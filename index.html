@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Una aventura Pokémon web sobre un mapa de estilo HeartGold y SoulSilver." />
+    <title>Pokémon · Ciudad Pokémon</title>
+    <link rel="stylesheet" href="styles.css?v=9" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-ball" aria-hidden="true"><i></i></span>
+          <span><strong>POKÉMON</strong><small>Ciudad Pokémon</small></span>
+        </div>
+
+        <div class="hud-summary" aria-live="polite">
+          <div><small>NIVEL</small><strong id="trainerLevel">1</strong></div>
+          <div><small>POKÉ BALLS</small><strong id="ballCount">6</strong></div>
+          <div><small>CAPTURADOS</small><strong id="caughtCount">0</strong></div>
+        </div>
+
+        <div class="top-actions">
+          <button id="fullscreenButton" type="button" aria-label="Cambiar pantalla completa" title="Pantalla completa">⛶</button>
+          <button id="inventoryButton" type="button" aria-label="Abrir mochila" title="Mochila">▣</button>
+          <button id="buildingEditorButton" type="button" aria-label="Editar casillas del mapa" title="Editor de casillas">#</button>
+          <button id="teamButton" type="button" aria-label="Abrir equipo" title="Equipo">☰</button>
+          <button id="soundButton" type="button" aria-label="Activar o desactivar sonido" title="Sonido"><span id="soundIcon">♪</span></button>
+        </div>
+      </header>
+
+      <section id="gameCard" class="game-card">
+        <section id="titleScreen" class="title-screen screen">
+          <div class="sky-grid" aria-hidden="true"></div>
+          <div class="title-copy">
+            <span class="eyebrow">AVENTURA WEB · MAPA HGSS</span>
+            <h1><span>Ciudad</span> Pokémon</h1>
+            <p>Explora una ciudad dibujada a mano, corre por sus caminos y encuentra Pokémon entre la hierba alta.</p>
+            <div class="title-actions">
+              <button id="newGameButton" class="primary-button" type="button">Nueva aventura <span>→</span></button>
+              <button id="continueButton" class="secondary-button hidden" type="button">Continuar partida</button>
+            </div>
+            <div class="title-controls"><kbd>WASD</kbd> andar <kbd>SHIFT</kbd> correr <kbd>E</kbd> interactuar <kbd>#</kbd> editar mapa</div>
+          </div>
+          <div class="title-visual" aria-hidden="true">
+            <span class="sun"></span>
+            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png" class="title-pokemon pikachu" alt="" />
+            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png" class="title-pokemon eevee" alt="" />
+            <span class="city-silhouette"></span>
+          </div>
+        </section>
+
+        <section id="worldScreen" class="world-screen screen hidden">
+          <div class="world-overlay">
+            <div class="location-card"><small>UBICACIÓN</small><strong id="areaName">Ciudad Pokémon</strong></div>
+            <div id="questPill" class="quest-pill"><span>!</span><div><small>OBJETIVO</small><strong>Explora la ciudad</strong></div></div>
+          </div>
+
+          <div id="mapViewport" class="map-viewport">
+            <canvas id="worldCanvas" width="960" height="624" aria-label="Mapa jugable de Ciudad Pokémon"></canvas>
+            <div id="assetNotice" class="asset-notice">Cargando sprites del mapa…</div>
+            <div id="runBadge" class="run-badge hidden">CORRIENDO</div>
+            <div id="mazeHud" class="maze-hud hidden">
+              <div><span>LUZ</span><div id="lightCharges" class="light-charges"><i></i><i></i><i></i></div></div>
+              <div><span>LA SOMBRA</span><strong id="shadowStatus">LEJOS</strong></div>
+              <div class="noise-row"><span>MICRÓFONO</span><div class="noise-track"><i id="noiseMeter"></i></div></div>
+              <small>W/S avanzar · A/D desplazarse · ←/→ girar · F luz</small>
+            </div>
+            <div id="captureBadge" class="capture-badge hidden" aria-live="polite">
+              <span aria-hidden="true">✦</span>
+              <div><small>ZONA DE CAPTURA</small><strong id="captureAreaName">Hierba activa</strong></div>
+              <div class="capture-activity" aria-label="Actividad de Pokémon"><i id="captureActivity"></i></div>
+            </div>
+            <aside id="miniMap" class="mini-map" aria-label="Minimapa de Ciudad Pokémon">
+              <header><strong>MAPA</strong><span id="miniMapArea">SAN PABLO</span></header>
+              <canvas id="miniMapCanvas" width="180" height="180" aria-label="Posición actual en el barrio"></canvas>
+              <div class="mini-map-legend"><span><i class="you"></i>Tú</span><span><i class="portal"></i>Puerta</span><span><i class="capture"></i>Hierba</span></div>
+            </aside>
+            <div id="saveStatus" class="save-status hidden" aria-live="polite">✓ PARTIDA GUARDADA</div>
+            <div class="map-scale" aria-label="Escala del mapa"><i></i><span>32 px · 1 casilla</span></div>
+            <div id="interactPrompt" class="interact-prompt hidden"><kbd>E</kbd> Interactuar</div>
+            <div id="areaToast" class="area-toast hidden">SAN PABLO · SEVILLA</div>
+            <div id="flashOverlay" class="flash-overlay" aria-hidden="true"></div>
+          </div>
+
+          <div class="world-controls">
+            <div class="keyboard-help">
+              <span><kbd>WASD</kbd> Andar</span>
+              <span><kbd>SHIFT</kbd> Correr</span>
+              <span><kbd>E</kbd> Interactuar</span>
+              <span><kbd>M</kbd> Equipo</span>
+            </div>
+            <div class="touch-controls" aria-label="Controles táctiles">
+              <div class="dpad">
+                <button type="button" data-control="up" aria-label="Arriba">▲</button>
+                <button type="button" data-control="left" aria-label="Izquierda">◀</button>
+                <button type="button" data-control="down" aria-label="Abajo">▼</button>
+                <button type="button" data-control="right" aria-label="Derecha">▶</button>
+              </div>
+              <button class="touch-b" type="button" data-control="run" aria-label="Correr">B<small>CORRER</small></button>
+              <button class="touch-a" type="button" data-action aria-label="Interactuar">A<small>ACCIÓN</small></button>
+            </div>
+          </div>
+
+          <div id="dialogBox" class="dialog-box hidden" role="dialog" aria-live="polite">
+            <span id="dialogAvatar" class="dialog-avatar">!</span>
+            <p id="dialogText"></p>
+            <button id="dialogNext" type="button" aria-label="Continuar">▼</button>
+          </div>
+        </section>
+
+        <section id="battleScreen" class="battle-screen screen hidden" aria-live="polite">
+          <div class="battle-scene">
+            <span class="battle-label">ENCUENTRO SALVAJE · SAN PABLO</span>
+            <div class="enemy-zone">
+              <div class="status-card enemy-status">
+                <div><strong id="enemyName">PIDGEY</strong><span id="enemyLevel">Nv. 3</span></div>
+                <div class="hp-row"><b>PS</b><span><i id="enemyHpBar"></i></span></div>
+                <small id="enemyHpText">18 / 18</small>
+              </div>
+              <span class="battle-platform"></span>
+              <img id="enemySprite" class="battle-pokemon enemy-pokemon" alt="Pokémon salvaje" />
+            </div>
+            <div class="player-zone">
+              <span class="battle-platform"></span>
+              <img id="activeSprite" class="battle-pokemon player-pokemon" alt="Tu Pokémon" />
+              <div class="status-card player-status">
+                <div><strong id="activeName">BULBASAUR</strong><span id="activeLevel">Nv. 5</span></div>
+                <div class="hp-row"><b>PS</b><span><i id="activeHpBar"></i></span></div>
+                <small id="activeHpText">24 / 24</small>
+                <div class="exp-row"><i id="activeExpBar"></i></div>
+              </div>
+            </div>
+            <div id="battleMessage" class="battle-message">¡Un Pokémon salvaje apareció!</div>
+          </div>
+
+          <div id="battleMenu" class="battle-menu">
+            <div class="battle-question">¿Qué debería hacer <strong id="battleActiveName">BULBASAUR</strong>?</div>
+            <div class="battle-actions">
+              <button id="fightButton" type="button"><span class="red">⚔</span>LUCHAR</button>
+              <button id="bagButton" type="button"><span class="orange">▣</span>MOCHILA <small id="battleBallCount">× 6</small></button>
+              <button id="teamBattleButton" type="button"><span class="green">◇</span>EQUIPO</button>
+              <button id="runButton" type="button"><span class="blue">➜</span>HUIR</button>
+            </div>
+          </div>
+          <div id="movesMenu" class="moves-menu hidden">
+            <div><strong>Elige un movimiento</strong><button id="movesBack" type="button">Volver</button></div>
+            <div id="movesGrid" class="moves-grid"></div>
+          </div>
+        </section>
+
+        <div id="starterModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="starterTitle">
+          <div class="starter-modal">
+            <button id="closeStarter" class="modal-close" type="button" aria-label="Cerrar">×</button>
+            <span class="eyebrow">TU PRIMER COMPAÑERO</span>
+            <h2 id="starterTitle">Elige un Pokémon</h2>
+            <p>Te acompañará por toda Ciudad Pokémon.</p>
+            <div id="starterGrid" class="starter-grid"></div>
+          </div>
+        </div>
+
+        <aside id="teamDrawer" class="team-drawer" aria-hidden="true">
+          <header><div><small>TU EQUIPO</small><h2>Compañeros</h2></div><button id="closeTeamButton" type="button" aria-label="Cerrar">×</button></header>
+          <div id="teamList" class="team-list"></div>
+          <div class="dex-card"><div><span>POKÉDEX LOCAL</span><strong id="drawerCaughtCount">0 / 7</strong></div><div class="dex-progress"><i id="dexProgress"></i></div></div>
+          <div class="drawer-actions"><button id="saveButton" type="button">Guardar partida</button><button id="resetButton" type="button">Reiniciar</button></div>
+        </aside>
+        <div id="drawerScrim" class="drawer-scrim hidden"></div>
+
+        <aside id="buildingEditor" class="building-editor" aria-hidden="true">
+          <header>
+            <div><small>EDITOR DEL MAPA</small><h2>Casillas 32×32</h2></div>
+            <button id="closeBuildingEditor" type="button" aria-label="Cerrar editor">×</button>
+          </header>
+          <p class="editor-help">Pulsa un cuadro del mapa para asignarle comportamiento. La cuadrícula usa coordenadas <strong>columna/fila</strong> y se guarda en este navegador.</p>
+          <div id="tileSelectionInfo" class="selected-building-info"><span>Selecciona una casilla</span><span>C— · F—</span></div>
+          <div class="sprite-options-title"><strong>Comportamiento</strong><small>Un clic para pintar</small></div>
+          <div id="tilePalette" class="tile-palette" role="group" aria-label="Tipo de casilla">
+            <button type="button" data-tile-type="walkable"><i></i>Transitable</button>
+            <button type="button" data-tile-type="blocked" class="selected"><i></i>Bloqueada</button>
+            <button type="button" data-tile-type="door"><i></i>Puerta</button>
+            <button type="button" data-tile-type="encounter"><i></i>Hierba / encuentro</button>
+            <button type="button" data-tile-type="event"><i></i>Evento</button>
+          </div>
+          <p id="tileEditorHint" class="tile-editor-hint">Modo actual: Bloqueada</p>
+          <div class="editor-actions">
+            <button id="copyTileButton" type="button">Copiar coordenada</button>
+            <button id="resetTileMap" type="button">Restaurar mapa</button>
+          </div>
+        </aside>
+        <div id="editorScrim" class="drawer-scrim editor-scrim hidden"></div>
+
+        <aside id="inventoryDrawer" class="inventory-drawer" aria-hidden="true">
+          <header>
+            <div><small>OBJETOS</small><h2>Mochila</h2></div>
+            <button id="closeInventory" type="button" aria-label="Cerrar mochila">×</button>
+          </header>
+          <div id="dimensionProgress" class="dimension-progress"></div>
+          <div id="inventoryList" class="inventory-list"></div>
+          <div class="inventory-tip"><strong>Consejo</strong><span>Explora cada isla de la Dimensión Prisma: los mejores objetos están lejos del portal.</span></div>
+        </aside>
+        <div id="inventoryScrim" class="drawer-scrim inventory-scrim hidden"></div>
+
+        <div id="jumpScare" class="jump-scare hidden" aria-live="assertive" aria-label="La Sombra te ha atrapado">
+          <div class="shadow-glitch glitch-a"></div>
+          <div class="shadow-glitch glitch-b"></div>
+          <img class="jump-shadow-sprite" src="assets/images/shadow-stalker.png" alt="" draggable="false" />
+          <strong>TE HA ENCONTRADO</strong>
+          <span>NO HAGAS RUIDO</span>
+        </div>
+      </section>
+
+      <footer class="legal-note">
+        Proyecto fan, gratuito y de uso personal. Pokémon pertenece a Nintendo, Game Freak y Creatures. Mapa de ImmigrantAE; sprite de Ethan (HGSS) extraído por Dazz y preservado por The Spriters Resource; criaturas servidas por PokéAPI.
+      </footer>
+    </main>
+    <script src="map-data.js?v=2"></script>
+    <script src="script.js?v=16"></script>
+  </body>
+</html>

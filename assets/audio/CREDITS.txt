@@ -1,0 +1,29 @@
+HORROR AUDIO ASSETS
+
+Shadow chase music
+- Title: Chase
+- Author: Adiutorium
+- License: CC0 / Public Domain
+- Source: https://opengameart.org/content/chase-2
+
+Shadow breathing
+- Title: horror breathing
+- Author: primbal
+- License: CC0 / Public Domain
+- Source: https://opengameart.org/content/horror-breathing
+
+Shadow snarl
+- Title: Monster snarls
+- Author: Darsycho
+- License: CC0 / Public Domain
+- Source: https://opengameart.org/content/monster-snarls
+
+Jumpscare impacts
+- Title: Horror Hit Soundpack 1
+- Author: psychhead_
+- License: CC0 / Public Domain
+- Source: https://opengameart.org/content/horror-hit-soundpack-1
+
+The shadow-stalker character image is an original AI-generated asset created
+specifically for this personal fan project. It does not depict an existing
+copyrighted character.
