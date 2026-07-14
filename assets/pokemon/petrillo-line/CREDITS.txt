@@ -1,0 +1,9 @@
+Petrillo, Musgólem y Terravórdeo
+
+Concepto y nombres: imagen de referencia proporcionada por el usuario.
+Sprites de frente y espalda: generados para este proyecto a partir de esa referencia con OpenAI ImageGen y limpiados a fondo transparente.
+
+Archivos:
+- petrillo-front.png / petrillo-back.png
+- musgolem-front.png / musgolem-back.png
+- terravordeo-front.png / terravordeo-back.png

@@ -1,0 +1,34 @@
+HGSS NPC atlas
+===============
+
+Source sheet: "Trainers (Overworld)" from Pokémon HeartGold / SoulSilver
+Ripped/uploaded by: Dragoon
+Archive: The Spriters Resource
+Source page: https://www.spriters-resource.com/ds_dsi/pokemonheartgoldsoulsilver/asset/26955/
+
+hgss-npc-idle.png contains ten 32x32 idle frames cropped from that sheet. The
+solid sheet background was converted to transparency; the sprite pixels were
+otherwise left unchanged.
+
+ethan-hgss-sheet.png
+Ripped by Dazz; preserved by The Spriters Resource.
+
+These are copyrighted Pokémon game assets. This repository uses them only in a
+free, non-commercial fan project. They are not relicensed by this notice.
+
+protagonist-walk.png / npc-guide-walk.png
+========================================
+
+Adapted from the two character references supplied by the project owner.
+The 4×4 walking atlases were rebuilt with OpenAI image generation, chroma-key
+extraction and local pixel-grid normalization. They contain four directions
+(down, left, right, up) and the sequence neutral/left/neutral/right.
+
+npcs/npc-01-* through npcs/npc-30-*
+====================================
+
+Original NPC roster created with OpenAI image generation using
+protagonist-walk.png as the structural and pixel-art style reference. The flat
+chroma backgrounds were removed locally and every sheet was normalized to the
+same 4×4, 64-pixel-cell contract. Character prompts and final assets were made
+for this fan project; no third-party sprite was copied into these 30 sheets.

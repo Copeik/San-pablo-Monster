@@ -1,0 +1,8 @@
+Peyote y Prensalito
+
+Concepto, nombres y referencia: imágenes proporcionadas por el usuario.
+Sprites de frente y espalda: generados para este proyecto con OpenAI ImageGen a partir de la referencia y convertidos a PNG con transparencia.
+
+Archivos:
+- peyote-front.png / peyote-back.png
+- prensalito-front.png / prensalito-back.png

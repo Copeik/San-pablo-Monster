@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "composition": {
+    "id": "main",
+    "duration_seconds": 3,
+    "fps": 30,
+    "resolution": "1080x1080",
+    "runtime": "HyperFrames 0.7.56 + GSAP + Three.js 0.160",
+    "audio": "silent"
+  },
+  "references": [
+    {
+      "role": "front identity reference",
+      "path": "assets/peyote.png",
+      "source_dimensions": "1254x1254",
+      "sha256": "BAD3865F0218122D3B431D4050C5047B44C24578B6AEEE09B94DCD5AEDF5FADA"
+    },
+    {
+      "role": "back and depth reference",
+      "path": "assets/peyote-back-reference.png",
+      "source_dimensions": "303x220",
+      "sha256": "E171BE83B8582262AEBD14A10870D3F9273250EE718310F458E77BD8B7E871C2"
+    }
+  ],
+  "beats": [
+    {"frame": 0, "description": "Calma después de la lluvia; Peyote mira al frente."},
+    {"frame": 10, "description": "Entra luz cálida y el cuerpo anticipa la mirada."},
+    {"frame": 18, "description": "El torso empieza a inclinarse hacia el cielo."},
+    {"frame": 32, "description": "Las nubes se abren y el arcoíris comienza a dibujarse."},
+    {"frame": 49, "description": "Arcoíris completo; reflejos de los ojos y mejillas felices."},
+    {"frame": 54, "description": "Pequeño rebote de alegría con volumen 3D visible."},
+    {"frame": 68, "description": "Aterrizaje suave y asentamiento mirando arriba."},
+    {"frame": 89, "description": "Plano hero sostenido bajo el arcoíris."}
+  ],
+  "free_local_stack": ["Codex", "Three.js", "GSAP", "HyperFrames", "FFmpeg"]
+}

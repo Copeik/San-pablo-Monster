@@ -1,0 +1,9 @@
+Luminio, Lunaria y Lusdria
+
+Concepto, nombres y referencia: imágenes proporcionadas por el usuario.
+Sprites de frente y espalda: generados para este proyecto con OpenAI ImageGen a partir de la referencia y convertidos a PNG con transparencia.
+
+Archivos:
+- luminio-front.png / luminio-back.png
+- lunaria-front.png / lunaria-back.png
+- lusdria-front.png / lusdria-back.png

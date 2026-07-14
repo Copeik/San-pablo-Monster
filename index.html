@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Una aventura Pokémon web sobre un mapa de estilo HeartGold y SoulSilver." />
     <title>Pokémon · Ciudad Pokémon</title>
-    <link rel="stylesheet" href="styles.css?v=9" />
+    <link rel="stylesheet" href="styles.css?v=16" />
   </head>
   <body>
     <main class="app-shell">
@@ -19,11 +19,13 @@
           <div><small>NIVEL</small><strong id="trainerLevel">1</strong></div>
           <div><small>POKÉ BALLS</small><strong id="ballCount">6</strong></div>
           <div><small>CAPTURADOS</small><strong id="caughtCount">0</strong></div>
+          <div><small>DINERO</small><strong id="money">500 ₽</strong></div>
         </div>
 
         <div class="top-actions">
           <button id="fullscreenButton" type="button" aria-label="Cambiar pantalla completa" title="Pantalla completa">⛶</button>
           <button id="inventoryButton" type="button" aria-label="Abrir mochila" title="Mochila">▣</button>
+          <button id="sanpledexButton" type="button" aria-label="Abrir Sanpledex" title="Sanpledex (P)">S</button>
           <button id="buildingEditorButton" type="button" aria-label="Editar casillas del mapa" title="Editor de casillas">#</button>
           <button id="teamButton" type="button" aria-label="Abrir equipo" title="Equipo">☰</button>
           <button id="soundButton" type="button" aria-label="Activar o desactivar sonido" title="Sonido"><span id="soundIcon">♪</span></button>
@@ -58,13 +60,14 @@
           </div>
 
           <div id="mapViewport" class="map-viewport">
-            <canvas id="worldCanvas" width="960" height="624" aria-label="Mapa jugable de Ciudad Pokémon"></canvas>
+            <canvas id="worldCanvas" width="960" height="624" tabindex="-1" aria-label="Mapa jugable de Ciudad Pokémon"></canvas>
             <div id="assetNotice" class="asset-notice">Cargando sprites del mapa…</div>
             <div id="runBadge" class="run-badge hidden">CORRIENDO</div>
             <div id="mazeHud" class="maze-hud hidden">
               <div><span>LUZ</span><div id="lightCharges" class="light-charges"><i></i><i></i><i></i></div></div>
               <div><span>LA SOMBRA</span><strong id="shadowStatus">LEJOS</strong></div>
-              <div class="noise-row"><span>MICRÓFONO</span><div class="noise-track"><i id="noiseMeter"></i></div></div>
+              <div><span>PULSO PRISMA</span><strong id="mazeObjective">POKÉMON · DÉBIL</strong></div>
+              <div class="noise-row"><span id="noiseLabel">MICRÓFONO</span><div class="noise-track"><i id="noiseMeter"></i></div></div>
               <small>W/S avanzar · A/D desplazarse · ←/→ girar · F luz</small>
             </div>
             <div id="captureBadge" class="capture-badge hidden" aria-live="polite">
@@ -75,9 +78,12 @@
             <aside id="miniMap" class="mini-map" aria-label="Minimapa de Ciudad Pokémon">
               <header><strong>MAPA</strong><span id="miniMapArea">SAN PABLO</span></header>
               <canvas id="miniMapCanvas" width="180" height="180" aria-label="Posición actual en el barrio"></canvas>
-              <div class="mini-map-legend"><span><i class="you"></i>Tú</span><span><i class="portal"></i>Puerta</span><span><i class="capture"></i>Hierba</span></div>
+              <div class="mini-map-legend"><span><i class="you"></i>Tú</span><span><i class="portal"></i>Puerta</span><span><i class="capture"></i>Hierba</span><span><i class="npc"></i>NPC</span></div>
             </aside>
             <div id="saveStatus" class="save-status hidden" aria-live="polite">✓ PARTIDA GUARDADA</div>
+            <div id="coordinateHud" class="coordinate-hud" aria-label="Coordenadas actuales">
+              <small>CASILLA ACTUAL</small><strong>C— · F—</strong><span>X— · Y— px</span>
+            </div>
             <div class="map-scale" aria-label="Escala del mapa"><i></i><span>32 px · 1 casilla</span></div>
             <div id="interactPrompt" class="interact-prompt hidden"><kbd>E</kbd> Interactuar</div>
             <div id="areaToast" class="area-toast hidden">SAN PABLO · SEVILLA</div>
@@ -168,12 +174,32 @@
         </aside>
         <div id="drawerScrim" class="drawer-scrim hidden"></div>
 
+        <section id="sanpledexModal" class="sanpledex-modal hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="sanpledexTitle">
+          <div class="sanpledex-dialog">
+            <header>
+              <div><small>ARCHIVO DE CRIATURAS · SAN PABLO</small><h2 id="sanpledexTitle">Sanpledex</h2></div>
+              <button id="closeSanpledex" type="button" aria-label="Cerrar Sanpledex">×</button>
+            </header>
+            <div class="sanpledex-summary" aria-live="polite">
+              <div><span>CAPTURADAS</span><strong id="sanpledexCaughtCount">0 / 22</strong></div>
+              <div><span>AVISTADAS</span><strong id="sanpledexSeenCount">0 / 22</strong></div>
+              <div class="sanpledex-progress"><i id="sanpledexProgress"></i></div>
+            </div>
+            <div class="sanpledex-layout">
+              <nav class="sanpledex-catalog" aria-label="Especies de la Sanpledex">
+                <div id="sanpledexList" class="sanpledex-list" role="listbox"></div>
+              </nav>
+              <article id="sanpledexDetail" class="sanpledex-detail" aria-live="polite"></article>
+            </div>
+          </div>
+        </section>
+
         <aside id="buildingEditor" class="building-editor" aria-hidden="true">
           <header>
             <div><small>EDITOR DEL MAPA</small><h2>Casillas 32×32</h2></div>
             <button id="closeBuildingEditor" type="button" aria-label="Cerrar editor">×</button>
           </header>
-          <p class="editor-help">Pulsa un cuadro del mapa para asignarle comportamiento. La cuadrícula usa coordenadas <strong>columna/fila</strong> y se guarda en este navegador.</p>
+          <p class="editor-help">Pulsa una casilla para asignarle comportamiento. <strong>C</strong> es columna, <strong>F</strong> es fila y C0/F0 está arriba a la izquierda. La cuadrícula se guarda en este navegador.</p>
           <div id="tileSelectionInfo" class="selected-building-info"><span>Selecciona una casilla</span><span>C— · F—</span></div>
           <div class="sprite-options-title"><strong>Comportamiento</strong><small>Un clic para pintar</small></div>
           <div id="tilePalette" class="tile-palette" role="group" aria-label="Tipo de casilla">
@@ -186,6 +212,7 @@
           <p id="tileEditorHint" class="tile-editor-hint">Modo actual: Bloqueada</p>
           <div class="editor-actions">
             <button id="copyTileButton" type="button">Copiar coordenada</button>
+            <button id="copyNpcButton" type="button">Copiar NPC</button>
             <button id="resetTileMap" type="button">Restaurar mapa</button>
           </div>
         </aside>
@@ -198,7 +225,7 @@
           </header>
           <div id="dimensionProgress" class="dimension-progress"></div>
           <div id="inventoryList" class="inventory-list"></div>
-          <div class="inventory-tip"><strong>Consejo</strong><span>Explora cada isla de la Dimensión Prisma: los mejores objetos están lejos del portal.</span></div>
+          <div class="inventory-tip"><strong>Consejo</strong><span>En el laberinto, busca la luz roja del Mercado Negro: sirve de refugio y vende objetos únicos.</span></div>
         </aside>
         <div id="inventoryScrim" class="drawer-scrim inventory-scrim hidden"></div>
 
@@ -209,13 +236,25 @@
           <strong>TE HA ENCONTRADO</strong>
           <span>NO HAGAS RUIDO</span>
         </div>
+
+        <div id="shopModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
+          <div id="shopDialog" class="shop-modal">
+            <button id="closeShop" class="modal-close" type="button" aria-label="Cerrar">×</button>
+            <span id="shopEyebrow" class="eyebrow">POKÉ MART</span>
+            <h2 id="shopTitle">Tienda Pokémon</h2>
+            <div class="shop-balance">Saldo: <strong id="shopMoney">0 ₽</strong></div>
+            <div id="shopList" class="shop-list"></div>
+            <p id="shopTip" class="shop-tip">Gana dinero ganando combates salvajes.</p>
+          </div>
+        </div>
       </section>
 
       <footer class="legal-note">
-        Proyecto fan, gratuito y de uso personal. Pokémon pertenece a Nintendo, Game Freak y Creatures. Mapa de ImmigrantAE; sprite de Ethan (HGSS) extraído por Dazz y preservado por The Spriters Resource; criaturas servidas por PokéAPI.
+        Proyecto fan, gratuito y de uso personal. Pokémon pertenece a Nintendo, Game Freak y Creatures. Mapa reconstruido desde la referencia aportada; protagonista y NPC adaptados desde las imágenes facilitadas; criaturas servidas por PokéAPI.
       </footer>
     </main>
-    <script src="map-data.js?v=2"></script>
-    <script src="script.js?v=16"></script>
+    <script src="map-layout.js?v=3"></script>
+    <script src="map-data.js?v=23"></script>
+    <script src="script.js?v=60"></script>
   </body>
 </html>

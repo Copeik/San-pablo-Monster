@@ -1,0 +1,10 @@
+Sombrañol, Penumbra y Tenebrantor
+
+Concepto, nombres y referencia: imágenes proporcionadas por el usuario.
+Sombrañol frontal: extraído directamente de la ficha del usuario y convertido a PNG con transparencia.
+Resto de vistas: generadas previamente para este proyecto con OpenAI ImageGen a partir de la misma referencia y convertidas a PNG con transparencia.
+
+Archivos:
+- sombranol-front.png / sombranol-back.png
+- penumbra-front.png / penumbra-back.png
+- tenebrantor-front.png / tenebrantor-back.png

@@ -1,0 +1,9 @@
+Moskito, Zumkito y Sanguento
+
+Concepto, nombres y referencia: imagen proporcionada por el usuario.
+Sprites de frente y espalda: extraídos directamente de la ficha original, sin regenerar las poses, y convertidos a PNG con transparencia.
+
+Archivos:
+- moskito-front.png / moskito-back.png
+- zumkito-front.png / zumkito-back.png
+- sanguento-front.png / sanguento-back.png

@@ -2,19 +2,70 @@
   "use strict";
 
   const SAVE_KEY = "pokemon-city-save-v3";
-  const MAP_EDIT_KEY = "pokemon-city-tile-overrides-v1";
+  const MAP_EDIT_KEY = "pokemon-city-tile-overrides-v4";
+  const MAP_REVISION = 12;
   const CITY_MAP = window.CITY_MAP_CONFIG;
-  const VIEW_WIDTH = 960;
-  const VIEW_HEIGHT = 624;
+  const BASE_VIEW_HEIGHT = 624;
+  const MAX_RENDER_WIDTH = 3840;
+  const MAX_RENDER_HEIGHT = 2160;
+  const SPRITE_CELL_SIZE = 64;
+  const PLAYER_HEAD_LOCK_HEIGHT = 36;
+  const PLAYER_LEG_MASKS = {
+    down: [{ x: 20, y: 50, width: 24, height: 10 }],
+    left: [{ x: 18, y: 51, width: 28, height: 9 }],
+    right: [{ x: 17, y: 51, width: 28, height: 9 }],
+    up: [{ x: 20, y: 51, width: 24, height: 9 }],
+  };
+  const PLAYER_SUPPORT_ROW = 59;
+  let VIEW_WIDTH = 960;
+  let VIEW_HEIGHT = BASE_VIEW_HEIGHT;
   const PIXELS_PER_METER = 8;
   const WORLD_WIDTH = CITY_MAP.width;
   const WORLD_HEIGHT = CITY_MAP.height;
   const PRISM_WIDTH = 2100;
   const PRISM_HEIGHT = 2200;
   const MAX_TEAM = 3;
-  const LOCAL_DEX_SIZE = 18;
-  const NORMAL_START = { ...CITY_MAP.spawn };
-  const PORTAL_POSITION = { x: 1250, y: 1110 };
+  const LOCAL_DEBUG_SPAWN = (() => {
+    if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return null;
+    const raw = new URLSearchParams(window.location.search).get("debugSpawn");
+    if (!raw) return null;
+    const [rawX, rawY, rawDirection = "down"] = raw.split(",");
+    const x = Number(rawX); const y = Number(rawY);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const direction = ["up", "down", "left", "right"].includes(rawDirection) ? rawDirection : "down";
+    return {
+      x: Math.max(35, Math.min(CITY_MAP.width - 35, x)),
+      y: Math.max(45, Math.min(CITY_MAP.height - 30, y)),
+      direction,
+    };
+  })();
+  const LOCAL_DEBUG_BATTLE = (() => {
+    if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return null;
+    const params = new URLSearchParams(window.location.search);
+    const teamId = Number(params.get("debugTeam"));
+    const teamLevel = clampDebugLevel(params.get("debugLevel"));
+    const wildId = Number(params.get("debugWild"));
+    if (!Number.isInteger(teamId) && !Number.isInteger(wildId)) return null;
+    return { teamId, teamLevel, wildId };
+  })();
+  const LOCAL_DEBUG_PRISM = (() => {
+    if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return null;
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get("debugPrism");
+    if (!target) return null;
+    return {
+      target: ["start", "market", "market_view", "goal"].includes(target) ? target : "start",
+      money: Math.max(0, Math.floor(Number(params.get("debugMoney")) || 2500)),
+    };
+  })();
+  const LOCAL_DEBUG_PLAYER_ATLAS = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
+    && new URLSearchParams(window.location.search).has("debugPlayerAtlas");
+  function clampDebugLevel(value) { return Math.max(1, Math.min(50, Number(value) || 5)); }
+  const NORMAL_START = { ...(LOCAL_DEBUG_SPAWN || CITY_MAP.spawn) };
+  const PORTAL_DOOR = (CITY_MAP.doors || []).find((door) => door.action === "prism");
+  const PORTAL_POSITION = PORTAL_DOOR
+    ? { x: (PORTAL_DOOR.col + .5) * CITY_MAP.tileSize, y: (PORTAL_DOOR.row + .5) * CITY_MAP.tileSize }
+    : { x: 1250, y: 1110 };
   const MAINTENANCE_ROOM = { x: 720, y: 560, w: 660, h: 520 };
   const MAINTENANCE_EXIT = { x: 1050, y: 1010, radius: 62 };
   const MAINTENANCE_TERMINAL = { x: 1050, y: 650, radius: 58 };
@@ -24,8 +75,122 @@
     { x: 935, y: 740, w: 230, h: 78 },
   ];
 
+  /* Interiores jugables: una sola geometría de sala para edificios y una ruta
+     silvestre más grande con encuentros. Las coordenadas están en el espacio
+     del mundo (px) y se dibujan con la misma cámara que el mapa de la ciudad. */
+  const INDOOR_ROOM = { x: 40, y: 30, w: 880, h: 560, wall: 30 };
+  const INDOOR_SPAWN = { x: INDOOR_ROOM.x + INDOOR_ROOM.w / 2, y: INDOOR_ROOM.y + INDOOR_ROOM.h - 54 };
+  const INDOOR_NPC = { x: INDOOR_ROOM.x + INDOOR_ROOM.w / 2, y: INDOOR_ROOM.y + 120, radius: 46 };
+  const INDOOR_EXIT = { x: INDOOR_SPAWN.x, y: INDOOR_SPAWN.y, radius: 42 };
+
+  const ROUTE_ROOM = { x: 20, y: 20, w: 920, h: 584, wall: 22 };
+  const ROUTE_SPAWN = { x: 460, y: ROUTE_ROOM.y + ROUTE_ROOM.h - 54 };
+  const ROUTE_EXIT = { x: ROUTE_SPAWN.x, y: ROUTE_SPAWN.y, radius: 46 };
+  const ROUTE_GRASS = [
+    { x: 80, y: 120, w: 280, h: 220 },
+    { x: 460, y: 100, w: 280, h: 240 },
+    { x: 720, y: 140, w: 180, h: 220 },
+    { x: 160, y: 380, w: 260, h: 180 },
+    { x: 540, y: 360, w: 300, h: 200 },
+    { x: 820, y: 420, w: 90, h: 150 },
+  ];
+  const ROUTE_BLOCKED = [
+    { x: 380, y: 90, w: 60, h: 60 }, { x: 740, y: 320, w: 70, h: 70 },
+    { x: 150, y: 280, w: 50, h: 50 }, { x: 600, y: 470, w: 64, h: 64 },
+    { x: 820, y: 420, w: 70, h: 90 },
+  ];
+  const ROUTE_POND = { x: 350, y: 410, w: 150, h: 90 };
+  const ROUTE_WILD_TABLE = [
+    { id: 16, weight: 20 }, { id: 19, weight: 18 }, { id: 10, weight: 13 },
+    { id: 13, weight: 12 }, { id: 43, weight: 12 }, { id: 104, weight: 9 },
+    { id: 9601, weight: 9 }, { id: 96, weight: 6 }, { id: 25, weight: 6 },
+    { id: 9101, weight: 8 }, { id: 9201, weight: 4 }, { id: 133, weight: 4 },
+  ];
+
+  const INTERIOR_PALETTES = {
+    center: { floor: "#f3d9da", floorAlt: "#ecc6c8", wall: "#cc504a", accent: "#ffe08a", label: "CENTRO POKÉMON" },
+    mart: { floor: "#cfe0ea", floorAlt: "#bfd3e0", wall: "#3f6f9c", accent: "#f4d35e", label: "POKÉ MART" },
+    lab: { floor: "#e4ead6", floorAlt: "#d6dec4", wall: "#5a8a52", accent: "#9ad1f0", label: "LABORATORIO POKÉMON" },
+    house: { floor: "#d9c39c", floorAlt: "#cdb088", wall: "#7a5230", accent: "#e7c86a", label: "CASA" },
+  };
+
+  const NPC_DEFS = {
+    nurse: { spriteIndex: 5, sprite: "npc-01-nurse", layout: "clinic", color: "#d96fae", name: "Enfermera", lines: [] },
+    clerk: { spriteIndex: 3, sprite: "npc-02-shopkeeper", layout: "shop", color: "#4f8fc3", name: "Dependiente", lines: [] },
+    professor: { spriteIndex: 1, sprite: "npc-03-professor", layout: "lab", color: "#8a8d8f", name: "Investigador", lines: [] },
+    abuela: { spriteIndex: 0, sprite: "npc-04-grandmother", layout: "cozy", color: "#9b6ad0", name: "Abuela Lola", lines: ["Tu equipo está precioso. Come poco, combate mucho y deja pelos en el sofá.", "La Galería Jazmín está al este. Di que vas de mi parte; no servirá de nada, pero suena importante."] },
+    nino: { spriteIndex: 6, sprite: "npc-05-child", layout: "playroom", color: "#e0a23a", name: "Niño Teo", lines: ["¡Mi Rattata es el más fuerte del barrio! El barrio incluye esta habitación.", "Busco Pokémon raros en el Jardín Tesalónica. De momento solo encontré un calcetín raro."] },
+    pescador: { spriteIndex: 3, sprite: "npc-06-fisher", layout: "coastal", color: "#3f7fae", name: "Pescador Berto", lines: ["Hoy solo ha picado una bota. Tiene buena Defensa, pero pésimo Ataque.", "Voy a Tesalónica por los Pokémon de Agua y por fingir que entiendo el viento."] },
+    jubilado: { spriteIndex: 1, sprite: "npc-07-grandfather", layout: "study", color: "#8a8d8f", name: "Don Ramón", lines: ["Conozco cada calle desde antes del minimapa. Nos perdíamos con dignidad.", "En la UNED investigan señales extrañas. Yo digo que es el wifi."] },
+    estudiante: { spriteIndex: 2, sprite: "npc-08-student", layout: "study", color: "#4b9b6a", name: "Estudiante Ana", lines: ["Estudio para líder de gimnasio. La asignatura más difícil es posar sin parpadear.", "Fuego gana a Planta, Agua a Fuego y el sueño gana a mis apuntes."] },
+    comerciante: { spriteIndex: 4, sprite: "npc-09-merchant", layout: "cozy", color: "#c75a4b", name: "Comerciante Poli", lines: ["Mis ofertas son tan buenas que a veces intento comprármelas yo mismo.", "Los combates dan dinero. Mis discursos comerciales, por desgracia, no."] },
+    artista: { spriteIndex: 5, sprite: "npc-10-artist", layout: "studio", color: "#d96fae", name: "Artista Lua", lines: ["Retrato a los Pokémon salvajes. Los Zubat siempre salen movidos y ofendidos.", "Mi estilo es hiperrealismo pixelado. Cuantos menos píxeles, más caro."] },
+    deportista: { spriteIndex: 7, sprite: "npc-11-athlete", layout: "playroom", color: "#5aa0c8", name: "Deportista Max", lines: ["Corro todas las mañanas. Algunas incluso hacia delante.", "Usa SHIFT para correr; úsalo con moderación si acabas de comer."] },
+    guarderia: { spriteIndex: 8, sprite: "npc-12-caretaker", layout: "cozy", color: "#e0b34a", name: "Cuidadora Veva", lines: ["Cuido a todos los Pokémon del barrio. Ellos creen que yo soy la mascota.", "Cuando completes el equipo, vuelve. Tengo seis toallas y ninguna esperanza."] },
+    jardinera: { spriteIndex: 9, sprite: "npc-13-gardener", layout: "studio", color: "#6aa84f", name: "Jardinera Sol", lines: ["Hablo con las plantas. Ellas responden con fotosíntesis pasivo-agresiva.", "La hierba alta esconde especies distintas y, en mi caso, las tijeras."] },
+  };
+
   const BUILDING_SHEET_URL = "https://www.spriters-resource.com/media/assets/4/3849.png?updated=1755472417";
-  const PLAYER_SHEET_URL = "assets/sprites/ethan-hgss-sheet.png";
+  const PLAYER_SHEET_URL = "assets/sprites/protagonist-walk.png";
+  const NPC_SHEET_URL = "assets/sprites/hgss-npc-idle.png";
+  const GUIDE_NPC_SHEET_URL = "assets/sprites/npc-guide-walk.png";
+  const NPC_ROSTER_SHEET_URLS = Object.freeze(Object.fromEntries([
+    "nurse", "shopkeeper", "professor", "grandmother", "child", "fisher", "grandfather", "student", "merchant", "artist",
+    "athlete", "caretaker", "gardener", "officer", "chef", "mechanic", "musician", "cyclist", "hiker", "office-worker",
+    "teen-girl", "teen-boy", "baker", "builder", "doctor", "vendor", "librarian", "tourist", "dancer", "ranger",
+  ].map((role, index) => {
+    const id = `npc-${String(index + 1).padStart(2, "0")}-${role}`;
+    return [id, `assets/sprites/npcs/${id}-walk.png`];
+  })));
+  const CUSTOM_POKEMON_ASSETS = Object.freeze({
+    9001: { front: "assets/pokemon/petrillo-line/petrillo-front.png", back: "assets/pokemon/petrillo-line/petrillo-back.png" },
+    9002: { front: "assets/pokemon/petrillo-line/musgolem-front.png", back: "assets/pokemon/petrillo-line/musgolem-back.png" },
+    9003: { front: "assets/pokemon/petrillo-line/terravordeo-front.png", back: "assets/pokemon/petrillo-line/terravordeo-back.png" },
+    9101: { front: "assets/pokemon/peyote-line/peyote-front.png", back: "assets/pokemon/peyote-line/peyote-back.png" },
+    9102: { front: "assets/pokemon/peyote-line/prensalito-front.png", back: "assets/pokemon/peyote-line/prensalito-back.png" },
+    9201: { front: "assets/pokemon/dracoscama-line/criascama-front.png", back: "assets/pokemon/dracoscama-line/criascama-back.png" },
+    9202: { front: "assets/pokemon/dracoscama-line/aliscama-front.png", back: "assets/pokemon/dracoscama-line/aliscama-back.png" },
+    9203: { front: "assets/pokemon/dracoscama-line/dracoscama-front.png", back: "assets/pokemon/dracoscama-line/dracoscama-back.png" },
+    9301: { front: "assets/pokemon/luminai-line/luminio-front.png", back: "assets/pokemon/luminai-line/luminio-back.png" },
+    9302: { front: "assets/pokemon/luminai-line/lunaria-front.png", back: "assets/pokemon/luminai-line/lunaria-back.png" },
+    9303: { front: "assets/pokemon/luminai-line/lusdria-front.png", back: "assets/pokemon/luminai-line/lusdria-back.png" },
+    9401: { front: "assets/pokemon/sombranol-line/sombranol-front.png", back: "assets/pokemon/sombranol-line/sombranol-back.png" },
+    9402: { front: "assets/pokemon/sombranol-line/penumbra-front.png", back: "assets/pokemon/sombranol-line/penumbra-back.png" },
+    9403: { front: "assets/pokemon/sombranol-line/tenebrantor-front.png", back: "assets/pokemon/sombranol-line/tenebrantor-back.png" },
+    9501: { front: "assets/pokemon/chispin-line/chispin-front.png", back: "assets/pokemon/chispin-line/chispin-back.png" },
+    9502: { front: "assets/pokemon/chispin-line/chisporc-front.png", back: "assets/pokemon/chispin-line/chisporc-back.png" },
+    9601: { front: "assets/pokemon/moskito-line/moskito-front.png", back: "assets/pokemon/moskito-line/moskito-back.png" },
+    9602: { front: "assets/pokemon/moskito-line/zumkito-front.png", back: "assets/pokemon/moskito-line/zumkito-back.png" },
+    9603: { front: "assets/pokemon/moskito-line/sanguento-front.png", back: "assets/pokemon/moskito-line/sanguento-back.png" },
+    9701: { front: "assets/pokemon/alua-line/alua-front.png", back: "assets/pokemon/alua-line/alua-back.png" },
+    9702: { front: "assets/pokemon/alua-line/capulua-front.png", back: "assets/pokemon/alua-line/capulua-back.png" },
+    9703: { front: "assets/pokemon/alua-line/maripulua-front.png", back: "assets/pokemon/alua-line/maripulua-back.png" },
+  });
+  const CUSTOM_POKEMON_MOTIONS = Object.freeze({
+    9001: "petrillo",
+    9002: "musgolem",
+    9003: "terravordeo",
+    9101: "peyote",
+    9102: "prensalito",
+    9201: "criascama",
+    9202: "aliscama",
+    9203: "dracoscama",
+    9301: "luminio",
+    9302: "lunaria",
+    9303: "lusdria",
+    9401: "sombranol",
+    9402: "penumbra",
+    9403: "tenebrantor",
+    9501: "chispin",
+    9502: "chisporc",
+    9601: "moskito",
+    9602: "zumkito",
+    9603: "sanguento",
+    9701: "alua",
+    9702: "capulua",
+    9703: "maripulua",
+  });
+  const PETRILLO_ID = 9001;
   const SHADOW_SPRITE_URL = "assets/images/shadow-stalker.png";
   const HORROR_AUDIO_URLS = {
     chase: "assets/audio/shadow-chase.mp3",
@@ -38,7 +203,7 @@
   const TYPE_COLORS = {
     Normal: "#8c9283", Planta: "#5a9e58", Fuego: "#df7145", Agua: "#4f8fc3",
     Volador: "#7f9dc7", Bicho: "#8ba33c", Eléctrico: "#e6b93e", Veneno: "#9970ad",
-    Fantasma: "#6d5a9b", Psíquico: "#d96f9c", Dragón: "#7362c5", Acero: "#79949f", Tierra: "#b58a54",
+    Fantasma: "#6d5a9b", Siniestro: "#4c4358", Psíquico: "#d96f9c", Dragón: "#7362c5", Hada: "#d985bd", Acero: "#79949f", Tierra: "#b58a54", Roca: "#9a8258",
   };
 
   const MOVES = {
@@ -58,6 +223,25 @@
     headbutt: { name: "Cabezazo", type: "Normal", power: 17, accuracy: 92 },
     metalSound: { name: "Onda Metálica", type: "Acero", power: 17, accuracy: 94 },
     dragonRage: { name: "Furia Dragón", type: "Dragón", power: 19, accuracy: 92 },
+    stoneSeal: { name: "Sello Pétreo", type: "Roca", power: 18, accuracy: 95 },
+    earthPress: { name: "Prensa Telúrica", type: "Tierra", power: 23, accuracy: 90 },
+    scaleRush: { name: "Carrera Escama", type: "Dragón", power: 18, accuracy: 95 },
+    razorWing: { name: "Ala Cortadora", type: "Bicho", power: 20, accuracy: 93 },
+    prairieDive: { name: "Picado de Pradera", type: "Volador", power: 24, accuracy: 89 },
+    moonGleam: { name: "Brillo Lunar", type: "Hada", power: 18, accuracy: 96 },
+    dreamWhisper: { name: "Susurro Onírico", type: "Psíquico", power: 21, accuracy: 93 },
+    astralGuard: { name: "Luz Astral", type: "Hada", power: 25, accuracy: 89 },
+    shadowPrank: { name: "Travesura Umbría", type: "Fantasma", power: 18, accuracy: 95 },
+    lanternDrain: { name: "Farol Voraz", type: "Siniestro", power: 21, accuracy: 92, drain: true },
+    eternalNight: { name: "Noche Eterna", type: "Fantasma", power: 26, accuracy: 87 },
+    sparkSnout: { name: "Hocico Chispa", type: "Eléctrico", power: 18, accuracy: 95 },
+    stormWing: { name: "Ala Tormenta", type: "Volador", power: 24, accuracy: 89 },
+    nectarNeedle: { name: "Aguijón Néctar", type: "Bicho", power: 17, accuracy: 96, drain: true },
+    bloodStinger: { name: "Aguijón Sanguíneo", type: "Bicho", power: 23, accuracy: 89, drain: true },
+    wingFeint: { name: "Finta Alada", type: "Volador", power: 20, accuracy: 93 },
+    silkEscape: { name: "Hilo de Fuga", type: "Bicho", power: 16, accuracy: 97 },
+    toxicThread: { name: "Hilo Tóxico", type: "Veneno", power: 20, accuracy: 92 },
+    hallucinationDust: { name: "Escamas Ilusorias", type: "Veneno", power: 24, accuracy: 88 },
   };
 
   const POKEMON = {
@@ -85,20 +269,56 @@
     399: { id: 399, name: "Bidoof", type: "Normal", baseHp: 25, catchRate: 0, moves: [MOVES.tackle, MOVES.headbutt] },
     445: { id: 445, name: "Garchomp", type: "Dragón", secondaryType: "Tierra", baseHp: 41, catchRate: 0, moves: [MOVES.dragonRage, MOVES.headbutt] },
     635: { id: 635, name: "Hydreigon", type: "Dragón", baseHp: 40, catchRate: 0, moves: [MOVES.dragonRage, MOVES.lick] },
+    9001: { id: 9001, name: "Petrillo", type: "Roca", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Pokémon Semilla. Resistente como Bulbasaur y capaz de absorber minerales del suelo.", evolvesTo: 9002, evolveLevel: 16 },
+    9002: { id: 9002, name: "Musgólem", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Pokémon Coloso Musgo. Sus brazos de roca se afianzan al suelo mientras las enredaderas absorben humedad.", evolvesTo: 9003, evolveLevel: 32 },
+    9003: { id: 9003, name: "Terravórdeo", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Pokémon Montaña Viviente. Cada paso mezcla minerales y semillas; allí donde descansa, vuelve a brotar la vida." },
+    9101: { id: 9101, name: "Peyote", type: "Roca", secondaryType: "Tierra", baseHp: 30, catchRate: .52, moves: [MOVES.tackle, MOVES.stoneSeal], description: "Pokémon Adobe. Compacta capas de tierra y roca hasta convertirlas en una coraza orgullosamente sellada.", evolvesTo: 9102, evolveLevel: 18 },
+    9102: { id: 9102, name: "Prensalito", type: "Roca", secondaryType: "Tierra", baseHp: 44, catchRate: .16, moves: [MOVES.stoneSeal, MOVES.earthPress, MOVES.headbutt], description: "Pokémon Bloque Prensado. Protege su territorio con un cuerpo de densidad extraordinaria." },
+    9201: { id: 9201, name: "Criascama", type: "Dragón", baseHp: 23, catchRate: .42, moves: [MOVES.tackle, MOVES.scaleRush], description: "Pokémon Cría Dragón. Salta entre piedras mientras aprende a leer las corrientes de la pradera.", evolvesTo: 9202, evolveLevel: 18 },
+    9202: { id: 9202, name: "Aliscama", type: "Dragón", secondaryType: "Bicho", baseHp: 31, catchRate: .18, moves: [MOVES.scaleRush, MOVES.razorWing, MOVES.gust], description: "Pokémon Ala Cortadora. Sus antenas anticipan cada cambio del viento.", evolvesTo: 9203, evolveLevel: 36 },
+    9203: { id: 9203, name: "Dracoscama", type: "Dragón", secondaryType: "Bicho", baseHp: 42, catchRate: .07, moves: [MOVES.dragonRage, MOVES.razorWing, MOVES.prairieDive], description: "Pokémon Dragón Veloz. Custodia las praderas con maniobras imposibles de seguir a simple vista." },
+    9301: { id: 9301, name: "Luminio", type: "Psíquico", baseHp: 21, catchRate: .50, moves: [MOVES.confusion, MOVES.moonGleam], description: "Pokémon Brillo. Baila junto a fuentes tranquilas y deja sueños de paz a su paso.", evolvesTo: 9302, evolveLevel: 17 },
+    9302: { id: 9302, name: "Lunaria", type: "Psíquico", secondaryType: "Hada", baseHp: 30, catchRate: .20, moves: [MOVES.moonGleam, MOVES.dreamWhisper, MOVES.confusion], description: "Pokémon Susurro. Sus cintas luminosas guían a quien se pierde en sus propios pensamientos.", evolvesTo: 9303, evolveLevel: 34 },
+    9303: { id: 9303, name: "Lusdria", type: "Psíquico", secondaryType: "Hada", baseHp: 38, catchRate: .08, moves: [MOVES.dreamWhisper, MOVES.astralGuard, MOVES.moonGleam], description: "Pokémon Luminar. Purifica las pesadillas con una luz telepática serena." },
+    9401: { id: 9401, name: "Sombrañol", type: "Fantasma", baseHp: 22, catchRate: .48, moves: [MOVES.lick, MOVES.shadowPrank], description: "Pokémon Sombra. Apaga luces para jugar bromas y se esconde entre llamas violetas.", evolvesTo: 9402, evolveLevel: 20 },
+    9402: { id: 9402, name: "Penumbra", type: "Fantasma", secondaryType: "Siniestro", baseHp: 32, catchRate: .19, moves: [MOVES.shadowPrank, MOVES.lanternDrain, MOVES.lick], description: "Pokémon Sombra. Su farol absorbe energía para sostener su cuerpo nebuloso.", evolvesTo: 9403, evolveLevel: 38 },
+    9403: { id: 9403, name: "Tenebrantor", type: "Fantasma", secondaryType: "Siniestro", baseHp: 43, catchRate: .07, moves: [MOVES.lanternDrain, MOVES.eternalNight, MOVES.shadowPrank], description: "Pokémon Ánima Oscura. Sus faroles marcan caminos secretos entre las sombras." },
+    9501: { id: 9501, name: "Chispin", type: "Eléctrico", baseHp: 24, catchRate: .46, moves: [MOVES.quickAttack, MOVES.sparkSnout], description: "Pokémon Cerdito Eléctrico. Al correr, carga sus mejillas y deja pequeñas chispas entre las briznas de hierba.", evolvesTo: 9502, evolveLevel: 24 },
+    9502: { id: 9502, name: "Chisporc", type: "Eléctrico", secondaryType: "Volador", baseHp: 36, catchRate: .13, moves: [MOVES.sparkSnout, MOVES.stormWing, MOVES.gust], description: "Pokémon Cerdito Tormenta. Sus alas acumulan electricidad hasta arrastrar nubes cargadas a su paso." },
+    9601: { id: 9601, name: "Moskito", type: "Bicho", baseHp: 19, catchRate: .65, moves: [MOVES.bugBite, MOVES.nectarNeedle], description: "Pokémon Mosquito. Bebe néctar y savia con un aguijón aún más curioso que peligroso.", evolvesTo: 9602, evolveLevel: 15 },
+    9602: { id: 9602, name: "Zumkito", type: "Bicho", baseHp: 27, catchRate: .25, moves: [MOVES.nectarNeedle, MOVES.wingFeint, MOVES.bugBite], description: "Pokémon Zumbido. Convierte el néctar en energía y confunde a sus rivales con patrones de sus alas.", evolvesTo: 9603, evolveLevel: 30 },
+    9603: { id: 9603, name: "Sanguento", type: "Bicho", secondaryType: "Volador", baseHp: 37, catchRate: .10, moves: [MOVES.bloodStinger, MOVES.wingFeint, MOVES.nectarNeedle], description: "Pokémon Aguijón. Planea desde las sombras y perfora defensas con extremidades afiladas." },
+    9701: { id: 9701, name: "Alúa", type: "Bicho", baseHp: 20, catchRate: .64, moves: [MOVES.tackle, MOVES.silkEscape], description: "Pokémon Oruga Hoja. Se camufla entre el follaje y segrega un hilo pegajoso cuando peligra.", evolvesTo: 9702, evolveLevel: 14 },
+    9702: { id: 9702, name: "Capulúa", type: "Bicho", secondaryType: "Veneno", baseHp: 29, catchRate: .24, moves: [MOVES.silkEscape, MOVES.toxicThread, MOVES.poisonSting], description: "Pokémon Crisálida Tóxica. Sus glándulas producen un líquido capaz de paralizar a quien lo toque.", evolvesTo: 9703, evolveLevel: 28 },
+    9703: { id: 9703, name: "Maripulúa", type: "Bicho", secondaryType: "Veneno", baseHp: 38, catchRate: .09, moves: [MOVES.toxicThread, MOVES.hallucinationDust, MOVES.wingFeint], description: "Pokémon Polilla Ilusoria. Sus escamas venenosas provocan espejismos en los bosques sombríos." },
   };
+
+  const SANPLEDEX_FAMILIES = Object.freeze([
+    { name: "Linaje del Brote", ids: [9001, 9002, 9003] },
+    { name: "Linaje del Adobe", ids: [9101, 9102] },
+    { name: "Linaje de las Escamas", ids: [9201, 9202, 9203] },
+    { name: "Linaje Lunar", ids: [9301, 9302, 9303] },
+    { name: "Linaje de la Penumbra", ids: [9401, 9402, 9403] },
+    { name: "Linaje de la Tormenta", ids: [9501, 9502] },
+    { name: "Linaje del Zumbido", ids: [9601, 9602, 9603] },
+    { name: "Linaje de la Seda Tóxica", ids: [9701, 9702, 9703] },
+  ]);
+  const SANPLEDEX_IDS = Object.freeze(SANPLEDEX_FAMILIES.flatMap((family) => family.ids));
 
   const SECRET_POWERHOUSE_IDS = [149, 248, 373, 376, 445, 635];
   const SECRET_POKEMON_IDS = [...SECRET_POWERHOUSE_IDS, 399];
+  const LOCAL_DEX_SIZE = Object.keys(POKEMON).length - SECRET_POKEMON_IDS.length;
 
-  const STARTERS = [POKEMON[1], POKEMON[4], POKEMON[7]];
+  const STARTERS = [POKEMON[1], POKEMON[4], POKEMON[7], POKEMON[9001]];
   const WILD_TABLE = [
     { id: 16, weight: 24 }, { id: 19, weight: 22 }, { id: 10, weight: 18 },
-    { id: 13, weight: 15 }, { id: 43, weight: 14 }, { id: 25, weight: 7 },
+    { id: 13, weight: 15 }, { id: 43, weight: 14 }, { id: 9701, weight: 8 },
+    { id: 25, weight: 7 }, { id: 9501, weight: 6 }, { id: 9001, weight: 4 },
   ];
 
   const PRISM_WILD_TABLE = [
     { id: 92, weight: 22 }, { id: 63, weight: 19 }, { id: 81, weight: 18 },
-    { id: 96, weight: 16 }, { id: 104, weight: 13 }, { id: 133, weight: 8 }, { id: 147, weight: 4 },
+    { id: 96, weight: 16 }, { id: 104, weight: 13 }, { id: 9301, weight: 8 }, { id: 133, weight: 8 }, { id: 9401, weight: 7 }, { id: 147, weight: 4 },
   ];
 
   const BUILDING_SPRITES = {
@@ -181,12 +401,12 @@
   ];
 
   const worldObjects = [
-    { id: "balls-ada", dimension: "san_pablo", x: 430, y: 1145, kind: "balls", amount: 2, name: "2 Poké Balls", sprite: "poke-ball" },
-    { id: "potion-memphis", dimension: "san_pablo", x: 1060, y: 850, kind: "potions", amount: 1, name: "Poción", sprite: "potion" },
-    { id: "berry-estambul", dimension: "san_pablo", x: 1840, y: 1150, kind: "berries", amount: 2, name: "2 Bayas Aranja", sprite: "oran-berry" },
-    { id: "shard-jerusalen", dimension: "san_pablo", x: 970, y: 275, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
-    { id: "shard-persepolis", dimension: "san_pablo", x: 1060, y: 1160, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
-    { id: "shard-siracusa", dimension: "san_pablo", x: 1250, y: 1435, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
+    { id: "balls-ada", dimension: "san_pablo", x: 285, y: 1145, kind: "balls", amount: 2, name: "2 Poké Balls", sprite: "poke-ball" },
+    { id: "potion-memphis", dimension: "san_pablo", x: 1030, y: 1042, kind: "potions", amount: 1, name: "Poción", sprite: "potion" },
+    { id: "berry-estambul", dimension: "san_pablo", x: 1900, y: 742, kind: "berries", amount: 2, name: "2 Bayas Aranja", sprite: "oran-berry" },
+    { id: "shard-jerusalen", dimension: "san_pablo", x: 950, y: 505, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
+    { id: "shard-persepolis", dimension: "san_pablo", x: 900, y: 1300, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
+    { id: "shard-siracusa", dimension: "san_pablo", x: 850, y: 1572, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
     { id: "ultra-west", dimension: "prism", x: 260, y: 1190, kind: "ultraBalls", amount: 2, name: "2 Ultra Balls", sprite: "ultra-ball" },
     { id: "max-potion-east", dimension: "prism", x: 1800, y: 1190, kind: "potions", amount: 2, name: "2 Pociones", sprite: "super-potion" },
     { id: "rare-candy-north", dimension: "prism", x: 1040, y: 360, kind: "rareCandies", amount: 1, name: "Caramelo Raro", sprite: "rare-candy" },
@@ -196,25 +416,35 @@
   const INVENTORY_ITEMS = [
     { key: "balls", name: "Poké Ball", sprite: "poke-ball", description: "Dispositivo estándar para capturar Pokémon." },
     { key: "ultraBalls", name: "Ultra Ball", sprite: "ultra-ball", description: "Aumenta mucho la probabilidad de captura." },
+    { key: "masterBalls", name: "Master Ball", sprite: "master-ball", description: "Captura sin fallar a cualquier Pokémon salvaje." },
     { key: "potions", name: "Poción", sprite: "potion", description: "Restaura 20 PS al Pokémon activo." },
+    { key: "maxPotions", name: "Poción Máxima", sprite: "max-potion", description: "Restaura todos los PS del Pokémon activo." },
     { key: "berries", name: "Baya Aranja", sprite: "oran-berry", description: "Restaura 10 PS al Pokémon activo." },
     { key: "rareCandies", name: "Caramelo Raro", sprite: "rare-candy", description: "Sube inmediatamente un nivel." },
+    { key: "prismBatteries", name: "Batería Prisma", sprite: "cell-battery", description: "Recupera una carga de luz dentro del laberinto." },
     { key: "prismShards", name: "Fragmento Prisma", sprite: "odd-keystone", description: "Tres fragmentos abren el portal dimensional." },
   ];
+
+  const BLACK_MARKET_LIMITS = Object.freeze({ rareCandy: 2, masterBall: 1, prismBattery: 3 });
 
   const treePositions = [];
   const carPositions = [];
 
   const defaultState = () => ({
-    version: 5, mapRevision: 7, started: false, starterChosen: false,
+    version: 6, mapRevision: MAP_REVISION, started: false, starterChosen: false,
     worldX: NORMAL_START.x, worldY: NORMAL_START.y, direction: NORMAL_START.direction,
     distance: 0, grassDistance: 0, balls: 6, trainerLevel: 1,
     activeTeamIndex: 0, caught: [], seen: [], team: [], questStage: 0,
     clinicGiftClaimed: false, sound: true, buildingSkins: {},
     dimension: "san_pablo", dimensionVisited: false, caughtDimension: false,
-    returnPosition: null, collectedObjects: [], interior: null, maintenanceReturn: null,
+    returnPosition: null, collectedObjects: [], interior: null, interiorData: null, maintenanceReturn: null,
     maze: null, secretPokemonSaved: false, secretPokemonId: null,
-    inventory: { potions: 1, berries: 1, ultraBalls: 0, rareCandies: 0, prismShards: 0 },
+    money: 500, battlesWon: 0, gifts: {},
+    blackMarket: { discovered: false, purchases: { rareCandy: 0, masterBall: 0, prismBattery: 0 } },
+    inventory: {
+      potions: 1, maxPotions: 0, berries: 1,
+      ultraBalls: 0, masterBalls: 0, rareCandies: 0, prismBatteries: 0, prismShards: 0,
+    },
   });
 
   let state = defaultState();
@@ -228,17 +458,23 @@
   let animationFrame = 0;
   let playerRunning = false;
   let lastEncounterCheck = 0;
+  let lastGrassStepAt = 0;
+  let lastGrassStepX = 0;
+  let lastGrassStepY = 0;
   let camera = { x: 640, y: 1140 };
   let lastArea = "";
   let lastSaveAt = 0;
   let saveStatusTimer = 0;
   let selectedBuildingId = "";
   let inventoryOpenedFromBattle = false;
+  let selectedSanpledexId = PETRILLO_ID;
+  let lastSanpledexFocus = null;
   let mazeDefinition = null;
   let microphoneStream = null;
   let microphoneAnalyser = null;
   let microphoneData = null;
   let microphoneLevel = 0;
+  let microphoneFallbackMode = false;
   let shadowPath = [];
   let shadowPathTimer = 0;
   let jumpScareActive = false;
@@ -250,6 +486,8 @@
   let breathingVolume = 0;
   let breathingPlayPending = false;
   let quietStillTime = 0;
+  let activeShopType = "mart";
+  let lastShopFocus = null;
   const mazeMotion = { forward: 0, strafe: 0, turn: 0 };
   const input = {
     up: false, down: false, left: false, right: false,
@@ -258,7 +496,23 @@
 
   const buildingSheet = new Image();
   const playerSheet = new Image();
-  const cityMapImage = new Image();
+  const npcSheet = new Image();
+  const guideNpcSheet = new Image();
+  const npcRosterSheets = new Map();
+  const cityMapPreview = new Image();
+  const cityNavigationMask = new Image();
+  const encounterGrassSheet = new Image();
+  const cityMapTileCache = new Map();
+  const cityMapVisibleTileIds = new Set();
+  const cityWorldAssets = Array.isArray(CITY_MAP.worldAssets) ? CITY_MAP.worldAssets : [];
+  const cityStreetPolish = CITY_MAP.streetPolish || {};
+  const cityWorldAssetImages = new Map();
+  const MAP_MEMORY_BUDGET_BYTES = (Number(CITY_MAP.memoryBudgetMB) || 96) * 1024 * 1024;
+  const MAP_PREFETCH_LIMIT = Number(CITY_MAP.prefetchLimit) || 2;
+  const MAP_PREFETCH_SECONDS = Number(CITY_MAP.prefetchSeconds) || .65;
+  const MAP_PREFETCH_MARGIN = Number(CITY_MAP.prefetchMargin) || 64;
+  const MAP_UNLOAD_MARGIN = Number(CITY_MAP.unloadMargin) || 160;
+  const MAP_UNLOAD_DELAY_MS = Number(CITY_MAP.unloadDelayMs) || 500;
   const shadowStalkerImage = new Image();
   const itemImages = new Map();
   const pokemonArtworkImages = new Map();
@@ -271,7 +525,13 @@
   const activeScareClips = new Set();
   let buildingSheetReady = false;
   let playerSheetReady = false;
-  let cityMapReady = false;
+  let npcSheetReady = false;
+  let guideNpcSheetReady = false;
+  let cityMapPreviewReady = false;
+  let cityNavigationMaskReady = false;
+  let cityNavigationMaskData = null;
+  let encounterGrassSheetReady = false;
+  let lastMapCameraSample = { x: camera.x, y: camera.y, time: 0 };
   let shadowStalkerReady = false;
   const defaultMapTiles = new Map();
   const tileOverrides = new Map();
@@ -285,6 +545,18 @@
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
+  function fadeTransition(midAction) {
+    return new Promise((resolve) => {
+      const overlay = elements.flashOverlay;
+      overlay.classList.remove("fade"); void overlay.offsetWidth;
+      overlay.classList.add("fade");
+      window.setTimeout(() => {
+        try { if (typeof midAction === "function") midAction(); } catch (error) { console.warn(error); }
+        window.setTimeout(() => { overlay.classList.remove("fade"); resolve(); }, 320);
+      }, 300);
+    });
+  }
+
   const elements = {
     titleScreen: $("#titleScreen"), worldScreen: $("#worldScreen"), battleScreen: $("#battleScreen"),
     starterModal: $("#starterModal"), starterGrid: $("#starterGrid"), newGameButton: $("#newGameButton"),
@@ -296,6 +568,10 @@
     dialogText: $("#dialogText"), dialogNext: $("#dialogNext"), teamDrawer: $("#teamDrawer"),
     drawerScrim: $("#drawerScrim"), teamList: $("#teamList"), drawerCaughtCount: $("#drawerCaughtCount"),
     dexProgress: $("#dexProgress"), teamButton: $("#teamButton"), closeTeamButton: $("#closeTeamButton"),
+    sanpledexButton: $("#sanpledexButton"), sanpledexModal: $("#sanpledexModal"),
+    closeSanpledex: $("#closeSanpledex"), sanpledexList: $("#sanpledexList"),
+    sanpledexDetail: $("#sanpledexDetail"), sanpledexCaughtCount: $("#sanpledexCaughtCount"),
+    sanpledexSeenCount: $("#sanpledexSeenCount"), sanpledexProgress: $("#sanpledexProgress"),
     saveButton: $("#saveButton"), resetButton: $("#resetButton"), soundButton: $("#soundButton"),
     soundIcon: $("#soundIcon"), enemyName: $("#enemyName"), enemyLevel: $("#enemyLevel"),
     enemyHpBar: $("#enemyHpBar"), enemyHpText: $("#enemyHpText"), enemySprite: $("#enemySprite"),
@@ -309,17 +585,21 @@
     buildingEditorButton: $("#buildingEditorButton"), buildingEditor: $("#buildingEditor"),
     closeBuildingEditor: $("#closeBuildingEditor"), editorScrim: $("#editorScrim"),
     tileSelectionInfo: $("#tileSelectionInfo"), tilePalette: $("#tilePalette"),
-    tileEditorHint: $("#tileEditorHint"), copyTileButton: $("#copyTileButton"),
+    tileEditorHint: $("#tileEditorHint"), copyTileButton: $("#copyTileButton"), copyNpcButton: $("#copyNpcButton"),
     resetTileMap: $("#resetTileMap"),
     inventoryButton: $("#inventoryButton"), inventoryDrawer: $("#inventoryDrawer"),
     closeInventory: $("#closeInventory"), inventoryScrim: $("#inventoryScrim"),
     dimensionProgress: $("#dimensionProgress"), inventoryList: $("#inventoryList"),
     gameCard: $("#gameCard"), fullscreenButton: $("#fullscreenButton"),
     mazeHud: $("#mazeHud"), lightCharges: $("#lightCharges"), shadowStatus: $("#shadowStatus"),
+    mazeObjective: $("#mazeObjective"), noiseLabel: $("#noiseLabel"),
     noiseMeter: $("#noiseMeter"), jumpScare: $("#jumpScare"), captureBadge: $("#captureBadge"),
     captureAreaName: $("#captureAreaName"), captureActivity: $("#captureActivity"),
     miniMap: $("#miniMap"), miniMapCanvas: $("#miniMapCanvas"), miniMapArea: $("#miniMapArea"),
-    saveStatus: $("#saveStatus"),
+    saveStatus: $("#saveStatus"), coordinateHud: $("#coordinateHud"),
+    battleScene: $(".battle-scene"), shopModal: $("#shopModal"), shopDialog: $("#shopDialog"),
+    shopTitle: $("#shopTitle"), shopEyebrow: $("#shopEyebrow"), shopTip: $("#shopTip"),
+    shopMoney: $("#shopMoney"), shopList: $("#shopList"), closeShop: $("#closeShop"), money: $("#money"),
   };
 
   async function requestGameFullscreen() {
@@ -433,7 +713,25 @@
     }).sort((a, b) => b.distance - a.distance);
     const goal = cells[0];
     const monster = cells.find((cell) => cell.distance > goal.distance * .58 && Math.abs(cell.x - goal.x) + Math.abs(cell.y - goal.y) > 8) || cells[Math.floor(cells.length * .18)];
-    return { grid, size, start, goal: { x: goal.x, y: goal.y }, monster: { x: monster.x, y: monster.y } };
+    const goalPath = [{ x: goal.x, y: goal.y }];
+    while (goalPath.length && (goalPath.at(-1).x !== start.x || goalPath.at(-1).y !== start.y)) {
+      const current = goalPath.at(-1);
+      const currentDistance = distances.get(`${current.x},${current.y}`);
+      const previous = [[1,0],[-1,0],[0,1],[0,-1]]
+        .map(([dx, dy]) => ({ x: current.x + dx, y: current.y + dy }))
+        .find((cell) => distances.get(`${cell.x},${cell.y}`) === currentDistance - 1);
+      if (!previous) break;
+      goalPath.push(previous);
+    }
+    goalPath.reverse();
+    const marketIndex = clamp(Math.round((goalPath.length - 1) * .42), 1, Math.max(1, goalPath.length - 2));
+    const market = goalPath[marketIndex] || start;
+    return {
+      grid, size, start,
+      goal: { x: goal.x, y: goal.y },
+      monster: { x: monster.x, y: monster.y },
+      market: { x: market.x, y: market.y },
+    };
   }
 
   function mazeDistances(grid, start) {
@@ -472,7 +770,7 @@
       state.maze = {
         playerX: start.x + .5, playerY: start.y + .5, angle: firstOpenDirection(grid, start),
         lightCharges: 3, monsterX: monster.x + .5, monsterY: monster.y + .5,
-        monsterRepel: 0, captures: 0, steps: 0, alertTimer: 0,
+        monsterRepel: 0, captures: 0, steps: 0, alertTimer: 0, marketReached: false,
       };
       shadowPath = []; shadowPathTimer = 0; sprintScare = null; sprintScareCooldown = 5;
       quietStillTime = 0;
@@ -483,10 +781,13 @@
   }
 
   async function requestMicrophoneAccess() {
-    if (microphoneStream?.getAudioTracks().some((track) => track.readyState === "live")) return true;
+    if (microphoneStream?.getAudioTracks().some((track) => track.readyState === "live")) {
+      microphoneFallbackMode = false;
+      return "microphone";
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
-      showDialog(["Este navegador no ofrece acceso al micrófono. Abre el juego en Chrome mediante localhost o HTTPS."], "MIC");
-      return false;
+      microphoneFallbackMode = true;
+      return "movement";
     }
     try {
       microphoneStream = await navigator.mediaDevices.getUserMedia({
@@ -501,12 +802,14 @@
       microphoneAnalyser.smoothingTimeConstant = .5;
       microphoneData = new Uint8Array(microphoneAnalyser.fftSize);
       source.connect(microphoneAnalyser);
-      return true;
+      microphoneFallbackMode = false;
+      return "microphone";
     } catch (error) {
       microphoneStream?.getTracks().forEach((track) => track.stop());
       microphoneStream = null; microphoneAnalyser = null; microphoneData = null;
-      showDialog(["La Dimensión Invertida necesita escuchar el entorno.", "Permite el uso del micrófono en Chrome y vuelve a tocar el portal."], "MIC");
-      return false;
+      microphoneFallbackMode = true;
+      console.info("Micrófono no disponible; se usará el ruido de movimiento.", error);
+      return "movement";
     }
   }
 
@@ -613,6 +916,7 @@
   function stopMicrophone() {
     microphoneStream?.getTracks().forEach((track) => track.stop());
     microphoneStream = null; microphoneAnalyser = null; microphoneData = null; microphoneLevel = 0;
+    microphoneFallbackMode = false;
     sprintScare = null;
     quietStillTime = 0;
     mazeMotion.forward = 0; mazeMotion.strafe = 0; mazeMotion.turn = 0;
@@ -663,15 +967,25 @@
     }
   }
 
-  function artworkUrl(id) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`; }
-  function iconUrl(id) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/${id}.png`; }
-  function frontSpriteUrl(id) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif`; }
-  function backSpriteUrl(id) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/back/${id}.gif`; }
+  function customPokemonAsset(id, view = "front") { return CUSTOM_POKEMON_ASSETS[id]?.[view] || null; }
+  function isCustomPokemon(id) { return Boolean(CUSTOM_POKEMON_ASSETS[id]); }
+  function isPetrillo(id) { return Number(id) === PETRILLO_ID; }
+  function setBattlePokemonMotion(element, id) {
+    const motion = CUSTOM_POKEMON_MOTIONS[Number(id)];
+    element.classList.toggle("custom-pokemon-motion", Boolean(motion));
+    if (motion) element.dataset.pokemonMotion = motion;
+    else delete element.dataset.pokemonMotion;
+  }
+  function artworkUrl(id) { return customPokemonAsset(id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`; }
+  function iconUrl(id) { return customPokemonAsset(id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/${id}.png`; }
+  function frontSpriteUrl(id) { return customPokemonAsset(id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif`; }
+  function backSpriteUrl(id) { return customPokemonAsset(id, "back") || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/back/${id}.gif`; }
   function itemSpriteUrl(name) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${name}.png`; }
   function currentWorldWidth() { return state.dimension === "prism" ? PRISM_WIDTH : WORLD_WIDTH; }
   function currentWorldHeight() { return state.dimension === "prism" ? PRISM_HEIGHT : WORLD_HEIGHT; }
 
   function attachSpriteFallback(image, id, back = false) {
+    if (isCustomPokemon(id)) { image.onerror = null; return; }
     image.onerror = () => {
       image.onerror = null;
       image.src = back
@@ -680,30 +994,591 @@
     };
   }
 
+  function worldAssetSource(asset) {
+    return CITY_MAP.assetSprites?.[asset.sprite] || asset.src || "";
+  }
+
+  function worldAssetUrl(source) {
+    const separator = source.includes("?") ? "&" : "?";
+    return `${source}${separator}v=${Number(CITY_MAP.assetRevision) || 1}`;
+  }
+
+  function buildWorldAssetDrawable(image) {
+    /* Los PNG del catalogo ya pasan por el limpiador de chroma/alpha. Evitar
+       un canvas duplicado por prototipo ahorra decenas de MiB con el mapa completo. */
+    return image;
+  }
+
+  function buildNavigationMaskData() {
+    const canvas = document.createElement("canvas");
+    canvas.width = cityNavigationMask.naturalWidth;
+    canvas.height = cityNavigationMask.naturalHeight;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.imageSmoothingEnabled = false;
+    context.drawImage(cityNavigationMask, 0, 0);
+    try {
+      const source = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      const pixels = new Uint8Array(canvas.width * canvas.height);
+      for (let index = 0; index < pixels.length; index += 1) pixels[index] = source[index * 4];
+      cityNavigationMaskData = { width: canvas.width, height: canvas.height, pixels };
+      cityNavigationMaskReady = true;
+      document.documentElement.dataset.navigationMask = `${canvas.width}x${canvas.height}@${CITY_MAP.navigationMask?.cellSize || 8}`;
+      document.documentElement.dataset.navigationMaskReady = "true";
+    } catch (error) {
+      cityNavigationMaskData = null;
+      cityNavigationMaskReady = false;
+      document.documentElement.dataset.navigationMaskReady = "error";
+      console.warn("No se pudo leer la mascara semantica de navegacion; se usa la cuadricula de respaldo.", error);
+    }
+  }
+
+  function updateWorldAssetDataset() {
+    const records = [...cityWorldAssetImages.values()];
+    const ready = records.filter((record) => record.ready).length;
+    const failed = records.filter((record) => record.failed).length;
+    document.documentElement.dataset.worldAssetCount = String(cityWorldAssets.length);
+    document.documentElement.dataset.worldAssetSpriteCount = String(records.length);
+    document.documentElement.dataset.worldAssetsReady = failed ? "error" : (records.length && ready === records.length ? "true" : "loading");
+  }
+
+  function loadCityWorldAssets() {
+    cityWorldAssets.forEach((asset) => {
+      const source = worldAssetSource(asset);
+      if (!source || cityWorldAssetImages.has(source)) return;
+      const image = new Image();
+      const record = { image, drawable: null, ready: false, failed: false };
+      cityWorldAssetImages.set(source, record);
+      image.onload = () => {
+        record.drawable = buildWorldAssetDrawable(image);
+        record.ready = true;
+        record.failed = false;
+        updateWorldAssetDataset();
+        updateAssetNotice();
+      };
+      image.onerror = () => {
+        record.drawable = null;
+        record.ready = false;
+        record.failed = true;
+        updateWorldAssetDataset();
+        updateAssetNotice();
+      };
+      image.decoding = "async";
+      image.src = worldAssetUrl(source);
+    });
+    updateWorldAssetDataset();
+  }
+
+  function worldAssetsReady() {
+    const expected = new Set(cityWorldAssets.map(worldAssetSource).filter(Boolean)).size;
+    return cityWorldAssetImages.size === expected
+      && [...cityWorldAssetImages.values()].every((record) => record.ready);
+  }
+
+  function encounterGrassReady() {
+    return !CITY_MAP.encounterGrass?.image || encounterGrassSheetReady;
+  }
+
+  function deployedNpcRosterSprites() {
+    const exterior = (CITY_MAP.npcs || [])
+      .map((npc) => npc.sprite)
+      .filter((sprite) => typeof sprite === "string" && sprite.startsWith("npc-"));
+    const interior = (CITY_MAP.doors || [])
+      .map((door) => NPC_DEFS[door.npc]?.sprite)
+      .filter((sprite) => typeof sprite === "string" && sprite.startsWith("npc-"));
+    return new Set([...interior, ...exterior]);
+  }
+
+  function updateNpcDeploymentDataset() {
+    const deployed = deployedNpcRosterSprites();
+    document.documentElement.dataset.npcDeployedCount = String(deployed.size);
+    document.documentElement.dataset.npcDeploymentReady = String(
+      deployed.size === Object.keys(NPC_ROSTER_SHEET_URLS).length
+      && [...deployed].every((sprite) => npcRosterSheets.get(sprite)?.ready),
+    );
+  }
+
+  function updateNpcRosterDataset() {
+    const records = [...npcRosterSheets.values()];
+    const ready = records.filter((record) => record.ready).length;
+    const failed = records.filter((record) => record.failed).length;
+    document.documentElement.dataset.npcRosterCount = String(records.length);
+    document.documentElement.dataset.npcRosterLoaded = String(ready);
+    document.documentElement.dataset.npcRosterReady = failed ? "error" : (ready === records.length ? "true" : "loading");
+    updateNpcDeploymentDataset();
+  }
+
+  function loadNpcRosterSprites() {
+    Object.entries(NPC_ROSTER_SHEET_URLS).forEach(([id, source]) => {
+      const image = new Image();
+      const record = { image, ready: false, failed: false };
+      npcRosterSheets.set(id, record);
+      image.onload = () => { record.ready = true; record.failed = false; updateNpcRosterDataset(); };
+      image.onerror = () => { record.ready = false; record.failed = true; updateNpcRosterDataset(); };
+      image.decoding = "async";
+      image.src = source;
+    });
+    updateNpcRosterDataset();
+  }
+
   function loadAssets() {
     buildingSheet.onload = () => { buildingSheetReady = true; };
     buildingSheet.onerror = () => { buildingSheetReady = false; };
     playerSheet.onload = () => { buildPlayerFrames(); playerSheetReady = true; updateAssetNotice(); };
     playerSheet.onerror = () => { playerSheetReady = false; elements.assetNotice.textContent = "Personaje en modo alternativo"; };
-    cityMapImage.onload = () => { cityMapReady = true; document.documentElement.dataset.cityMapReady = "true"; updateAssetNotice(); };
-    cityMapImage.onerror = () => { cityMapReady = false; document.documentElement.dataset.cityMapReady = "false"; elements.assetNotice.textContent = "No se pudo cargar el mapa de la ciudad"; };
+    npcSheet.onload = () => { npcSheetReady = true; };
+    npcSheet.onerror = () => { npcSheetReady = false; };
+    guideNpcSheet.onload = () => { guideNpcSheetReady = true; updateAssetNotice(); };
+    guideNpcSheet.onerror = () => { guideNpcSheetReady = false; elements.assetNotice.textContent = "NPC en modo alternativo"; };
+    cityMapPreview.onload = () => { cityMapPreviewReady = true; updateMapTileStreaming(); updateAssetNotice(); };
+    cityMapPreview.onerror = () => { cityMapPreviewReady = false; elements.assetNotice.textContent = "No se pudo cargar la vista previa del mapa"; };
+    cityNavigationMask.onload = () => { buildNavigationMaskData(); updateAssetNotice(); };
+    cityNavigationMask.onerror = () => {
+      cityNavigationMaskReady = false;
+      cityNavigationMaskData = null;
+      document.documentElement.dataset.navigationMaskReady = "error";
+      console.warn("No se pudo cargar la mascara semantica; se mantiene la navegacion de respaldo.");
+    };
+    encounterGrassSheet.onload = () => {
+      encounterGrassSheetReady = true;
+      document.documentElement.dataset.encounterGrassReady = "true";
+      updateAssetNotice();
+    };
+    encounterGrassSheet.onerror = () => {
+      encounterGrassSheetReady = false;
+      document.documentElement.dataset.encounterGrassReady = "error";
+      console.warn("No se pudo cargar el sprite de hierba alta.");
+      updateAssetNotice();
+    };
     shadowStalkerImage.onload = () => { shadowStalkerReady = true; };
     shadowStalkerImage.onerror = () => { shadowStalkerReady = false; };
     buildingSheet.src = BUILDING_SHEET_URL;
     playerSheet.src = PLAYER_SHEET_URL;
-    cityMapImage.src = CITY_MAP.image;
+    npcSheet.src = NPC_SHEET_URL;
+    guideNpcSheet.src = GUIDE_NPC_SHEET_URL;
+    loadNpcRosterSprites();
+    cityMapPreview.decoding = "async";
+    cityMapPreview.src = CITY_MAP.previewImage;
+    if (CITY_MAP.navigationMask?.image) {
+      cityNavigationMask.decoding = "async";
+      cityNavigationMask.src = `${CITY_MAP.navigationMask.image}?v=${CITY_MAP.navigationMask.revision || 1}`;
+    }
+    if (CITY_MAP.encounterGrass?.image) {
+      document.documentElement.dataset.encounterGrassReady = "loading";
+      encounterGrassSheet.decoding = "async";
+      encounterGrassSheet.src = `${CITY_MAP.encounterGrass.image}?v=${CITY_MAP.encounterGrass.revision || 1}`;
+    } else {
+      document.documentElement.dataset.encounterGrassReady = "unused";
+    }
+    loadCityWorldAssets();
+    updateMapTileStreaming();
     shadowStalkerImage.src = SHADOW_SPRITE_URL;
     Object.values(horrorAudio).forEach((audio) => audio.load());
   }
 
   function updateAssetNotice() {
-    if (cityMapReady && playerSheetReady) elements.assetNotice.classList.add("hidden");
+    const visibleIds = [...cityMapVisibleTileIds];
+    const readyCount = visibleIds.filter((id) => cityMapTileCache.get(id)?.ready).length;
+    const visibleReady = visibleIds.length > 0 && readyCount === visibleIds.length;
+    document.documentElement.dataset.cityMapReady = visibleReady ? "true" : "loading";
+    const failedAssets = [...cityWorldAssetImages.values()].filter((record) => record.failed).length;
+    if (visibleReady && playerSheetReady && guideNpcSheetReady && worldAssetsReady() && encounterGrassReady()) elements.assetNotice.classList.add("hidden");
+    else if (!visibleReady && state.started && state.dimension === "san_pablo" && !state.interior) {
+      elements.assetNotice.textContent = `Cargando mapa HD visible… ${readyCount}/${visibleIds.length}`;
+      elements.assetNotice.classList.remove("hidden");
+    } else if (failedAssets && state.started && state.dimension === "san_pablo" && !state.interior) {
+      elements.assetNotice.textContent = `No se pudieron cargar ${failedAssets} objetos del mapa`;
+      elements.assetNotice.classList.remove("hidden");
+    } else if (!worldAssetsReady() && state.started && state.dimension === "san_pablo" && !state.interior) {
+      const records = [...cityWorldAssetImages.values()];
+      const readyAssets = records.filter((record) => record.ready).length;
+      elements.assetNotice.textContent = `Cargando objetos del mapa… ${readyAssets}/${records.length}`;
+      elements.assetNotice.classList.remove("hidden");
+    } else if (!encounterGrassReady() && state.started && state.dimension === "san_pablo" && !state.interior) {
+      elements.assetNotice.textContent = "Cargando hierba de encuentros…";
+      elements.assetNotice.classList.remove("hidden");
+    }
+  }
+
+  function mapTileAtWorld(x, y) {
+    return (CITY_MAP.tiles || []).find((tile) => x >= tile.x && x < tile.x + tile.w
+      && y >= tile.y && y < tile.y + tile.h) || null;
+  }
+
+  function disposeMapDrawable(drawable) {
+    if (typeof drawable?.close === "function") drawable.close();
+    if (drawable instanceof HTMLImageElement) {
+      drawable.onload = null;
+      drawable.onerror = null;
+      drawable.removeAttribute("src");
+    }
+  }
+
+  function releaseMapTile(id) {
+    const record = cityMapTileCache.get(id);
+    if (!record) return;
+    record.controller?.abort();
+    disposeMapDrawable(record.drawable);
+    if (record.objectUrl) URL.revokeObjectURL(record.objectUrl);
+    cityMapTileCache.delete(id);
+  }
+
+  function releaseAllMapTiles() {
+    [...cityMapTileCache.keys()].forEach(releaseMapTile);
+    cityMapVisibleTileIds.clear();
+    lastMapCameraSample = { x: camera.x, y: camera.y, time: 0 };
+    updateMapStreamingDataset();
+  }
+
+  function decodeMapTileAsImage(tile, controller) {
+    const image = new Image();
+    image.decoding = "async";
+    return new Promise((resolve, reject) => {
+      let settled = false;
+
+      const cleanup = () => {
+        image.onload = null;
+        image.onerror = null;
+        controller.signal.removeEventListener("abort", abortLoad);
+      };
+      const finish = (callback) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        callback();
+      };
+      const abortLoad = () => finish(() => {
+        image.removeAttribute("src");
+        const error = new Error("Carga de mapa cancelada");
+        error.name = "AbortError";
+        reject(error);
+      });
+
+      image.onload = () => finish(() => resolve({ drawable: image, objectUrl: null }));
+      image.onerror = () => finish(() => reject(new Error(`No se pudo decodificar ${tile.image}`)));
+      controller.signal.addEventListener("abort", abortLoad, { once: true });
+      if (controller.signal.aborted) abortLoad();
+      else image.src = tile.image;
+    });
+  }
+
+  async function decodeMapTile(tile, controller) {
+    if (window.location.protocol === "file:") return decodeMapTileAsImage(tile, controller);
+
+    let objectUrl = null;
+    try {
+      const response = await fetch(tile.image, { signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      if (typeof window.createImageBitmap === "function") return window.createImageBitmap(blob);
+
+      objectUrl = URL.createObjectURL(blob);
+      const image = new Image();
+      image.decoding = "async";
+      image.src = objectUrl;
+      await image.decode();
+      return { drawable: image, objectUrl };
+    } catch (error) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (error?.name === "AbortError") throw error;
+      return decodeMapTileAsImage(tile, controller);
+    }
+  }
+
+  function ensureMapTileLoaded(tile, priority, now) {
+    const existing = cityMapTileCache.get(tile.id);
+    if (existing?.failedAt && now - existing.failedAt >= 2000) releaseMapTile(tile.id);
+    else if (existing) {
+      existing.lastNeededAt = now;
+      existing.priority = Math.min(existing.priority, priority);
+      return;
+    }
+
+    const controller = new AbortController();
+    const record = {
+      tile,
+      controller,
+      drawable: null,
+      objectUrl: null,
+      ready: false,
+      bytes: 0,
+      priority,
+      lastNeededAt: now,
+    };
+    cityMapTileCache.set(tile.id, record);
+    decodeMapTile(tile, controller).then((decoded) => {
+      const drawable = decoded?.drawable || decoded;
+      if (cityMapTileCache.get(tile.id) !== record) {
+        disposeMapDrawable(drawable);
+        if (decoded?.objectUrl) URL.revokeObjectURL(decoded.objectUrl);
+        return;
+      }
+      record.drawable = drawable;
+      record.objectUrl = decoded?.objectUrl || null;
+      record.ready = true;
+      record.bytes = (drawable.width || drawable.naturalWidth || 0) * (drawable.height || drawable.naturalHeight || 0) * 4;
+      updateMapStreamingDataset();
+      updateAssetNotice();
+    }).catch((error) => {
+      if (error?.name === "AbortError" || cityMapTileCache.get(tile.id) !== record) return;
+      record.ready = false;
+      record.failedAt = performance.now();
+      elements.assetNotice.textContent = `No se pudo cargar el sector ${tile.id}`;
+      elements.assetNotice.classList.remove("hidden");
+      updateMapStreamingDataset();
+    });
+  }
+
+  function mapTileIntersects(tile, bounds) {
+    return tile.x < bounds.right && tile.x + tile.w > bounds.left
+      && tile.y < bounds.bottom && tile.y + tile.h > bounds.top;
+  }
+
+  function mapTilesIntersecting(bounds) {
+    return (CITY_MAP.tiles || []).filter((tile) => mapTileIntersects(tile, bounds));
+  }
+
+  function expandedMapBounds(bounds, margin) {
+    return {
+      left: clamp(bounds.left - margin, 0, WORLD_WIDTH),
+      top: clamp(bounds.top - margin, 0, WORLD_HEIGHT),
+      right: clamp(bounds.right + margin, 0, WORLD_WIDTH),
+      bottom: clamp(bounds.bottom + margin, 0, WORLD_HEIGHT),
+    };
+  }
+
+  function mapRenderCamera(renderScale = { scaleX: 1, scaleY: 1 }) {
+    const scaleX = Math.max(.001, renderScale.scaleX || 1);
+    const scaleY = Math.max(.001, renderScale.scaleY || 1);
+    return {
+      x: Math.round(camera.x * scaleX) / scaleX,
+      y: Math.round(camera.y * scaleY) / scaleY,
+    };
+  }
+
+  function mapViewportBounds(renderScale) {
+    const renderedCamera = mapRenderCamera(renderScale);
+    return {
+      left: renderedCamera.x,
+      top: renderedCamera.y,
+      right: renderedCamera.x + VIEW_WIDTH,
+      bottom: renderedCamera.y + VIEW_HEIGHT,
+    };
+  }
+
+  function updateMapStreamingDataset() {
+    const records = [...cityMapTileCache.values()];
+    const visibleIds = [...cityMapVisibleTileIds];
+    const readyVisible = visibleIds.filter((id) => cityMapTileCache.get(id)?.ready).length;
+    const bytes = records.reduce((total, record) => total + (record.bytes || 0), 0);
+    document.documentElement.dataset.mapTilesLoaded = records.filter((record) => record.ready).map((record) => record.tile.id).join(",");
+    document.documentElement.dataset.mapTilesVisible = visibleIds.join(",");
+    document.documentElement.dataset.mapTilesVisibleReady = `${readyVisible}/${visibleIds.length}`;
+    document.documentElement.dataset.mapTileCacheSize = String(records.length);
+    document.documentElement.dataset.mapTileCacheBytes = String(bytes);
+    document.documentElement.dataset.mapTileCacheLimit = `${Math.round(MAP_MEMORY_BUDGET_BYTES / 1024 / 1024)}MiB`;
+  }
+
+  function evictMapTilesToBudget(now) {
+    let bytes = [...cityMapTileCache.values()].reduce((total, record) => total + (record.bytes || 0), 0);
+    const candidates = [...cityMapTileCache.values()]
+      .filter((record) => !cityMapVisibleTileIds.has(record.tile.id))
+      .sort((a, b) => a.lastNeededAt - b.lastNeededAt || b.priority - a.priority);
+    while (bytes > MAP_MEMORY_BUDGET_BYTES && candidates.length) {
+      const record = candidates.shift();
+      bytes -= record.bytes || 0;
+      releaseMapTile(record.tile.id);
+    }
+
+    const recordLimit = cityMapVisibleTileIds.size + MAP_PREFETCH_LIMIT + 8;
+    const excess = [...cityMapTileCache.values()]
+      .filter((record) => !cityMapVisibleTileIds.has(record.tile.id) && now - record.lastNeededAt > MAP_UNLOAD_DELAY_MS)
+      .sort((a, b) => a.lastNeededAt - b.lastNeededAt);
+    while (cityMapTileCache.size > recordLimit && excess.length) releaseMapTile(excess.shift().tile.id);
+  }
+
+  function updateMapTileStreaming(renderScale = { scaleX: 1, scaleY: 1 }, now = performance.now()) {
+    const outsideCity = !state.started || state.dimension !== "san_pablo" || Boolean(state.interior)
+      || elements.worldScreen.classList.contains("hidden");
+    if (outsideCity) {
+      releaseAllMapTiles();
+      return;
+    }
+
+    const view = mapViewportBounds(renderScale);
+    const elapsedSeconds = lastMapCameraSample.time ? clamp((now - lastMapCameraSample.time) / 1000, .001, .25) : 0;
+    const velocityX = elapsedSeconds ? (camera.x - lastMapCameraSample.x) / elapsedSeconds : 0;
+    const velocityY = elapsedSeconds ? (camera.y - lastMapCameraSample.y) / elapsedSeconds : 0;
+    lastMapCameraSample = { x: camera.x, y: camera.y, time: now };
+
+    const chunkSize = CITY_MAP.chunkSize || 512;
+    const predictionX = clamp(velocityX * MAP_PREFETCH_SECONDS, -chunkSize, chunkSize);
+    const predictionY = clamp(velocityY * MAP_PREFETCH_SECONDS, -chunkSize, chunkSize);
+    const predicted = {
+      left: clamp(view.left + predictionX, 0, WORLD_WIDTH),
+      top: clamp(view.top + predictionY, 0, WORLD_HEIGHT),
+      right: clamp(view.right + predictionX, 0, WORLD_WIDTH),
+      bottom: clamp(view.bottom + predictionY, 0, WORLD_HEIGHT),
+    };
+    const swept = expandedMapBounds({
+      left: Math.min(view.left, predicted.left),
+      top: Math.min(view.top, predicted.top),
+      right: Math.max(view.right, predicted.right),
+      bottom: Math.max(view.bottom, predicted.bottom),
+    }, MAP_PREFETCH_MARGIN);
+
+    const visible = mapTilesIntersecting(view);
+    cityMapVisibleTileIds.clear();
+    visible.forEach((tile) => cityMapVisibleTileIds.add(tile.id));
+    const predictedCenterX = (predicted.left + predicted.right) / 2;
+    const predictedCenterY = (predicted.top + predicted.bottom) / 2;
+    const prefetch = mapTilesIntersecting(swept)
+      .filter((tile) => !cityMapVisibleTileIds.has(tile.id))
+      .sort((a, b) => Math.hypot(a.x + a.w / 2 - predictedCenterX, a.y + a.h / 2 - predictedCenterY)
+        - Math.hypot(b.x + b.w / 2 - predictedCenterX, b.y + b.h / 2 - predictedCenterY))
+      .slice(0, MAP_PREFETCH_LIMIT);
+    const desiredIds = new Set([...visible.map((tile) => tile.id), ...prefetch.map((tile) => tile.id)]);
+
+    visible.forEach((tile) => ensureMapTileLoaded(tile, 0, now));
+    prefetch.forEach((tile) => ensureMapTileLoaded(tile, 1, now));
+    const unloadBounds = expandedMapBounds(view, MAP_UNLOAD_MARGIN);
+    [...cityMapTileCache.values()].forEach((record) => {
+      if (desiredIds.has(record.tile.id)) {
+        record.lastNeededAt = now;
+        return;
+      }
+      if (!mapTileIntersects(record.tile, unloadBounds) && now - record.lastNeededAt > MAP_UNLOAD_DELAY_MS) releaseMapTile(record.tile.id);
+    });
+    evictMapTilesToBudget(now);
+    updateMapStreamingDataset();
+    updateAssetNotice();
+  }
+
+  function drawStreamedCityMap(context) {
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.fillStyle = "#244c39";
+    context.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    cityMapTileCache.forEach((record) => {
+      if (!record.ready) return;
+      const tile = record.tile;
+      const gutter = Number(CITY_MAP.chunkGutter) || 0;
+      const left = Math.min(gutter, tile.x);
+      const top = Math.min(gutter, tile.y);
+      const right = Math.min(gutter, WORLD_WIDTH - tile.x - tile.w);
+      const bottom = Math.min(gutter, WORLD_HEIGHT - tile.y - tile.h);
+      context.drawImage(record.drawable, tile.x - left, tile.y - top, tile.w + left + right, tile.h + top + bottom);
+    });
+    context.imageSmoothingEnabled = false;
+  }
+
+  function strokeWorldPolyline(context, points) {
+    if (!Array.isArray(points) || points.length < 2) return;
+    context.beginPath();
+    context.moveTo(Number(points[0][0]), Number(points[0][1]));
+    points.slice(1).forEach((point) => context.lineTo(Number(point[0]), Number(point[1])));
+    context.stroke();
+  }
+
+  function drawStreetEdge(context, street) {
+    const [x1, y1, x2, y2] = street.segment || [];
+    const width = Number(street.width) || 0;
+    const length = Math.hypot(x2 - x1, y2 - y1);
+    if (!length || !width) return;
+    const normalX = -(y2 - y1) / length;
+    const normalY = (x2 - x1) / length;
+    [-1, 1].forEach((side) => {
+      const offset = side * width / 2;
+      const points = [
+        [x1 + normalX * offset, y1 + normalY * offset],
+        [x2 + normalX * offset, y2 + normalY * offset],
+      ];
+      context.strokeStyle = "rgba(31, 52, 43, .22)";
+      context.lineWidth = street.id === "tesalonica" ? 6 : 5;
+      strokeWorldPolyline(context, points);
+      context.strokeStyle = "rgba(248, 238, 209, .62)";
+      context.lineWidth = street.id === "tesalonica" ? 2.5 : 2;
+      strokeWorldPolyline(context, points);
+    });
+  }
+
+  function drawAccessPath(context, access) {
+    const points = access.points || [];
+    const width = Number(access.width) || 20;
+    if (points.length < 2) return;
+    context.save();
+    context.lineCap = "butt";
+    context.strokeStyle = "rgba(36, 57, 47, .16)";
+    context.lineWidth = width + 4;
+    strokeWorldPolyline(context, points);
+    context.strokeStyle = "rgba(182, 174, 155, .46)";
+    context.lineWidth = width + 2;
+    strokeWorldPolyline(context, points);
+    context.strokeStyle = "rgba(224, 219, 202, .28)";
+    context.lineWidth = Math.max(6, width - 4);
+    strokeWorldPolyline(context, points);
+
+    context.strokeStyle = "rgba(105, 101, 88, .18)";
+    context.lineWidth = 1;
+    for (let pointIndex = 1; pointIndex < points.length; pointIndex += 1) {
+      const [x1, y1] = points[pointIndex - 1];
+      const [x2, y2] = points[pointIndex];
+      const length = Math.hypot(x2 - x1, y2 - y1);
+      if (!length) continue;
+      const normalX = -(y2 - y1) / length;
+      const normalY = (x2 - x1) / length;
+      for (let along = 12; along < length - 4; along += 14) {
+        const amount = along / length;
+        const x = x1 + (x2 - x1) * amount;
+        const y = y1 + (y2 - y1) * amount;
+        context.beginPath();
+        context.moveTo(x - normalX * (width / 2 - 3), y - normalY * (width / 2 - 3));
+        context.lineTo(x + normalX * (width / 2 - 3), y + normalY * (width / 2 - 3));
+        context.stroke();
+      }
+    }
+    context.restore();
+  }
+
+  function drawStreetCrossing(context, crossing) {
+    const stripeCount = Math.max(2, Number(crossing.stripes) || 4);
+    const span = Number(crossing.width) || 56;
+    const length = Number(crossing.length) || 44;
+    const step = span / stripeCount;
+    const stripeWidth = Math.max(4, step * .48);
+    context.save();
+    context.translate(Number(crossing.x), Number(crossing.y));
+    context.rotate((Number(crossing.angle) || 0) * Math.PI / 180);
+    context.fillStyle = "rgba(244, 238, 211, .34)";
+    context.shadowColor = "rgba(39, 57, 48, .18)";
+    context.shadowBlur = 1;
+    for (let index = 0; index < stripeCount; index += 1) {
+      const x = -span / 2 + step * (index + .5) - stripeWidth / 2;
+      context.fillRect(Math.round(x), Math.round(-length / 2), Math.round(stripeWidth), Math.round(length));
+    }
+    context.restore();
+  }
+
+  function drawStreetPolish(context) {
+    if (!Number(cityStreetPolish.revision)) return;
+    context.save();
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    const edgeIds = new Set(cityStreetPolish.edgeStreetIds || []);
+    (CITY_MAP.streets || []).filter((street) => edgeIds.has(street.id))
+      .forEach((street) => drawStreetEdge(context, street));
+    (cityStreetPolish.accessPaths || []).forEach((access) => drawAccessPath(context, access));
+    (cityStreetPolish.crossings || []).forEach((crossing) => drawStreetCrossing(context, crossing));
+    context.restore();
+    document.documentElement.dataset.streetPolishRevision = String(cityStreetPolish.revision);
+  }
+
+  function mapSectionAt(x, y) {
+    return (CITY_MAP.sections || []).find((section) => x >= section.x && x < section.x + section.w
+      && y >= section.y && y < section.y + section.h) || { id: "san-pablo", name: "San Pablo", x: 0, y: 0, w: WORLD_WIDTH, h: WORLD_HEIGHT };
   }
 
   function zoneAtY(y) {
-    if (y < 520) return { id: "north", name: "Parque Norte" };
-    if (y < 1120) return { id: "center", name: "Centro de la ciudad" };
-    return { id: "south", name: "Barrio Sur" };
+    return mapSectionAt(state.worldX, y);
   }
 
   function tileKey(col, row) { return `${col},${row}`; }
@@ -715,10 +1590,31 @@
     }
   }
 
+  function setDefaultTileSegment(type, segment) {
+    const [x1, y1, x2, y2, width] = segment;
+    const size = CITY_MAP.tileSize;
+    const minCol = Math.max(0, Math.floor((Math.min(x1, x2) - width / 2) / size));
+    const maxCol = Math.min(Math.ceil(WORLD_WIDTH / size) - 1, Math.ceil((Math.max(x1, x2) + width / 2) / size));
+    const minRow = Math.max(0, Math.floor((Math.min(y1, y2) - width / 2) / size));
+    const maxRow = Math.min(Math.ceil(WORLD_HEIGHT / size) - 1, Math.ceil((Math.max(y1, y2) + width / 2) / size));
+    const dx = x2 - x1; const dy = y2 - y1; const lengthSquared = dx * dx + dy * dy || 1;
+    for (let row = minRow; row <= maxRow; row += 1) {
+      for (let col = minCol; col <= maxCol; col += 1) {
+        const x = (col + .5) * size; const y = (row + .5) * size;
+        const amount = clamp(((x - x1) * dx + (y - y1) * dy) / lengthSquared, 0, 1);
+        const distanceToSegment = Math.hypot(x - (x1 + dx * amount), y - (y1 + dy * amount));
+        if (distanceToSegment <= width / 2) defaultMapTiles.set(tileKey(col, row), type);
+      }
+    }
+  }
+
   function initializeMapTiles() {
     defaultMapTiles.clear();
-    CITY_MAP.blockedRects.forEach((rect) => setDefaultTileRect("blocked", rect));
-    CITY_MAP.encounterRects.forEach((rect) => setDefaultTileRect("encounter", rect));
+    (CITY_MAP.blockedRects || []).forEach((rect) => setDefaultTileRect("blocked", rect));
+    (CITY_MAP.walkableRects || []).forEach((rect) => setDefaultTileRect("walkable", rect));
+    (CITY_MAP.walkableSegments || []).forEach((segment) => setDefaultTileSegment("walkable", segment));
+    (CITY_MAP.encounterRects || []).forEach((rect) => setDefaultTileRect("encounter", rect));
+    (CITY_MAP.encounterTiles || []).forEach(([col, row]) => defaultMapTiles.set(tileKey(col, row), "encounter"));
     CITY_MAP.doors.forEach((door) => defaultMapTiles.set(tileKey(door.col, door.row), "door"));
     tileOverrides.clear();
     try {
@@ -737,20 +1633,153 @@
   function mapTileType(col, row) {
     if (col < 0 || row < 0 || col >= Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize) || row >= Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize)) return "blocked";
     const key = tileKey(col, row);
-    return tileOverrides.has(key) ? tileOverrides.get(key) : (defaultMapTiles.get(key) || "walkable");
+    return tileOverrides.has(key) ? tileOverrides.get(key) : (defaultMapTiles.get(key) || CITY_MAP.defaultTile || "walkable");
   }
 
   function worldToTile(x, y) {
     return { col: Math.floor(x / CITY_MAP.tileSize), row: Math.floor(y / CITY_MAP.tileSize) };
   }
 
+  function mapNpcPosition(npc) {
+    return {
+      x: (Number(npc.col) + .5) * CITY_MAP.tileSize,
+      y: (Number(npc.row) + .5) * CITY_MAP.tileSize,
+    };
+  }
+
+  function nearbyWorldNpc(maxDistance = 58) {
+    if (state.dimension !== "san_pablo" || state.interior) return null;
+    const player = { x: state.worldX, y: state.worldY };
+    return (CITY_MAP.npcs || [])
+      .map((npc) => ({ npc, position: mapNpcPosition(npc) }))
+      .map((entry) => ({ ...entry, distance: distance(player, entry.position) }))
+      .filter((entry) => entry.distance <= maxDistance)
+      .sort((a, b) => a.distance - b.distance)[0] || null;
+  }
+
+  function distanceToRect(x, y, rect) {
+    const nearestX = clamp(x, rect.x, rect.x + rect.w);
+    const nearestY = clamp(y, rect.y, rect.y + rect.h);
+    return Math.hypot(x - nearestX, y - nearestY);
+  }
+
+  function nearbyWorldBlocker(maxDistance = 58) {
+    if (state.dimension !== "san_pablo" || state.interior) return null;
+    const candidates = cityWorldAssets
+      .filter((asset) => asset.kind === "blocker" && asset.interaction)
+      .map((asset) => ({
+        asset,
+        distance: Math.min(...worldAssetColliderRects(asset)
+          .map((rect) => distanceToRect(state.worldX, state.worldY, rect))),
+      }))
+      .filter((entry) => Number.isFinite(entry.distance) && entry.distance <= maxDistance)
+      .sort((a, b) => a.distance - b.distance);
+    return candidates[0] || null;
+  }
+
+  function worldNpcBlocksPosition(x, y) {
+    return (CITY_MAP.npcs || []).some((npc) => {
+      const position = mapNpcPosition(npc);
+      return Math.hypot(x - position.x, y - position.y) < 25;
+    });
+  }
+
+  function worldAssetColliderRects(asset) {
+    return (asset.colliders || []).map((collider) => ({
+      x: Number(asset.x) + Number(collider[0]),
+      y: Number(asset.y) + Number(collider[1]),
+      w: Number(collider[2]),
+      h: Number(collider[3]),
+    })).filter((rect) => Number.isFinite(rect.x) && Number.isFinite(rect.y) && rect.w > 0 && rect.h > 0);
+  }
+
+  function circleIntersectsRect(x, y, radius, rect) {
+    const nearestX = clamp(x, rect.x, rect.x + rect.w);
+    const nearestY = clamp(y, rect.y, rect.y + rect.h);
+    return ((x - nearestX) ** 2) + ((y - nearestY) ** 2) <= radius ** 2;
+  }
+
+  const WORLD_ASSET_BUCKET_SIZE = 128;
+  let worldAssetColliderIndex = null;
+
+  function ensureWorldAssetColliderIndex() {
+    if (worldAssetColliderIndex) return worldAssetColliderIndex;
+    const buckets = new Map();
+    const records = [];
+    cityWorldAssets.forEach((asset) => {
+      if (asset.solid === false) return;
+      worldAssetColliderRects(asset).forEach((rect) => {
+        const record = { asset, rect };
+        records.push(record);
+        const minCol = Math.floor(rect.x / WORLD_ASSET_BUCKET_SIZE);
+        const maxCol = Math.floor((rect.x + rect.w) / WORLD_ASSET_BUCKET_SIZE);
+        const minRow = Math.floor(rect.y / WORLD_ASSET_BUCKET_SIZE);
+        const maxRow = Math.floor((rect.y + rect.h) / WORLD_ASSET_BUCKET_SIZE);
+        for (let row = minRow; row <= maxRow; row += 1) {
+          for (let col = minCol; col <= maxCol; col += 1) {
+            const key = `${col},${row}`;
+            if (!buckets.has(key)) buckets.set(key, []);
+            buckets.get(key).push(record);
+          }
+        }
+      });
+    });
+    worldAssetColliderIndex = { buckets, records };
+    document.documentElement.dataset.worldAssetColliders = String(records.length);
+    return worldAssetColliderIndex;
+  }
+
+  function worldAssetColliderRecordsNear(x, y, radius = 0) {
+    const { buckets } = ensureWorldAssetColliderIndex();
+    const records = new Set();
+    const minCol = Math.floor((x - radius) / WORLD_ASSET_BUCKET_SIZE);
+    const maxCol = Math.floor((x + radius) / WORLD_ASSET_BUCKET_SIZE);
+    const minRow = Math.floor((y - radius) / WORLD_ASSET_BUCKET_SIZE);
+    const maxRow = Math.floor((y + radius) / WORLD_ASSET_BUCKET_SIZE);
+    for (let row = minRow; row <= maxRow; row += 1) {
+      for (let col = minCol; col <= maxCol; col += 1) {
+        (buckets.get(`${col},${row}`) || []).forEach((record) => records.add(record));
+      }
+    }
+    return [...records];
+  }
+
+  function worldAssetBlocksPosition(x, y, radius = 9) {
+    return worldAssetColliderRecordsNear(x, y, radius)
+      .some(({ rect }) => circleIntersectsRect(x, y, radius, rect));
+  }
+
+  function navigationMaskAllowsPosition(x, y, radius = 9) {
+    if (!cityNavigationMaskReady || !cityNavigationMaskData) return null;
+    const cellSize = Number(CITY_MAP.navigationMask?.cellSize) || 8;
+    const samples = [[0, 0]];
+    for (let index = 0; index < 12; index += 1) {
+      const angle = Math.PI * 2 * index / 12;
+      samples.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
+    }
+    return samples.every(([offsetX, offsetY]) => {
+      const col = Math.floor((x + offsetX) / cellSize);
+      const row = Math.floor((y + offsetY) / cellSize);
+      if (col < 0 || row < 0 || col >= cityNavigationMaskData.width || row >= cityNavigationMaskData.height) return false;
+      return cityNavigationMaskData.pixels[row * cityNavigationMaskData.width + col] >= 128;
+    });
+  }
+
   function cityMapCanOccupy(x, y) {
     const radius = 9;
     if (x < radius || y < radius || x > WORLD_WIDTH - radius || y > WORLD_HEIGHT - radius) return false;
-    return [[-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius]].every(([offsetX, offsetY]) => {
+    const tileSamples = [[-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius]].map(([offsetX, offsetY]) => {
       const tile = worldToTile(x + offsetX, y + offsetY);
-      return mapTileType(tile.col, tile.row) !== "blocked";
+      const key = tileKey(tile.col, tile.row);
+      return { ...tile, key, type: mapTileType(tile.col, tile.row), override: tileOverrides.get(key) };
     });
+    if (tileSamples.some((sample) => sample.type === "door" || sample.override === "blocked")) return false;
+    const forcedOpen = tileSamples.every((sample) => ["walkable", "encounter", "event"].includes(sample.override));
+    const semanticOpen = navigationMaskAllowsPosition(x, y, radius);
+    const tilesAreOpen = forcedOpen || (semanticOpen === null
+      ? tileSamples.every((sample) => sample.type !== "blocked")
+      : semanticOpen);
+    return tilesAreOpen && !worldAssetBlocksPosition(x, y, radius);
   }
 
   function defaultDoorAt(col, row) {
@@ -768,39 +1797,216 @@
     return null;
   }
 
+  function createPlayerFrameCanvas() {
+    const canvas = document.createElement("canvas");
+    canvas.width = SPRITE_CELL_SIZE; canvas.height = SPRITE_CELL_SIZE;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.imageSmoothingEnabled = false;
+    return canvas;
+  }
+
+  function copyPlayerFrame(source, mirror = false) {
+    const canvas = createPlayerFrameCanvas();
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (mirror) {
+      context.save();
+      context.translate(SPRITE_CELL_SIZE, 0);
+      context.scale(-1, 1);
+      context.drawImage(source, 0, 0);
+      context.restore();
+    } else {
+      context.drawImage(source, 0, 0);
+    }
+    return canvas;
+  }
+
+  function lockPlayerFrameHead(frame, canonical) {
+    const context = frame.getContext("2d", { willReadFrequently: true });
+    context.clearRect(0, 0, SPRITE_CELL_SIZE, PLAYER_HEAD_LOCK_HEIGHT);
+    context.drawImage(canonical, 0, 0, SPRITE_CELL_SIZE, PLAYER_HEAD_LOCK_HEIGHT,
+      0, 0, SPRITE_CELL_SIZE, PLAYER_HEAD_LOCK_HEIGHT);
+  }
+
+  function replacePlayerFrameLegs(frame, oppositeStride, direction) {
+    const context = frame.getContext("2d", { willReadFrequently: true });
+    const masks = PLAYER_LEG_MASKS[direction];
+    masks.forEach((mask) => context.clearRect(mask.x, mask.y, mask.width, mask.height));
+    context.save();
+    context.beginPath();
+    masks.forEach((mask) => context.rect(mask.x, mask.y, mask.width, mask.height));
+    context.clip();
+    context.translate(SPRITE_CELL_SIZE, 0);
+    context.scale(-1, 1);
+    context.drawImage(oppositeStride, 0, 0);
+    context.restore();
+  }
+
+  function resetPlayerAnimation() {
+    animationFrame = 0;
+    animationTime = 0;
+    playerRunning = false;
+    elements.runBadge?.classList.add("hidden");
+  }
+
+  function playerFramePixels(frame) {
+    return frame.getContext("2d", { willReadFrequently: true })
+      .getImageData(0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE).data;
+  }
+
+  function playerFrameRegionEqual(first, second, top = 0, bottom = SPRITE_CELL_SIZE) {
+    const firstPixels = playerFramePixels(first); const secondPixels = playerFramePixels(second);
+    for (let y = top; y < bottom; y += 1) {
+      for (let x = 0; x < SPRITE_CELL_SIZE; x += 1) {
+        const start = (y * SPRITE_CELL_SIZE + x) * 4;
+        for (let channel = 0; channel < 4; channel += 1) {
+          if (firstPixels[start + channel] !== secondPixels[start + channel]) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function playerFrameOutsideMasksEqual(first, second, masks, top = 0) {
+    const firstPixels = playerFramePixels(first); const secondPixels = playerFramePixels(second);
+    for (let y = top; y < SPRITE_CELL_SIZE; y += 1) {
+      for (let x = 0; x < SPRITE_CELL_SIZE; x += 1) {
+        const masked = masks.some((mask) => x >= mask.x && x < mask.x + mask.width
+          && y >= mask.y && y < mask.y + mask.height);
+        if (masked) continue;
+        const start = (y * SPRITE_CELL_SIZE + x) * 4;
+        for (let channel = 0; channel < 4; channel += 1) {
+          if (firstPixels[start + channel] !== secondPixels[start + channel]) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function playerFrameBottom(frame) {
+    const pixels = playerFramePixels(frame);
+    for (let y = SPRITE_CELL_SIZE - 1; y >= 0; y -= 1) {
+      for (let x = 0; x < SPRITE_CELL_SIZE; x += 1) {
+        if (pixels[(y * SPRITE_CELL_SIZE + x) * 4 + 3] > 0) return y;
+      }
+    }
+    return -1;
+  }
+
+  function playerSupportIoU(first, second) {
+    const firstPixels = playerFramePixels(first); const secondPixels = playerFramePixels(second);
+    let intersection = 0; let union = 0;
+    for (let x = 0; x < SPRITE_CELL_SIZE; x += 1) {
+      const pixel = (PLAYER_SUPPORT_ROW * SPRITE_CELL_SIZE + x) * 4 + 3;
+      const firstOpaque = firstPixels[pixel] > 0; const secondOpaque = secondPixels[pixel] > 0;
+      if (firstOpaque && secondOpaque) intersection += 1;
+      if (firstOpaque || secondOpaque) union += 1;
+    }
+    return union ? intersection / union : 1;
+  }
+
+  function renderPlayerAnimationDebugAtlas() {
+    if (!LOCAL_DEBUG_PLAYER_ATLAS) return;
+    document.querySelector("#playerAnimationDebugAtlas")?.remove();
+    const canvas = document.createElement("canvas");
+    canvas.id = "playerAnimationDebugAtlas";
+    canvas.width = 512; canvas.height = 512;
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", "Atlas corregido del protagonista: abajo, izquierda, derecha y arriba");
+    canvas.style.cssText = "position:fixed;inset:50% auto auto 50%;width:min(512px,92vw);height:auto;transform:translate(-50%,-50%);z-index:9999;border:4px solid #fff;background:#17212b;box-shadow:0 18px 60px rgba(0,0,0,.65);image-rendering:pixelated";
+    const context = canvas.getContext("2d");
+    context.imageSmoothingEnabled = false;
+    for (let row = 0; row < 8; row += 1) {
+      for (let col = 0; col < 8; col += 1) {
+        context.fillStyle = (row + col) % 2 ? "#263442" : "#1d2934";
+        context.fillRect(col * 64, row * 64, 64, 64);
+      }
+    }
+    ["down", "left", "right", "up"].forEach((direction, row) => {
+      const frames = playerFrames.get(`walk-${direction}`) || [];
+      frames.forEach((frame, column) => {
+        context.drawImage(frame, column * 128, row * 128, 128, 128);
+        context.strokeStyle = "rgba(255,255,255,.24)";
+        context.strokeRect(column * 128 + .5, row * 128 + .5, 127, 127);
+      });
+    });
+    document.body.appendChild(canvas);
+    document.documentElement.dataset.playerAtlasDebug = "true";
+  }
+
   function buildPlayerFrames() {
     playerFrames.clear();
-    let minimumOpaquePixels = Infinity;
-    const frameSets = {
-      "walk-down": [0, 0, 3], "walk-right": [0, 32, 3], "walk-up": [0, 64, 3], "walk-left": [0, 96, 3],
-      "run-up": [88, 0, 3], "run-right": [88, 32, 3], "run-down": [88, 64, 3], "run-left": [88, 96, 3],
-    };
-    Object.entries(frameSets).forEach(([name, [startX, startY, count]]) => {
+    const directionRows = { down: 0, left: 1, right: 2, up: 3 };
+    const rawFrames = new Map();
+    Object.entries(directionRows).forEach(([direction, row]) => {
       const frames = [];
-      for (let index = 0; index < count; index += 1) {
-        const canvas = document.createElement("canvas");
-        canvas.width = 24; canvas.height = 32;
+      for (let index = 0; index < 4; index += 1) {
+        const canvas = createPlayerFrameCanvas();
         const context = canvas.getContext("2d", { willReadFrequently: true });
-        context.drawImage(playerSheet, startX + index * 24, startY, 24, 32, 0, 0, 24, 32);
-        const pixels = context.getImageData(0, 0, 24, 32);
-        for (let pixel = 0; pixel < pixels.data.length; pixel += 4) {
-          if (pixels.data[pixel] < 24 && pixels.data[pixel + 1] > 95 && pixels.data[pixel + 2] > 205) pixels.data[pixel + 3] = 0;
-        }
-        let opaquePixels = 0;
-        for (let pixel = 3; pixel < pixels.data.length; pixel += 4) if (pixels.data[pixel] > 0) opaquePixels += 1;
-        minimumOpaquePixels = Math.min(minimumOpaquePixels, opaquePixels);
-        context.putImageData(pixels, 0, 0);
+        context.drawImage(playerSheet, index * SPRITE_CELL_SIZE, row * SPRITE_CELL_SIZE,
+          SPRITE_CELL_SIZE, SPRITE_CELL_SIZE, 0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE);
         frames.push(canvas);
       }
-      playerFrames.set(name, frames);
+      rawFrames.set(direction, frames);
     });
+
+    const oppositeDirection = { left: "right", right: "left", down: "down", up: "up" };
+    const metrics = {};
+    let minimumOpaquePixels = Infinity;
+    let pixelInspectionAvailable = true;
+    Object.keys(directionRows).forEach((direction) => {
+      const raw = rawFrames.get(direction);
+      const canonical = raw[0];
+      const frame0 = copyPlayerFrame(canonical);
+      const frame1 = copyPlayerFrame(raw[1]);
+      const frame2 = copyPlayerFrame(canonical);
+      const oppositeStride = rawFrames.get(oppositeDirection[direction])[1];
+      const frame3 = copyPlayerFrame(raw[3]);
+      replacePlayerFrameLegs(frame3, oppositeStride, direction);
+      lockPlayerFrameHead(frame1, canonical);
+      lockPlayerFrameHead(frame3, canonical);
+      const frames = [frame0, frame1, frame2, frame3];
+      playerFrames.set(`walk-${direction}`, frames);
+      playerFrames.set(`run-${direction}`, frames);
+
+      if (pixelInspectionAvailable) {
+        try {
+          frames.forEach((frame) => {
+            const pixels = playerFramePixels(frame);
+            let opaquePixels = 0;
+            for (let pixel = 3; pixel < pixels.length; pixel += 4) if (pixels[pixel] > 0) opaquePixels += 1;
+            minimumOpaquePixels = Math.min(minimumOpaquePixels, opaquePixels);
+          });
+          metrics[direction] = {
+            cap: frames.every((frame) => playerFrameRegionEqual(frame0, frame, 0, PLAYER_HEAD_LOCK_HEIGHT)),
+            neutral: playerFrameRegionEqual(frame0, frame2),
+            body: playerFrameOutsideMasksEqual(frame3, raw[3], PLAYER_LEG_MASKS[direction], PLAYER_HEAD_LOCK_HEIGHT),
+            support: frames.every((frame) => playerFrameBottom(frame) === PLAYER_SUPPORT_ROW),
+            strideIoU: Number(playerSupportIoU(frame1, frame3).toFixed(3)),
+          };
+        } catch (error) {
+          /* file:// vuelve opaco el canvas por seguridad. La lectura es solo
+             diagnóstica: los fotogramas reconstruidos siguen siendo válidos. */
+          pixelInspectionAvailable = false;
+        }
+      }
+    });
+    const metricValues = Object.values(metrics);
     document.documentElement.dataset.playerFrames = [...playerFrames].map(([name, frames]) => `${name}:${frames.length}`).join(",");
-    document.documentElement.dataset.playerOpaqueMin = String(minimumOpaquePixels);
+    document.documentElement.dataset.playerOpaqueMin = pixelInspectionAvailable ? String(minimumOpaquePixels) : "unavailable-file-origin";
+    document.documentElement.dataset.playerCapStable = pixelInspectionAvailable ? String(metricValues.every((metric) => metric.cap)) : "unavailable";
+    document.documentElement.dataset.playerNeutralStable = pixelInspectionAvailable ? String(metricValues.every((metric) => metric.neutral)) : "unavailable";
+    document.documentElement.dataset.playerBodyStable = pixelInspectionAvailable ? String(metricValues.every((metric) => metric.body)) : "unavailable";
+    document.documentElement.dataset.playerSupportStable = pixelInspectionAvailable ? String(metricValues.every((metric) => metric.support)) : "unavailable";
+    document.documentElement.dataset.playerStrideAlternates = pixelInspectionAvailable ? String(metricValues.every((metric) => metric.strideIoU < .8)) : "unavailable";
+    document.documentElement.dataset.playerAnimationMetrics = pixelInspectionAvailable
+      ? Object.entries(metrics).map(([direction, metric]) => `${direction}:cap=${Number(metric.cap)},neutral=${Number(metric.neutral)},body=${Number(metric.body)},support=${Number(metric.support)},stride=${metric.strideIoU}`).join(";")
+      : "unavailable";
+    renderPlayerAnimationDebugAtlas();
   }
 
   function openBuildingEditor() {
     if (!state.started || state.dimension !== "san_pablo" || state.interior) return;
-    closeTeam(); closeInventoryPanel(); clearDirectionalInput();
+    closeSanpledex(false); closeTeam(); closeInventoryPanel(); clearDirectionalInput();
     elements.buildingEditor.classList.add("open");
     elements.buildingEditor.setAttribute("aria-hidden", "false");
     elements.editorScrim.classList.remove("hidden");
@@ -822,7 +2028,9 @@
       return;
     }
     const type = mapTileType(selectedMapTile.col, selectedMapTile.row);
-    elements.tileSelectionInfo.innerHTML = `<span>${labels[type]}</span><span>C${selectedMapTile.col} · F${selectedMapTile.row}</span>`;
+    const centerX = selectedMapTile.col * CITY_MAP.tileSize + CITY_MAP.tileSize / 2;
+    const centerY = selectedMapTile.row * CITY_MAP.tileSize + CITY_MAP.tileSize / 2;
+    elements.tileSelectionInfo.innerHTML = `<span>${labels[type]}</span><span>C${selectedMapTile.col} · F${selectedMapTile.row}<br>X${centerX} · Y${centerY}</span>`;
   }
 
   function handleMapEditorClick(event) {
@@ -845,7 +2053,7 @@
       setBattleMessage("La energía del laberinto bloquea la mochila durante el rescate.");
       return;
     }
-    closeTeam(); closeBuildingEditorPanel(); clearDirectionalInput();
+    closeSanpledex(false); closeTeam(); closeBuildingEditorPanel(); clearDirectionalInput();
     inventoryOpenedFromBattle = fromBattle && Boolean(battle);
     renderInventory();
     elements.inventoryDrawer.classList.add("open");
@@ -873,15 +2081,18 @@
       const active = activePokemon();
       let action = "";
       let disabled = count <= 0;
-      if (["balls", "ultraBalls"].includes(item.key)) {
+      if (["balls", "ultraBalls", "masterBalls"].includes(item.key)) {
         action = inventoryOpenedFromBattle ? "LANZAR" : "COMBATE";
         disabled = disabled || !inventoryOpenedFromBattle;
-      } else if (["potions", "berries"].includes(item.key)) {
+      } else if (["potions", "maxPotions", "berries"].includes(item.key)) {
         action = "USAR";
         disabled = disabled || !active || active.hp >= active.maxHp;
       } else if (item.key === "rareCandies") {
         action = "USAR";
-        disabled = disabled || !active;
+        disabled = disabled || !active || active.level >= 50;
+      } else if (item.key === "prismBatteries") {
+        action = "USAR";
+        disabled = disabled || state.dimension !== "prism" || ensureMazeState().lightCharges >= 3;
       } else {
         action = "CLAVE";
         disabled = true;
@@ -897,37 +2108,58 @@
 
   async function useInventoryItem(key) {
     if (inventoryCount(key) <= 0) return;
-    if (key === "balls" || key === "ultraBalls") {
+    if (["balls", "ultraBalls", "masterBalls"].includes(key)) {
       closeInventoryPanel();
-      await throwBall(key === "ultraBalls" ? "ultra" : "poke");
+      await throwBall(key === "masterBalls" ? "master" : key === "ultraBalls" ? "ultra" : "poke");
+      return;
+    }
+
+    if (key === "prismBatteries") {
+      if (state.dimension !== "prism") return;
+      const maze = ensureMazeState();
+      if (maze.lightCharges >= 3) return;
+      state.inventory.prismBatteries -= 1;
+      maze.lightCharges = Math.min(3, maze.lightCharges + 1);
+      closeInventoryPanel(); renderHud(); updateMazeHud(); saveGame();
+      playTone(980, .14, "sine", .04);
+      showAreaToast(`LUZ RECARGADA · ${maze.lightCharges} USOS`);
       return;
     }
 
     const active = activePokemon();
     if (!active) return;
-    if (key === "potions" || key === "berries") {
+    if (["potions", "maxPotions", "berries"].includes(key)) {
       if (active.hp >= active.maxHp) return;
-      const healing = key === "potions" ? 20 : 10;
+      const healing = key === "maxPotions" ? active.maxHp : key === "potions" ? 20 : 10;
+      const recovered = Math.min(healing, active.maxHp - active.hp);
       state.inventory[key] -= 1;
       active.hp = Math.min(active.maxHp, active.hp + healing);
       closeInventoryPanel();
       renderHud(); saveGame(); playJingle("success");
       if (battle) {
-        setBattleBusy(true); updateBattleHealth(); setBattleMessage(`¡${speciesOf(active).name} recuperó ${healing} PS!`);
+        setBattleBusy(true); updateBattleHealth(); setBattleMessage(`¡${speciesOf(active).name} recuperó ${recovered} PS!`);
         await wait(800); await enemyTurn();
-      } else showAreaToast(`${speciesOf(active).name.toUpperCase()} RECUPERA ${healing} PS`);
+      } else showAreaToast(`${speciesOf(active).name.toUpperCase()} RECUPERA ${recovered} PS`);
       return;
     }
 
     if (key === "rareCandies") {
+      if (active.level >= 50) return;
       state.inventory.rareCandies -= 1;
+      const previousName = speciesOf(active).name;
       active.level += 1; active.maxHp += 3; active.hp = active.maxHp;
+      const evolutions = evolvePokemonIfReady(active);
       state.trainerLevel = Math.max(1, Math.floor(state.team.reduce((sum, member) => sum + member.level, 0) / state.team.length) - 3);
       closeInventoryPanel(); renderHud(); saveGame(); playJingle("level");
       if (battle) {
-        setBattleBusy(true); renderBattle(); setBattleMessage(`¡${speciesOf(active).name} subió al nivel ${active.level}!`);
-        await wait(900); await enemyTurn();
-      } else showDialog([`¡${speciesOf(active).name} subió al nivel ${active.level}!`], "★");
+        setBattleBusy(true); renderBattle(); setBattleMessage(`¡${previousName} subió al nivel ${active.level}!`);
+        await wait(900);
+        for (const evolution of evolutions) { renderBattle(); setBattleMessage(`¡${evolution.from} evolucionó a ${evolution.to}!`); playJingle("success"); await wait(1200); }
+        await enemyTurn();
+      } else {
+        const messages = [`¡${previousName} subió al nivel ${active.level}!`, ...evolutions.map((evolution) => `¡${evolution.from} evolucionó a ${evolution.to}!`)];
+        showDialog(messages, "★");
+      }
     }
   }
 
@@ -935,6 +2167,23 @@
     const species = POKEMON[id];
     const maxHp = species.baseHp + level * 3;
     return { id, level, exp: 0, hp: maxHp, maxHp };
+  }
+
+  function evolvePokemonIfReady(member) {
+    const evolutions = [];
+    let species = speciesOf(member);
+    while (species?.evolvesTo && member.level >= species.evolveLevel && POKEMON[species.evolvesTo]) {
+      const nextSpecies = POKEMON[species.evolvesTo];
+      evolutions.push({ from: species.name, to: nextSpecies.name, fromId: species.id, toId: nextSpecies.id });
+      const hpDelta = nextSpecies.baseHp - species.baseHp;
+      member.maxHp = Math.max(1, member.maxHp + hpDelta);
+      member.hp = clamp(member.hp + hpDelta, 0, member.maxHp);
+      member.id = nextSpecies.id;
+      if (!state.seen.includes(nextSpecies.id)) state.seen.push(nextSpecies.id);
+      if (!state.caught.includes(nextSpecies.id)) state.caught.push(nextSpecies.id);
+      species = nextSpecies;
+    }
+    return evolutions;
   }
 
   function hydratePokemon(member) {
@@ -972,19 +2221,35 @@
       next.seen = Array.isArray(saved.seen) ? [...new Set(saved.seen.filter((id) => POKEMON[id]))] : [];
       next.worldX = clamp(Number(saved.worldX) || NORMAL_START.x, 35, WORLD_WIDTH - 35);
       next.worldY = clamp(Number(saved.worldY) || NORMAL_START.y, 45, WORLD_HEIGHT - 30);
-      if (saved.mapRevision !== 7) {
+      if (saved.mapRevision !== MAP_REVISION) {
         next.worldX = NORMAL_START.x;
         next.worldY = NORMAL_START.y;
         next.direction = NORMAL_START.direction;
-        next.mapRevision = 7;
+        next.mapRevision = MAP_REVISION;
         next.interior = null;
         next.maintenanceReturn = null;
       }
       next.buildingSkins = saved.buildingSkins && typeof saved.buildingSkins === "object" ? { ...saved.buildingSkins } : {};
+      next.gifts = saved.gifts && typeof saved.gifts === "object" ? { ...saved.gifts } : {};
       next.inventory = { ...defaultState().inventory, ...(saved.inventory || {}) };
+      const defaultBlackMarket = defaultState().blackMarket;
+      const savedBlackMarket = saved.blackMarket && typeof saved.blackMarket === "object" ? saved.blackMarket : {};
+      const savedBlackMarketPurchases = savedBlackMarket.purchases && typeof savedBlackMarket.purchases === "object"
+        ? savedBlackMarket.purchases
+        : {};
+      next.blackMarket = {
+        ...defaultBlackMarket,
+        ...savedBlackMarket,
+        discovered: Boolean(savedBlackMarket.discovered),
+        purchases: { ...defaultBlackMarket.purchases },
+      };
+      Object.entries(BLACK_MARKET_LIMITS).forEach(([key, limit]) => {
+        next.blackMarket.purchases[key] = clamp(Math.floor(Number(savedBlackMarketPurchases[key]) || 0), 0, limit);
+      });
       next.collectedObjects = Array.isArray(saved.collectedObjects) ? [...new Set(saved.collectedObjects)] : [];
       next.secretPokemonId = POKEMON[saved.secretPokemonId] ? Number(saved.secretPokemonId) : null;
       next.interior = saved.interior === "maintenance" ? "maintenance" : null;
+      next.interiorData = null;
       next.maintenanceReturn = saved.maintenanceReturn && Number.isFinite(saved.maintenanceReturn.x) && Number.isFinite(saved.maintenanceReturn.y)
         ? {
           x: clamp(saved.maintenanceReturn.x, 105, WORLD_WIDTH - 105),
@@ -993,13 +2258,13 @@
           buildingId: saved.maintenanceReturn.buildingId || null,
         }
         : null;
-      if (saved.mapRevision !== 7) { next.interior = null; next.maintenanceReturn = null; }
+      if (saved.mapRevision !== MAP_REVISION) { next.interior = null; next.maintenanceReturn = null; }
       if (next.interior && !next.maintenanceReturn) next.interior = null;
       if ((Number(saved.version) || 0) < 4) {
-        next.version = 4;
         next.secretPokemonSaved = false;
         next.secretPokemonId = null;
       }
+      next.version = defaultState().version;
       next.dimension = saved.dimension === "prism" ? "prism" : "san_pablo";
       if (next.dimension === "prism") {
         next.dimension = "san_pablo";
@@ -1009,8 +2274,21 @@
         next.interior = null;
         next.maintenanceReturn = null;
       }
+      if (LOCAL_DEBUG_SPAWN && !next.interior) {
+        next.worldX = LOCAL_DEBUG_SPAWN.x;
+        next.worldY = LOCAL_DEBUG_SPAWN.y;
+        next.direction = LOCAL_DEBUG_SPAWN.direction;
+      }
+      if (next.dimension === "san_pablo" && !next.interior && !cityMapCanOccupy(next.worldX, next.worldY)) {
+        next.worldX = NORMAL_START.x;
+        next.worldY = NORMAL_START.y;
+        next.direction = NORMAL_START.direction;
+        next.mapRevision = MAP_REVISION;
+      }
       next.activeTeamIndex = clamp(Number(saved.activeTeamIndex) || 0, 0, Math.max(0, next.team.length - 1));
       state = next;
+      state.team.forEach((member) => evolvePokemonIfReady(member));
+      updateMapTileStreaming();
       camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, currentWorldWidth() - VIEW_WIDTH);
       camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, currentWorldHeight() - VIEW_HEIGHT);
       return state.started && state.team.length > 0;
@@ -1044,10 +2322,10 @@
   }
 
   function renderStarters() {
-    const backgrounds = { Planta: "#dcebc5", Fuego: "#f5ddc8", Agua: "#d6e9ef" };
+    const backgrounds = { Planta: "#dcebc5", Fuego: "#f5ddc8", Agua: "#d6e9ef", Roca: "#e8dfc8" };
     elements.starterGrid.innerHTML = STARTERS.map((starter) => `
       <article class="starter-card" style="--starter-color:${TYPE_COLORS[starter.type]};--starter-bg:${backgrounds[starter.type]}">
-        <img src="${artworkUrl(starter.id)}" alt="${starter.name}" draggable="false" />
+        <img class="${isPetrillo(starter.id) ? "custom-pokemon-sprite petrillo-sprite petrillo-starter-sprite" : ""}" src="${artworkUrl(starter.id)}" alt="${starter.name}" draggable="false" />
         <h3>${starter.name}</h3><span class="starter-type">${starter.type}</span>
         <p>${starter.description}</p><button type="button" data-starter="${starter.id}">Elegir a ${starter.name}</button>
       </article>
@@ -1081,7 +2359,7 @@
       `¡${POKEMON[id].name} será tu compañero por la ciudad!`,
       "Mantén SHIFT para correr. Ethan usa animaciones distintas para caminar y correr en las cuatro direcciones.",
       "El botón # abre la cuadrícula: pulsa una casilla para marcarla como transitable, bloqueada, puerta, hierba o evento.",
-      "Cuando quieras indicarme cambios puedes copiar una coordenada, por ejemplo: C65, F33 = puerta.",
+      "Cuando quieras indicarme cambios puedes copiar una coordenada, por ejemplo: C18, F21 = puerta.",
     ], "P", () => showAreaToast("CIUDAD POKÉMON"));
   }
 
@@ -1107,13 +2385,18 @@
     elements.trainerLevel.textContent = state.trainerLevel;
     elements.ballCount.textContent = state.balls;
     elements.caughtCount.textContent = state.caught.length;
-    elements.battleBallCount.textContent = `× ${state.balls + state.inventory.ultraBalls}`;
+    if (elements.money) elements.money.textContent = `${state.money} ₽`;
+    elements.battleBallCount.textContent = `× ${state.balls + state.inventory.ultraBalls + state.inventory.masterBalls}`;
     elements.soundIcon.textContent = state.sound ? "♪" : "×";
+    document.documentElement.dataset.blackMarketMasterRemaining = String(Math.max(
+      0,
+      BLACK_MARKET_LIMITS.masterBall - (Number(state.blackMarket.purchases.masterBall) || 0),
+    ));
     const objectives = [
       "Explora Ciudad Pokémon",
       "Captura tu primer Pokémon salvaje",
       "Forma un equipo de 3 Pokémon",
-      "Visita el Centro Pokémon (C65, F33)",
+      "Visita el Centro de Salud (C18, F21)",
       "¡Objetivo cumplido! Sigue explorando",
     ];
     let objective = objectives[clamp(state.questStage, 0, 4)];
@@ -1215,16 +2498,32 @@
 
   function canMoveTo(x, y) {
     if (state.interior === "maintenance") return maintenanceCanOccupy(x, y);
+    if (state.interior === "building" || state.interior === "route") return interiorCanOccupy(x, y);
     if (state.dimension === "prism") {
       if (x < 24 || y < 30 || x > PRISM_WIDTH - 24 || y > PRISM_HEIGHT - 22) return false;
       return prismWalkableAreas.some((area) => x >= area.x + 18 && x <= area.x + area.w - 18 && y >= area.y + 18 && y <= area.y + area.h - 18);
     }
-    return cityMapCanOccupy(x, y);
+    return cityMapCanOccupy(x, y) && !worldNpcBlocksPosition(x, y);
+  }
+
+  function encounterAreaContains(area, x, y) {
+    if (area?.shape === "polygon") return pointInPolygon(x, y, area.points || []);
+    return Boolean(area) && x >= Number(area.x) && x <= Number(area.x) + Number(area.w)
+      && y >= Number(area.y) && y <= Number(area.y) + Number(area.h);
+  }
+
+  function encounterAreaAt(x, y) {
+    return (CITY_MAP.encounterAreas || []).find((area) => encounterAreaContains(area, x, y)) || null;
   }
 
   function currentEncounterZone() {
+    if (state.interior === "route") {
+      return ROUTE_GRASS.some((g) => state.worldX >= g.x && state.worldX <= g.x + g.w
+        && state.worldY >= g.y && state.worldY <= g.y + g.h);
+    }
     if (state.interior) return false;
     if (state.dimension === "san_pablo") {
+      if (encounterAreaAt(state.worldX, state.worldY)) return true;
       const tile = worldToTile(state.worldX, state.worldY);
       return mapTileType(tile.col, tile.row) === "encounter";
     }
@@ -1232,7 +2531,10 @@
   }
 
   function currentGreenArea() {
+    if (state.interior === "route") return currentEncounterZone() ? { name: "Hierba de la ruta" } : null;
     if (state.interior || state.dimension !== "san_pablo") return null;
+    const area = encounterAreaAt(state.worldX, state.worldY);
+    if (area) return { id: area.id, name: area.name || "Hierba alta" };
     return currentEncounterZone() ? { name: "Hierba alta" } : null;
   }
 
@@ -1243,13 +2545,32 @@
       if (distance(player, MAINTENANCE_TERMINAL) <= MAINTENANCE_TERMINAL.radius) return { id: "maintenance_terminal" };
       return null;
     }
+    if (state.interior === "building") {
+      const player = { x: state.worldX, y: state.worldY };
+      if (distance(player, INDOOR_NPC) <= INDOOR_NPC.radius) return { id: "interior_npc" };
+      if (distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
+      return null;
+    }
+    if (state.interior === "route") {
+      const player = { x: state.worldX, y: state.worldY };
+      if (distance(player, ROUTE_EXIT) <= ROUTE_EXIT.radius) return { id: "interior_exit" };
+      return null;
+    }
     if (state.dimension === "prism") {
       const maze = ensureMazeState();
       const start = mazeDefinition.start;
+      const market = mazeDefinition.market;
+      if (market && Math.hypot(maze.playerX - (market.x + .5), maze.playerY - (market.y + .5)) < .9) {
+        return { id: "black_market" };
+      }
       return Math.hypot(maze.playerX - (start.x + .5), maze.playerY - (start.y + .5)) < .85
         ? { id: "dimension_exit" }
         : null;
     }
+    const worldNpc = nearbyWorldNpc();
+    if (worldNpc) return { id: "world_npc", npc: worldNpc.npc };
+    const worldBlocker = nearbyWorldBlocker();
+    if (worldBlocker) return { id: "world_blocker", asset: worldBlocker.asset };
     return nearbyMapInteraction();
     /* El mapa procedural anterior se conserva debajo para las mecánicas interiores,
        pero el exterior nuevo usa exclusivamente la cuadrícula editable. */
@@ -1274,14 +2595,21 @@
       map_tile: "Interactuar",
       building_door: "Entrar al edificio", maintenance_exit: "Volver al exterior",
       maintenance_terminal: "Usar terminal", dimension_portal: "Examinar portal",
-      dimension_exit: "Regresar a San Pablo", health: "Hablar", cafe: "Hablar",
+      dimension_exit: "Regresar a San Pablo", black_market: "Entrar al mercado negro", health: "Hablar", cafe: "Hablar",
       uned: "Consultar", school: "Leer", field: "Examinar",
+      interior_npc: "Hablar", world_npc: "Hablar", interior_exit: "Salir",
+      world_blocker: "Examinar obstáculo",
     };
-    elements.interactPrompt.innerHTML = `<kbd>E</kbd> ${labels[poi.id] || "Interactuar"}`;
+    const label = poi.id === "map_tile" && poi.event?.action === "prism"
+      ? "Examinar portal"
+      : labels[poi.id] || "Interactuar";
+    elements.interactPrompt.innerHTML = `<kbd>E</kbd> ${label}`;
   }
 
   function areaForPosition(x, y) {
     if (state.interior === "maintenance") return "Sala de mantenimiento";
+    if (state.interior === "building") return state.interiorData?.label || "Interior";
+    if (state.interior === "route") return currentEncounterZone() ? "Ruta Silvestre · Hierba" : "Ruta Silvestre";
     if (state.dimension === "prism") {
       if (y < 860) return "Dimensión Prisma · Isla Norte";
       if (x < 800) return "Dimensión Prisma · Isla Oeste";
@@ -1289,8 +2617,15 @@
       return "Dimensión Prisma · Umbral";
     }
     const tile = worldToTile(x, y);
-    if (mapTileType(tile.col, tile.row) === "encounter") return "Hierba alta";
-    return zoneAtY(y).name;
+    if (currentEncounterZone()) return currentGreenArea()?.name || "Hierba alta";
+    const street = (CITY_MAP.streets || [])
+      .map((entry) => {
+        const [x1, y1, x2, y2] = entry.segment;
+        return { ...entry, distance: distanceToRoad(x, y, { x1, y1, x2, y2 }) };
+      })
+      .filter((entry) => entry.distance <= entry.width / 2)
+      .sort((a, b) => (a.distance / a.width) - (b.distance / b.width))[0];
+    return street?.name || mapSectionAt(x, y).name;
   }
 
   function distanceToRoad(x, y, road) {
@@ -1302,7 +2637,19 @@
 
   function updateAreaLabel() {
     const area = areaForPosition(state.worldX, state.worldY);
+    const tile = worldToTile(state.worldX, state.worldY);
+    document.documentElement.dataset.playerPosition = `${Math.round(state.worldX)},${Math.round(state.worldY)}`;
+    document.documentElement.dataset.playerTile = `C${tile.col},F${tile.row}`;
+    document.documentElement.dataset.playerDirection = state.direction;
     elements.areaName.textContent = area;
+    if (elements.coordinateHud) {
+      const inCity = state.dimension === "san_pablo" && !state.interior;
+      elements.coordinateHud.classList.toggle("hidden", !inCity);
+      if (inCity) {
+        elements.coordinateHud.querySelector("strong").textContent = `C${tile.col} · F${tile.row}`;
+        elements.coordinateHud.querySelector("span").textContent = `X${Math.round(state.worldX)} · Y${Math.round(state.worldY)} px`;
+      }
+    }
     if (elements.miniMapArea) elements.miniMapArea.textContent = area.toUpperCase();
     updateCaptureStatus();
     if (lastArea && area !== lastArea) showAreaToast(area.toUpperCase());
@@ -1325,21 +2672,42 @@
     if (!poi) return;
 
     if (poi.id === "map_tile") {
-      if (poi.event?.action === "heal") {
-        state.team.forEach((member) => { member.hp = member.maxHp; });
-        const messages = ["Enfermera: Tu equipo ha recuperado todos sus PS."];
-        if (!state.clinicGiftClaimed) {
-          state.clinicGiftClaimed = true; state.balls += 2;
-          messages.push("También te entrego 2 Poké Balls para que sigas explorando.");
+      const door = poi.event;
+      if (!door) { showDialog([`Evento en C${poi.col}, F${poi.row}.`], "!"); return; }
+      if (door.action === "closed") {
+        showDialog([`${door.label}: La puerta está cerrada por ahora.`], "!");
+      } else if (door.action === "prism") {
+        if (state.inventory.prismShards < 3) {
+          showDialog([`El umbral reacciona a tus Fragmentos Prisma: ${state.inventory.prismShards} / 3.`, "Busca los tres destellos en Jerusalén, Persépolis y Siracusa."], "◇");
+        } else {
+          showDialog(["Los tres fragmentos encajan en el umbral. El aire empieza a doblarse…", "La dimensión reacciona al ruido y puede pedir acceso al micrófono."], "◇", enterPrismDimension);
         }
-        renderHud(); saveGame(); showDialog(messages, "+");
-      } else if (poi.event?.action === "closed") {
-        showDialog([`${poi.event.label}: La puerta está cerrada por ahora.`], "!");
       } else {
-        showDialog([`${poi.type === "door" ? "Puerta" : "Evento"} en C${poi.col}, F${poi.row}. Aquí podremos añadir diálogo, cambio de mapa o cualquier acción.`], "!");
+        const typeMap = { heal: "center", shop: "mart", lab: "lab", house: "house", route: "route" };
+        const type = typeMap[door.action];
+        if (type) enterInterior(type, door);
+        else showDialog([`${door.label}: aún no hay nada que hacer aquí.`], "!");
       }
       return;
     }
+
+    if (poi.id === "world_npc") {
+      const npc = poi.npc || {};
+      const lines = Array.isArray(npc.lines) && npc.lines.length ? npc.lines : ["Hola, entrenador."];
+      showDialog(lines.map((line) => `${npc.name || "NPC"}: ${line}`), (npc.name || "N").charAt(0));
+      return;
+    }
+
+    if (poi.id === "world_blocker") {
+      const interaction = poi.asset?.interaction || {};
+      const lines = Array.isArray(interaction.lines) && interaction.lines.length
+        ? interaction.lines
+        : ["Parece que necesito algo para avanzar"];
+      showDialog(lines, "!");
+      return;
+    }
+    if (poi.id === "interior_npc") { useInteriorNpc(); return; }
+    if (poi.id === "interior_exit") { leaveInterior(); return; }
 
     if (poi.id === "building_door") {
       const building = buildings.find((item) => item.id === poi.buildingId);
@@ -1374,6 +2742,11 @@
 
     if (poi.id === "dimension_exit") {
       showDialog(["El portal de regreso conecta con el campo de fútbol de San Pablo."], "◇", leavePrismDimension);
+      return;
+    }
+
+    if (poi.id === "black_market") {
+      openBlackMarket();
       return;
     }
 
@@ -1456,34 +2829,265 @@
     ], "⚙");
   }
 
+  function interiorCanOccupy(x, y) {
+    if (state.interior === "route") {
+      const r = ROUTE_ROOM;
+      if (x < r.x + r.wall || x > r.x + r.w - r.wall || y < r.y + r.wall || y > r.y + r.h - r.wall) return false;
+      if (x >= ROUTE_POND.x - 8 && x <= ROUTE_POND.x + ROUTE_POND.w + 8 && y >= ROUTE_POND.y - 8 && y <= ROUTE_POND.y + ROUTE_POND.h + 8) return false;
+      return !ROUTE_BLOCKED.some((b) => x >= b.x - 14 && x <= b.x + b.w + 14 && y >= b.y - 14 && y <= b.y + b.h + 14);
+    }
+    const r = INDOOR_ROOM;
+    return x > r.x + r.wall && x < r.x + r.w - r.wall && y > r.y + r.wall && y < r.y + r.h - r.wall;
+  }
+
+  async function enterInterior(type, door) {
+    if (inputLocked) return;
+    inputLocked = true; clearDirectionalInput();
+    await fadeTransition(() => {
+      state.interior = type === "route" ? "route" : "building";
+      state.interiorData = {
+        type, label: door?.label || INTERIOR_PALETTES[type]?.label || "Interior",
+        npc: door?.npc || null, returnX: state.worldX, returnY: state.worldY, returnDir: state.direction,
+      };
+      if (type === "route") { state.worldX = ROUTE_SPAWN.x; state.worldY = ROUTE_SPAWN.y; }
+      else { state.worldX = INDOOR_SPAWN.x; state.worldY = INDOOR_SPAWN.y; }
+      state.direction = "up";
+      /* Las salas están diseñadas exactamente para el viewport 960×624. */
+      camera.x = 0;
+      camera.y = 0;
+      lastArea = "";
+      elements.buildingEditorButton.disabled = true;
+      closeBuildingEditorPanel();
+    });
+    inputLocked = false;
+    playTone(330, .08, "square", .025);
+    updateAreaLabel(); updateInteractPrompt(); saveGame();
+    showAreaToast((state.interiorData?.label || "Interior").toUpperCase());
+  }
+
+  async function leaveInterior() {
+    if (inputLocked) return;
+    inputLocked = true; clearDirectionalInput();
+    const dest = state.interiorData || {};
+    await fadeTransition(() => {
+      state.interior = null;
+      state.worldX = dest.returnX ?? NORMAL_START.x;
+      state.worldY = dest.returnY ?? NORMAL_START.y;
+      state.direction = dest.returnDir || "down";
+      state.interiorData = null;
+      camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
+      camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
+      lastArea = "";
+      elements.buildingEditorButton.disabled = false;
+    });
+    inputLocked = false;
+    playTone(440, .08, "square", .025);
+    updateAreaLabel(); updateInteractPrompt(); saveGame();
+    showAreaToast("CIUDAD POKÉMON");
+  }
+
+  function useInteriorNpc() {
+    const type = state.interiorData?.type;
+    if (type === "center") clinicHeal();
+    else if (type === "mart") showDialog([
+      "Dependiente: ¡Bienvenido! Las Poké Balls están de oferta: cuestan exactamente lo que pone en la etiqueta.",
+      "Si rompes algo, no pasa nada... mientras lo compres.",
+    ], "$", () => openShop());
+    else if (type === "lab") labDialog();
+    else if (type === "house") houseDialog(state.interiorData?.npc);
+    else showDialog(["Alguien está aquí…"], "?");
+  }
+
+  function clinicHeal() {
+    state.team.forEach((member) => { member.hp = member.maxHp; });
+    const messages = ["Enfermera: Tu equipo está como nuevo. Yo, en cambio, necesito una Poción y vacaciones."];
+    if (!state.clinicGiftClaimed) { state.clinicGiftClaimed = true; state.balls += 2; messages.push("Toma 2 Poké Balls. No son caramelos; lo aclaro por lo ocurrido el martes."); }
+    if (state.team.length >= MAX_TEAM && state.questStage >= 3) {
+      state.questStage = 4; messages.push("¡Objetivo completado! Has formado y cuidado a tu equipo."); playJingle("success");
+    }
+    renderHud(); saveGame(); showDialog(messages, "+");
+  }
+
+  function labDialog() {
+    const lines = [
+      "Profesora Encina: ¡Bienvenida! He ordenado el laboratorio, así que ahora no encuentro nada.",
+      `Llevas ${state.caught.length} Pokémon capturados de ${LOCAL_DEX_SIZE} de la región.`,
+      "Mi hipótesis: la Ruta Silvestre esconde Pokémon raros. Mi otra hipótesis: necesito café.",
+    ];
+    if (!state.gifts.lab) {
+      state.gifts.lab = true; state.inventory.potions += 1;
+      lines.push("Toma esta Poción extra. La ciencia funciona mejor cuando nadie se desmaya.");
+      playJingle("success");
+    }
+    renderHud(); saveGame(); showDialog(lines, "🔬");
+  }
+
+  function houseDialog(npcId) {
+    const def = NPC_DEFS[npcId] || { name: "Vecino", lines: ["¡Hola! Buen tiempo hoy."] };
+    const lines = [`${def.name}: ${def.lines[0]}`];
+    if (def.lines[1]) lines.push(def.lines[1]);
+    if (npcId === "comerciante" && !state.gifts.comerciante) {
+      state.gifts.comerciante = true; state.money += 150;
+      lines.push("Toma 150 Pokédólares de cortesía para gastar en el Poké Mart.");
+      renderHud();
+    }
+    saveGame(); showDialog(lines, def.name.charAt(0));
+  }
+
+  function shopCatalog(type = activeShopType) {
+    if (type === "black_market") {
+      return [
+        {
+          id: "maxPotion", name: "Poción Máxima", price: 300, sprite: "max-potion",
+          description: "Restaura todos los PS del Pokémon activo.",
+          buy: () => { state.inventory.maxPotions += 1; },
+        },
+        {
+          id: "prismBattery", name: "Batería Prisma", price: 200, sprite: "cell-battery", stockKey: "prismBattery",
+          description: "Recupera una carga de la linterna del laberinto.",
+          buy: () => { state.inventory.prismBatteries += 1; },
+        },
+        {
+          id: "rareCandy", name: "Caramelo Raro", price: 900, sprite: "rare-candy", stockKey: "rareCandy",
+          description: "Sube un nivel al Pokémon activo. Solo quedan dos.",
+          buy: () => { state.inventory.rareCandies += 1; },
+        },
+        {
+          id: "masterBall", name: "Master Ball", price: 1800, sprite: "master-ball", stockKey: "masterBall",
+          description: "Garantiza una captura. Pieza única.",
+          buy: () => { state.inventory.masterBalls += 1; },
+        },
+      ];
+    }
+    return [
+      { id: "pokeBall", name: "Poké Ball", price: 100, sprite: "poke-ball", description: "Una captura estándar.", buy: () => { state.balls += 1; } },
+      { id: "potion", name: "Poción", price: 80, sprite: "potion", description: "Restaura 20 PS.", buy: () => { state.inventory.potions += 1; } },
+      { id: "oranBerry", name: "Baya Aranja", price: 50, sprite: "oran-berry", description: "Restaura 10 PS.", buy: () => { state.inventory.berries += 1; } },
+      { id: "ultraBall", name: "Ultra Ball", price: 600, sprite: "ultra-ball", description: "Mejora mucho la captura.", buy: () => { state.inventory.ultraBalls += 1; } },
+    ];
+  }
+
+  function blackMarketStock(item) {
+    if (!item?.stockKey) return Infinity;
+    const limit = BLACK_MARKET_LIMITS[item.stockKey] ?? 0;
+    return Math.max(0, limit - (Number(state.blackMarket.purchases[item.stockKey]) || 0));
+  }
+
+  function openShop(type = "mart") {
+    if (!elements.shopModal) { showDialog(["Dependiente: ¡Bienvenido al Poké Mart! Vuelve pronto."], "$"); return; }
+    closeSanpledex(false);
+    activeShopType = type;
+    lastShopFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    clearDirectionalInput();
+    renderShop();
+    elements.shopModal.classList.remove("hidden");
+    elements.closeShop?.focus({ preventScroll: true });
+  }
+
+  function openBlackMarket() {
+    const maze = ensureMazeState();
+    maze.marketReached = true;
+    maze.monsterRepel = Math.max(maze.monsterRepel, 5);
+    maze.alertTimer = 0;
+    shadowPath = []; shadowPathTimer = 0;
+    const firstVisit = !state.blackMarket.discovered;
+    state.blackMarket.discovered = true;
+    saveGame();
+    if (firstVisit) {
+      showDialog([
+        "Traficante Umbral: La Sombra no cruza la luz roja. Desde ahora este puesto es tu refugio.",
+        "Lo que vendo no aparece en ningún Poké Mart. El género limitado no vuelve a entrar.",
+      ], "₽", () => openShop("black_market"));
+    } else openShop("black_market");
+  }
+
+  function closeShop() {
+    if (!elements.shopModal || elements.shopModal.classList.contains("hidden")) return;
+    elements.shopModal.classList.add("hidden");
+    const focusTarget = lastShopFocus?.isConnected && lastShopFocus.offsetParent !== null
+      ? lastShopFocus
+      : elements.canvas;
+    focusTarget?.focus({ preventScroll: true });
+    lastShopFocus = null;
+  }
+
+  function renderShop() {
+    const items = shopCatalog();
+    const blackMarket = activeShopType === "black_market";
+    elements.shopDialog?.classList.toggle("black-market", blackMarket);
+    if (elements.shopEyebrow) elements.shopEyebrow.textContent = blackMarket ? "TRATOS DEL UMBRAL" : "POKÉ MART";
+    if (elements.shopTitle) elements.shopTitle.textContent = blackMarket ? "Mercado Negro" : "Tienda Pokémon";
+    if (elements.shopTip) elements.shopTip.textContent = blackMarket
+      ? "La luz roja es un refugio. Los objetos limitados no se reponen al recargar la partida."
+      : "Gana dinero ganando combates salvajes.";
+    elements.shopMoney.textContent = `${state.money} ₽`;
+    elements.shopList.innerHTML = items.map((item, index) => {
+      const remaining = blackMarketStock(item);
+      const soldOut = remaining <= 0;
+      const stockLabel = Number.isFinite(remaining) ? ` · ${remaining} disponibles` : "";
+      return `<div class="shop-item ${soldOut ? "sold-out" : ""}">
+        <img src="${itemSpriteUrl(item.sprite)}" alt="" draggable="false" />
+        <div class="shop-item-info"><strong>${item.name}</strong><small>${item.price} ₽${stockLabel}</small><p>${item.description}</p></div>
+        <button type="button" data-shop="${index}" ${soldOut || state.money < item.price ? "disabled" : ""}>${soldOut ? "Agotado" : "Comprar"}</button>
+      </div>`;
+    }).join("");
+    $$('[data-shop]').forEach((button) => button.addEventListener("click", () => buyShopItem(items[Number(button.dataset.shop)])));
+  }
+
+  function buyShopItem(item) {
+    if (!item || blackMarketStock(item) <= 0 || state.money < item.price) {
+      playTone(95, .15, "square", .03);
+      return;
+    }
+    state.money -= item.price;
+    item.buy();
+    if (item.stockKey) state.blackMarket.purchases[item.stockKey] += 1;
+    playJingle("success"); renderShop(); renderHud(); saveGame();
+  }
+
   function primaryAction() {
     if (state.dimension === "prism" && !nearestPointOfInterest()) useFlashlight();
     else interact();
   }
 
   async function enterPrismDimension() {
-    const microphoneReady = await requestMicrophoneAccess();
-    if (!microphoneReady) return;
+    const noiseMode = await requestMicrophoneAccess();
     state.returnPosition = { x: state.worldX, y: state.worldY };
     state.dimension = "prism";
     state.dimensionVisited = true;
     if (!state.secretPokemonSaved) state.secretPokemonId = chooseSecretPokemonId();
-    ensureMazeState(true);
+    const maze = ensureMazeState(true);
+    if (state.blackMarket.discovered && mazeDefinition.market) {
+      const market = mazeDefinition.market;
+      maze.playerX = market.x + .5; maze.playerY = market.y + .5;
+      maze.angle = firstOpenDirection(mazeDefinition.grid, market);
+      maze.marketReached = true;
+      maze.monsterRepel = 3.5;
+    }
     state.worldX = 1050; state.worldY = 1830; state.direction = "up";
     lastArea = "";
     elements.buildingEditorButton.disabled = true;
     elements.worldScreen.classList.add("maze-mode");
     elements.mazeHud.classList.remove("hidden");
+    if (elements.noiseLabel) elements.noiseLabel.textContent = noiseMode === "microphone" ? "MICRÓFONO" : "MOVIMIENTO";
     playJingle("capture");
     renderHud(); saveGame();
+    const objective = state.secretPokemonSaved
+      ? "El Pokémon ya está a salvo, pero el Mercado Negro sigue abierto entre los muros."
+      : "Resuelve el laberinto y derrota al Pokémon invertido para liberarlo.";
+    const noiseRule = noiseMode === "microphone"
+      ? "La Sombra oye el ruido de tu habitación y se mueve más rápido cuando te escucha."
+      : "Modo sin micrófono activo: la Sombra reaccionará a tus pasos, giros y carreras.";
     showDialog([
-      "La Sombra oye el ruido de tu habitación y se mueve más rápido cuando te escucha.",
+      noiseRule,
       "Apunta hacia ella y pulsa F para ahuyentarla. La linterna solo puede repelerla tres veces.",
-      "Resuelve el laberinto y derrota al Pokémon invertido para liberarlo.",
+      "Busca la luz roja: el Mercado Negro funciona como refugio y punto de control.",
+      objective,
     ], "MIC", () => showAreaToast("DIMENSIÓN INVERTIDA"));
   }
 
   function leavePrismDimension() {
+    closeShop();
     stopMicrophone();
     const destination = state.returnPosition || { x: PORTAL_POSITION.x, y: PORTAL_POSITION.y + field.h / 2 + 70 };
     state.dimension = "san_pablo";
@@ -1601,17 +3205,27 @@
 
   function updateMazeMonster(deltaSeconds, effectiveNoise, playerStill) {
     const maze = ensureMazeState();
-    maze.monsterRepel = Math.max(0, maze.monsterRepel - deltaSeconds);
-    maze.alertTimer = effectiveNoise > .24
-      ? Math.max(maze.alertTimer, 4.2 + effectiveNoise * 4.4)
-      : Math.max(0, maze.alertTimer - deltaSeconds);
+    const market = mazeDefinition.market;
+    const insideMarketRefuge = Boolean(maze.marketReached && market
+      && Math.hypot(maze.playerX - (market.x + .5), maze.playerY - (market.y + .5)) < 1.25);
+    maze.monsterRepel = insideMarketRefuge
+      ? Math.max(2.2, maze.monsterRepel - deltaSeconds)
+      : Math.max(0, maze.monsterRepel - deltaSeconds);
+    maze.alertTimer = insideMarketRefuge
+      ? 0
+      : effectiveNoise > .24
+        ? Math.max(maze.alertTimer, 4.2 + effectiveNoise * 4.4)
+        : Math.max(0, maze.alertTimer - deltaSeconds);
     sprintScareCooldown = Math.max(0, sprintScareCooldown - deltaSeconds);
     shadowPathTimer -= deltaSeconds;
     const repelled = maze.monsterRepel > 0;
     const chasing = !repelled && maze.alertTimer > 0;
     updateChaseMusic(deltaSeconds, chasing);
-    if (updateSprintScare(deltaSeconds, effectiveNoise, playerStill)) return;
-    if (maybeStartSilentPass()) return;
+    if (insideMarketRefuge) { sprintScare = null; quietStillTime = 0; }
+    else {
+      if (updateSprintScare(deltaSeconds, effectiveNoise, playerStill)) return;
+      if (maybeStartSilentPass()) return;
+    }
     if (shadowPathTimer <= 0 || shadowPath.length < 2) {
       let targetX = maze.playerX; let targetY = maze.playerY;
       if (repelled) {
@@ -1643,15 +3257,18 @@
   function updateMazeMovement(deltaSeconds, drawerOpen) {
     const maze = ensureMazeState();
     const micLive = microphoneStream?.getAudioTracks().some((track) => track.readyState === "live");
-    if (!micLive && !inputLocked && elements.dialogBox.classList.contains("hidden")) {
-      showDialog(["El micrófono se ha desconectado. El portal pierde estabilidad."], "MIC", leavePrismDimension);
-      return;
+    if (!micLive && !microphoneFallbackMode) {
+      microphoneStream?.getTracks().forEach((track) => track.stop());
+      microphoneStream = null; microphoneAnalyser = null; microphoneData = null; microphoneLevel = 0;
+      microphoneFallbackMode = true;
+      if (elements.noiseLabel) elements.noiseLabel.textContent = "MOVIMIENTO";
+      showAreaToast("MICRÓFONO DESCONECTADO · MODO MOVIMIENTO");
     }
-    const micNoise = updateMicrophoneLevel();
+    const micNoise = micLive ? updateMicrophoneLevel() : 0;
     const shadowDistance = Math.hypot(maze.monsterX - maze.playerX, maze.monsterY - maze.playerY);
     updateProximityBreathing(deltaSeconds, shadowDistance, !battle && !jumpScareActive);
     if (battle || inputLocked || drawerOpen || jumpScareActive || !elements.dialogBox.classList.contains("hidden")) {
-      playerRunning = false;
+      resetPlayerAnimation();
       quietStillTime = 0;
       mazeMotion.forward = 0; mazeMotion.strafe = 0; mazeMotion.turn = 0;
       updateChaseMusic(deltaSeconds, false);
@@ -1684,21 +3301,27 @@
     const velocityY = Math.sin(maze.angle) * mazeMotion.forward
       + Math.sin(maze.angle + Math.PI / 2) * mazeMotion.strafe;
     const movementSpeed = Math.hypot(velocityX, velocityY);
+    let actualMovementSpeed = 0;
     if (movementSpeed > .025) {
+      const previousX = maze.playerX; const previousY = maze.playerY;
       const nextX = maze.playerX + velocityX * deltaSeconds;
       const nextY = maze.playerY + velocityY * deltaSeconds;
       if (mazeCanOccupy(nextX, maze.playerY)) maze.playerX = nextX;
       if (mazeCanOccupy(maze.playerX, nextY)) maze.playerY = nextY;
-      maze.steps += movementSpeed * deltaSeconds;
-      animationTime += deltaSeconds * 1000;
-      animationFrame = Math.floor(animationTime / (playerRunning ? 82 : 145)) % 4;
-    } else { animationFrame = 0; animationTime = 0; }
+      const actualMovement = Math.hypot(maze.playerX - previousX, maze.playerY - previousY);
+      actualMovementSpeed = deltaSeconds > 0 ? actualMovement / deltaSeconds : 0;
+      if (actualMovement > .0001) {
+        maze.steps += actualMovement;
+        animationTime += deltaSeconds * 1000;
+        animationFrame = Math.floor(animationTime / (playerRunning ? 82 : 145)) % 4;
+      } else resetPlayerAnimation();
+    } else resetPlayerAnimation();
 
     const playerStill = !translating && turnInput === 0
-      && movementSpeed < .045 && Math.abs(mazeMotion.turn) < .04;
+      && actualMovementSpeed < .045 && Math.abs(mazeMotion.turn) < .04;
     const perfectlyQuiet = micNoise < .055;
     quietStillTime = playerStill && perfectlyQuiet ? quietStillTime + deltaSeconds : 0;
-    const movementNoise = movementSpeed > .045 ? (playerRunning ? .38 : .08 + movementSpeed / speed * .06) : 0;
+    const movementNoise = actualMovementSpeed > .045 ? (playerRunning ? .38 : .08 + actualMovementSpeed / speed * .06) : 0;
     const turnNoise = Math.abs(mazeMotion.turn) > .04 ? .035 : 0;
     const effectiveNoise = Math.max(micNoise, movementNoise, turnNoise);
     updateMazeMonster(deltaSeconds, effectiveNoise, playerStill && perfectlyQuiet);
@@ -1755,6 +3378,17 @@
     elements.shadowStatus.style.color = ["MUY CERCA", "TE HA OÍDO"].includes(status)
       ? "#f06d6d"
       : ["TE OYE", "TE PERSIGUE", "NO HAGAS RUIDO"].includes(status) ? "#f0bd64" : "#7fe0e8";
+    const objectiveTarget = state.secretPokemonSaved ? mazeDefinition.market : mazeDefinition.goal;
+    const objectiveDistance = objectiveTarget
+      ? Math.hypot(maze.playerX - (objectiveTarget.x + .5), maze.playerY - (objectiveTarget.y + .5))
+      : Infinity;
+    const signal = objectiveDistance < 2.2 ? "AQUÍ" : objectiveDistance < 5 ? "INTENSA" : objectiveDistance < 9 ? "FUERTE" : objectiveDistance < 14 ? "MEDIA" : "DÉBIL";
+    if (elements.mazeObjective) elements.mazeObjective.textContent = `${state.secretPokemonSaved ? "MERCADO" : "POKÉMON"} · ${signal}`;
+    if (elements.noiseLabel) elements.noiseLabel.textContent = microphoneFallbackMode ? "MOVIMIENTO" : "MICRÓFONO";
+    document.documentElement.dataset.prismNoiseMode = microphoneFallbackMode ? "movement" : "microphone";
+    document.documentElement.dataset.prismMarketCheckpoint = String(Boolean(maze.marketReached));
+    document.documentElement.dataset.prismPlayer = `${maze.playerX.toFixed(3)},${maze.playerY.toFixed(3)}`;
+    document.documentElement.dataset.prismShadow = `${maze.monsterX.toFixed(3)},${maze.monsterY.toFixed(3)}`;
     elements.noiseMeter.style.width = `${Math.round(noise * 100)}%`;
     elements.noiseMeter.style.background = noise > .55 ? "#ef6666" : noise > .3 ? "#e5b75e" : "#68d19b";
   }
@@ -1820,15 +3454,18 @@
 
     window.setTimeout(() => {
       const maze = ensureMazeState();
-      const { start, monster, grid } = mazeDefinition;
-      maze.playerX = start.x + .5;
-      maze.playerY = start.y + .5;
-      maze.angle = firstOpenDirection(grid, start);
+      const { start, market, monster, grid } = mazeDefinition;
+      const checkpointReached = Boolean(maze.marketReached && market);
+      const respawn = checkpointReached ? market : start;
+      const remainingLightCharges = maze.lightCharges;
+      maze.playerX = respawn.x + .5;
+      maze.playerY = respawn.y + .5;
+      maze.angle = firstOpenDirection(grid, respawn);
       maze.monsterX = monster.x + .5;
       maze.monsterY = monster.y + .5;
-      maze.monsterRepel = 0;
+      maze.monsterRepel = checkpointReached ? 3.5 : 0;
       maze.alertTimer = 0;
-      maze.lightCharges = 3;
+      maze.lightCharges = checkpointReached ? Math.max(1, remainingLightCharges) : 3;
       maze.steps = 0;
       maze.captures = (maze.captures || 0) + 1;
       shadowPath = [];
@@ -1842,21 +3479,21 @@
       updateMazeHud(0);
       updateInteractPrompt();
       saveGame();
-      showAreaToast("LA SOMBRA TE DEVUELVE AL INICIO");
+      showAreaToast(checkpointReached ? "EL REFUGIO ROJO TE HA SALVADO" : "LA SOMBRA TE DEVUELVE AL INICIO");
     }, 1620);
   }
 
   function updateMovement(deltaSeconds) {
     const drawerOpen = elements.teamDrawer.classList.contains("open")
       || elements.buildingEditor.classList.contains("open")
-      || elements.inventoryDrawer.classList.contains("open");
+      || elements.inventoryDrawer.classList.contains("open")
+      || (elements.shopModal && !elements.shopModal.classList.contains("hidden"));
     if (state.dimension === "prism") {
       updateMazeMovement(deltaSeconds, drawerOpen);
       return;
     }
     if (!state.started || battle || inputLocked || drawerOpen || !elements.dialogBox.classList.contains("hidden")) {
-      playerRunning = false;
-      elements.runBadge.classList.add("hidden");
+      resetPlayerAnimation();
       return;
     }
 
@@ -1864,10 +3501,7 @@
     let dy = (input.down ? 1 : 0) - (input.up ? 1 : 0);
     const moving = dx !== 0 || dy !== 0;
     if (!moving) {
-      animationFrame = 0;
-      animationTime = 0;
-      playerRunning = false;
-      elements.runBadge.classList.add("hidden");
+      resetPlayerAnimation();
       return;
     }
 
@@ -1898,6 +3532,9 @@
       const previousQuestStage = state.questStage;
       if (state.questStage === 0 && state.distance > 330) state.questStage = 1;
       if (currentEncounterZone()) {
+        lastGrassStepAt = performance.now();
+        lastGrassStepX = state.worldX;
+        lastGrassStepY = state.worldY;
         state.grassDistance += moved * (running ? 1.25 : 1);
         if (state.grassDistance - lastEncounterCheck > 85) {
           lastEncounterCheck = state.grassDistance;
@@ -1918,7 +3555,7 @@
       }
       updateAreaLabel(); updateInteractPrompt();
       if (previousQuestStage !== state.questStage) renderHud();
-    }
+    } else resetPlayerAnimation();
   }
 
   function drawRoad(context, road) {
@@ -2259,6 +3896,197 @@
     drawMapLabel(context, MAINTENANCE_EXIT.x, MAINTENANCE_EXIT.y + 34, "SALIDA");
   }
 
+  function drawInterior(context) {
+    if (state.interior === "route") { drawRouteInterior(context); return; }
+    const palette = INTERIOR_PALETTES[state.interiorData?.type] || INTERIOR_PALETTES.house;
+    const r = INDOOR_ROOM;
+    const type = state.interiorData?.type;
+    const tile = type === "house" ? 24 : 32;
+    for (let y = r.y; y < r.y + r.h; y += tile) {
+      for (let x = r.x; x < r.x + r.w; x += tile) {
+        const checker = (Math.floor((x - r.x) / tile) + Math.floor((y - r.y) / tile)) % 2;
+        context.fillStyle = checker ? palette.floorAlt : palette.floor;
+        context.fillRect(x, y, tile, tile);
+        context.fillStyle = "rgba(255,255,255,.08)";
+        if (type === "house") context.fillRect(x, y, tile - 1, 2);
+        else context.fillRect(x + 2, y + 2, tile - 4, 2);
+      }
+    }
+    context.fillStyle = "rgba(38,28,24,.18)";
+    context.fillRect(r.x + r.wall, r.y + r.wall, r.w - r.wall * 2, 12);
+    context.fillStyle = palette.wall;
+    context.fillRect(r.x, r.y, r.w, r.wall); context.fillRect(r.x, r.y + r.h - r.wall, r.w, r.wall);
+    context.fillRect(r.x, r.y, r.wall, r.h); context.fillRect(r.x + r.w - r.wall, r.y, r.wall, r.h);
+    context.fillStyle = "rgba(255,255,255,.17)";
+    context.fillRect(r.x + 8, r.y + 8, r.w - 16, 6);
+    context.strokeStyle = palette.accent; context.lineWidth = 3;
+    context.strokeRect(r.x + 9.5, r.y + 9.5, r.w - 19, r.h - 19);
+    drawInteriorFurniture(context, palette);
+    drawInteriorNpc(context, palette);
+    const ex = INDOOR_EXIT;
+    context.fillStyle = "rgba(244,220,119,.32)"; context.beginPath(); context.ellipse(ex.x, ex.y, 44, 16, 0, 0, Math.PI * 2); context.fill();
+    context.fillStyle = "rgba(244,220,119,.5)"; context.beginPath(); context.ellipse(ex.x, ex.y, 22, 8, 0, 0, Math.PI * 2); context.fill();
+    drawMapLabel(context, ex.x, ex.y + 30, "SALIDA");
+    drawMapLabel(context, r.x + r.w / 2, r.y + 48, palette.label);
+  }
+
+  function drawPixelFurniture(context, kind, x, y, color = "#8a6440") {
+    context.save(); context.translate(Math.round(x), Math.round(y));
+    if (kind === "rug") {
+      context.fillStyle = "rgba(80,42,55,.18)"; context.fillRect(-74, -42, 148, 84);
+      context.fillStyle = color; context.fillRect(-70, -38, 140, 76);
+      context.fillStyle = "rgba(255,236,182,.42)"; context.strokeStyle = "rgba(255,236,182,.55)"; context.lineWidth = 4;
+      context.strokeRect(-60, -28, 120, 56); context.fillRect(-4, -38, 8, 76);
+    } else if (kind === "table") {
+      context.fillStyle = "rgba(30,22,18,.2)"; context.fillRect(-34, 24, 76, 12);
+      context.fillStyle = "#5b3825"; context.fillRect(-33, 12, 10, 24); context.fillRect(23, 12, 10, 24);
+      context.fillStyle = color; context.fillRect(-42, -18, 84, 36);
+      context.fillStyle = "rgba(255,255,255,.18)"; context.fillRect(-38, -14, 76, 5);
+    } else if (kind === "bed") {
+      context.fillStyle = "#5a3d2d"; context.fillRect(-38, -54, 76, 108);
+      context.fillStyle = color; context.fillRect(-33, -49, 66, 98);
+      context.fillStyle = "#f3ead2"; context.fillRect(-29, -45, 58, 27);
+      context.fillStyle = "rgba(255,255,255,.25)"; context.fillRect(-28, -12, 56, 5);
+    } else if (kind === "shelf") {
+      context.fillStyle = "#4c3122"; context.fillRect(-44, -55, 88, 110);
+      context.fillStyle = color; context.fillRect(-38, -49, 76, 98);
+      const books = ["#c9544f", "#4d86a6", "#e2b34e", "#6a9a58", "#906baa"];
+      for (let row = 0; row < 3; row += 1) {
+        context.fillStyle = "#4c3122"; context.fillRect(-38, -20 + row * 31, 76, 5);
+        for (let book = 0; book < 6; book += 1) {
+          context.fillStyle = books[(book + row) % books.length]; context.fillRect(-31 + book * 11, -43 + row * 31, 7, 22);
+        }
+      }
+    } else if (kind === "sofa") {
+      context.fillStyle = "#4a382d"; context.fillRect(-56, 22, 112, 16);
+      context.fillStyle = color; context.fillRect(-62, -20, 124, 47); context.fillRect(-68, -18, 18, 55); context.fillRect(50, -18, 18, 55);
+      context.fillStyle = "rgba(255,255,255,.14)"; context.fillRect(-44, -13, 40, 32); context.fillRect(4, -13, 40, 32);
+    } else if (kind === "plant") {
+      context.fillStyle = "#b06f45"; context.fillRect(-14, 4, 28, 25); context.fillStyle = "#754329"; context.fillRect(-10, 24, 20, 7);
+      context.fillStyle = color; context.fillRect(-6, -35, 12, 42); context.fillRect(-27, -25, 23, 13); context.fillRect(4, -18, 27, 14); context.fillRect(-21, -43, 20, 17);
+    } else if (kind === "screen") {
+      context.fillStyle = "#343b43"; context.fillRect(-32, -34, 64, 54); context.fillStyle = color; context.fillRect(-25, -27, 50, 35);
+      context.fillStyle = "rgba(255,255,255,.48)"; context.fillRect(-20, -21, 30, 4); context.fillStyle = "#4b4b47"; context.fillRect(-8, 20, 16, 17); context.fillRect(-22, 34, 44, 5);
+    } else if (kind === "counter") {
+      context.fillStyle = "#4b3b31"; context.fillRect(-110, -8, 220, 50); context.fillStyle = color; context.fillRect(-116, -24, 232, 32);
+      context.fillStyle = "rgba(255,255,255,.22)"; context.fillRect(-108, -18, 216, 6);
+    }
+    context.restore();
+  }
+
+  function drawInteriorFurniture(context, palette) {
+    const type = state.interiorData?.type;
+    const r = INDOOR_ROOM;
+    if (type === "center" || type === "mart") {
+      drawPixelFurniture(context, "counter", INDOOR_NPC.x, INDOOR_NPC.y + 72, palette.accent);
+      drawPixelFurniture(context, "shelf", r.x + 92, r.y + 120, type === "center" ? "#d98483" : "#6d9cc2");
+      drawPixelFurniture(context, "shelf", r.x + r.w - 92, r.y + 120, type === "center" ? "#d98483" : "#6d9cc2");
+      if (type === "center") {
+        drawPixelFurniture(context, "sofa", r.x + 180, r.y + 395, "#d56568");
+        drawPixelFurniture(context, "screen", r.x + r.w - 125, r.y + 375, "#70d8dc");
+      } else {
+        drawPixelFurniture(context, "shelf", r.x + 110, r.y + 350, "#6d9cc2");
+        drawPixelFurniture(context, "shelf", r.x + r.w - 110, r.y + 350, "#6d9cc2");
+      }
+    } else if (type === "lab") {
+      drawPixelFurniture(context, "counter", INDOOR_NPC.x, INDOOR_NPC.y + 72, "#63865d");
+      drawPixelFurniture(context, "screen", r.x + 115, r.y + 115, "#75e2e8");
+      drawPixelFurniture(context, "screen", r.x + r.w - 115, r.y + 115, "#75e2e8");
+      drawPixelFurniture(context, "table", r.x + 200, r.y + 375, "#7c9d6e");
+      drawPixelFurniture(context, "table", r.x + r.w - 200, r.y + 375, "#7c9d6e");
+    } else {
+      const npc = NPC_DEFS[state.interiorData?.npc] || {};
+      const layout = npc.layout || "cozy";
+      const colors = { cozy: "#bd6c5b", playroom: "#4d83b0", coastal: "#4f91a3", study: "#7c5b96", studio: "#b56b83" };
+      drawPixelFurniture(context, "rug", INDOOR_NPC.x, r.y + 350, colors[layout]);
+      drawPixelFurniture(context, "bed", r.x + 100, r.y + 145, colors[layout]);
+      if (layout === "study") {
+        drawPixelFurniture(context, "shelf", r.x + r.w - 100, r.y + 130, "#79563c");
+        drawPixelFurniture(context, "screen", r.x + r.w - 120, r.y + 360, "#80d8da");
+        drawPixelFurniture(context, "table", INDOOR_NPC.x, r.y + 350, "#8a6440");
+      } else if (layout === "playroom") {
+        drawPixelFurniture(context, "sofa", r.x + r.w - 140, r.y + 125, colors[layout]);
+        drawPixelFurniture(context, "table", INDOOR_NPC.x, r.y + 350, "#d19b54");
+        drawPixelFurniture(context, "plant", r.x + r.w - 95, r.y + 390, "#4e9a55");
+      } else if (layout === "coastal") {
+        drawPixelFurniture(context, "shelf", r.x + r.w - 100, r.y + 130, "#517c8f");
+        drawPixelFurniture(context, "sofa", r.x + r.w - 150, r.y + 370, "#4f91a3");
+        drawPixelFurniture(context, "plant", r.x + 120, r.y + 390, "#3e8b61");
+      } else if (layout === "studio") {
+        drawPixelFurniture(context, "screen", r.x + r.w - 115, r.y + 125, "#e3c36a");
+        drawPixelFurniture(context, "shelf", r.x + r.w - 105, r.y + 370, "#9b5f74");
+        drawPixelFurniture(context, "table", INDOOR_NPC.x, r.y + 350, "#b47b4b");
+      } else {
+        drawPixelFurniture(context, "sofa", r.x + r.w - 140, r.y + 130, colors[layout]);
+        drawPixelFurniture(context, "table", INDOOR_NPC.x, r.y + 350, "#8a6440");
+        drawPixelFurniture(context, "plant", r.x + r.w - 95, r.y + 390, "#4e9a55");
+      }
+    }
+  }
+
+  function drawInteriorNpc(context, palette) {
+    const npc = NPC_DEFS[state.interiorData?.npc] || {};
+    const color = npc.color || palette.accent;
+    const t = performance.now();
+    const bob = Math.round(Math.sin(t / 420));
+    const x = INDOOR_NPC.x; const y = INDOOR_NPC.y + bob;
+    context.fillStyle = "rgba(20,40,30,.22)";
+    context.beginPath(); context.ellipse(x, INDOOR_NPC.y + 27, 21, 7, 0, 0, Math.PI * 2); context.fill();
+    const rosterRecord = npcRosterSheets.get(npc.sprite);
+    if (rosterRecord?.ready) {
+      context.drawImage(rosterRecord.image, 0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE,
+        Math.round(x) - 32, Math.round(y) - 40, 64, 64);
+    } else if (npcSheetReady && Number.isInteger(npc.spriteIndex)) {
+      context.drawImage(npcSheet, npc.spriteIndex * 32, 0, 32, 32, Math.round(x) - 32, Math.round(y) - 40, 64, 64);
+    } else {
+      context.fillStyle = color; context.fillRect(x - 12, y - 6, 24, 26);
+      context.fillStyle = "#f0c099"; context.beginPath(); context.arc(x, y - 16, 12, 0, Math.PI * 2); context.fill();
+    }
+    const near = distance({ x: state.worldX, y: state.worldY }, INDOOR_NPC) <= INDOOR_NPC.radius + 36;
+    if (near) {
+      context.fillStyle = "#ffe24a"; context.beginPath(); context.arc(x + 18, y - 26, 9, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#3a2a00"; context.font = "900 12px Trebuchet MS"; context.textAlign = "center";
+      context.fillText("!", x + 18, y - 22);
+    }
+  }
+
+  function drawRouteInterior(context) {
+    const r = ROUTE_ROOM;
+    context.fillStyle = "#7fbf5a"; context.fillRect(r.x, r.y, r.w, r.h);
+    for (let y = r.y; y < r.y + r.h; y += 16) {
+      context.fillStyle = `rgba(255,255,255,${(Math.floor((y - r.y) / 16)) % 2 ? .04 : 0})`;
+      context.fillRect(r.x, y, r.w, 8);
+    }
+    context.fillStyle = "#c9b27a";
+    context.fillRect(ROUTE_SPAWN.x - 30, r.y + r.wall, 60, r.h - r.wall * 2);
+    context.fillRect(r.x + r.wall, ROUTE_SPAWN.y - 24, r.w - r.wall * 2, 48);
+    context.fillStyle = "#4f8fc3"; context.fillRect(ROUTE_POND.x, ROUTE_POND.y, ROUTE_POND.w, ROUTE_POND.h);
+    context.fillStyle = "rgba(255,255,255,.2)"; context.fillRect(ROUTE_POND.x + 6, ROUTE_POND.y + 6, ROUTE_POND.w - 12, 8);
+    ROUTE_BLOCKED.forEach((b) => {
+      context.fillStyle = "rgba(30,60,39,.25)";
+      context.beginPath(); context.ellipse(b.x + b.w / 2 + 4, b.y + b.h, b.w * .6, b.h * .25, 0, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#5a4930"; context.fillRect(b.x + b.w / 2 - 4, b.y + b.h * .4, 8, b.h * .6);
+      context.fillStyle = "#2f6841"; context.beginPath(); context.arc(b.x + b.w / 2, b.y + b.h * .4, b.w * .55, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#4c8a49"; context.beginPath(); context.arc(b.x + b.w / 2 - 6, b.y + b.h * .4 - 6, b.w * .35, 0, Math.PI * 2); context.fill();
+    });
+    ROUTE_GRASS.forEach((g) => {
+      context.fillStyle = "rgba(46,120,60,.55)"; context.fillRect(g.x, g.y, g.w, g.h);
+      context.fillStyle = "#2e6e3a";
+      for (let y = g.y + 6; y < g.y + g.h - 4; y += 12) {
+        for (let x = g.x + 6; x < g.x + g.w - 4; x += 12) {
+          context.fillRect(x, y, 3, 6); context.fillRect(x + 4, y + 2, 3, 5);
+        }
+      }
+    });
+    context.fillStyle = "#2a5e36";
+    context.fillRect(r.x, r.y, r.w, r.wall); context.fillRect(r.x, r.y + r.h - r.wall, r.w, r.wall);
+    context.fillRect(r.x, r.y, r.wall, r.h); context.fillRect(r.x + r.w - r.wall, r.y, r.wall, r.h);
+    const ex = ROUTE_EXIT;
+    context.fillStyle = "rgba(244,220,119,.42)"; context.beginPath(); context.ellipse(ex.x, ex.y, 46, 18, 0, 0, Math.PI * 2); context.fill();
+    drawMapLabel(context, ex.x, ex.y + 32, "VOLVER A LA CIUDAD");
+    drawMapLabel(context, r.x + r.w / 2, r.y + 44, "RUTA SILVESTRE");
+  }
+
   function drawParkingAreas(context, bounds) {
     const lots = parkingLots.filter((lot) => entityInView(lot, bounds, 20));
     lots.forEach((lot) => {
@@ -2416,31 +4244,254 @@
     context.restore();
   }
 
-  function playerSourceFrame() {
-    const frames = playerFrames.get(`${playerRunning ? "run" : "walk"}-${state.direction}`) || [];
-    if (!frames.length) return null;
-    const walkOrder = [0, 1, 0, 2];
-    return frames[playerRunning ? animationFrame % frames.length : walkOrder[animationFrame % walkOrder.length]];
+  function directionFromNpcToPlayer(position, fallback = "down") {
+    const dx = state.worldX - position.x;
+    const dy = state.worldY - position.y;
+    if (Math.hypot(dx, dy) > 90) return fallback;
+    if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? "left" : "right";
+    return dy < 0 ? "up" : "down";
   }
 
-  function playerAlternateFoot() {
-    return animationFrame === 1 || animationFrame === 3;
+  function drawWorldNpc(context, npc) {
+    const position = mapNpcPosition(npc);
+    const direction = directionFromNpcToPlayer(position, npc.direction || "down");
+    const rows = { down: 0, left: 1, right: 2, up: 3 };
+    const frame = npc.walking ? Math.floor(performance.now() / 170) % 4 : 0;
+    context.save();
+    context.fillStyle = "rgba(22,43,34,.23)";
+    context.beginPath(); context.ellipse(Math.round(position.x), Math.round(position.y + 1), 16, 5, 0, 0, Math.PI * 2); context.fill();
+    const rosterRecord = npcRosterSheets.get(npc.sprite);
+    const spriteSheet = npc.sprite === "guide" && guideNpcSheetReady ? guideNpcSheet : (rosterRecord?.ready ? rosterRecord.image : null);
+    if (spriteSheet) {
+      context.drawImage(spriteSheet, frame * SPRITE_CELL_SIZE, (rows[direction] || 0) * SPRITE_CELL_SIZE,
+        SPRITE_CELL_SIZE, SPRITE_CELL_SIZE, Math.round(position.x) - 32, Math.round(position.y) - 60, 64, 64);
+    } else {
+      context.fillStyle = "#416448"; context.fillRect(position.x - 13, position.y - 30, 26, 30);
+      context.fillStyle = "#d5a079"; context.fillRect(position.x - 10, position.y - 48, 20, 18);
+    }
+    if (distance({ x: state.worldX, y: state.worldY }, position) <= 70) {
+      context.fillStyle = "#ffe24a"; context.beginPath(); context.arc(position.x + 20, position.y - 48, 9, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#352900"; context.font = "900 12px Trebuchet MS"; context.textAlign = "center"; context.fillText("!", position.x + 20, position.y - 44);
+    }
+    context.restore();
+  }
+
+  function worldAssetInView(asset, bounds, margin = 48) {
+    if (Number(asset.rotation)) {
+      const radius = Math.max(Number(asset.w), Number(asset.h)) / 2;
+      return Number(asset.x) + radius >= bounds.left - margin && Number(asset.x) - radius <= bounds.right + margin
+        && Number(asset.y) + radius >= bounds.top - margin && Number(asset.y) - radius <= bounds.bottom + margin;
+    }
+    const left = Number(asset.x) - Number(asset.w) / 2;
+    const right = left + Number(asset.w);
+    const top = Number(asset.y) - Number(asset.h);
+    const bottom = Number(asset.y);
+    return right >= bounds.left - margin && left <= bounds.right + margin
+      && bottom >= bounds.top - margin && top <= bounds.bottom + margin;
+  }
+
+  function drawWorldAsset(context, asset) {
+    const record = cityWorldAssetImages.get(worldAssetSource(asset));
+    if (!record?.ready) return;
+    context.save();
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    if (asset.kind === "building") context.filter = "drop-shadow(0 3px 2px rgba(24, 45, 34, .28))";
+    const width = Number(asset.w); const height = Number(asset.h);
+    const rotation = Number(asset.rotation) || 0;
+    if (rotation || asset.flipX) {
+      context.translate(Math.round(Number(asset.x)), Math.round(Number(asset.y) - height / 2));
+      context.rotate(rotation * Math.PI / 180);
+      context.scale(asset.flipX ? -1 : 1, 1);
+      context.drawImage(record.drawable || record.image, -width / 2, -height / 2, width, height);
+    } else {
+      context.drawImage(
+        record.drawable || record.image,
+        Math.round(Number(asset.x) - width / 2),
+        Math.round(Number(asset.y) - height),
+        width,
+        height,
+      );
+    }
+    context.restore();
+  }
+
+  function drawWorldAssetColliders(context, assets) {
+    if (!elements.buildingEditor.classList.contains("open")) return;
+    context.save();
+    context.fillStyle = "rgba(234, 42, 127, .28)";
+    context.strokeStyle = "rgba(255, 255, 255, .92)";
+    context.lineWidth = 2;
+    context.font = "700 12px monospace";
+    context.textBaseline = "bottom";
+    assets.forEach((asset) => {
+      worldAssetColliderRects(asset).forEach((rect) => {
+        context.fillRect(rect.x, rect.y, rect.w, rect.h);
+        context.strokeRect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2);
+      });
+      context.fillStyle = "rgba(12, 31, 24, .88)";
+      context.fillText(`${asset.id} · depth ${asset.depthY ?? asset.y}`, asset.x - asset.w / 2, asset.y - asset.h - 4);
+      context.fillStyle = "rgba(234, 42, 127, .28)";
+    });
+    context.restore();
+  }
+
+  function visibleEncounterGrassTiles(bounds) {
+    const size = CITY_MAP.tileSize;
+    const startCol = Math.max(0, Math.floor((bounds.left - size) / size));
+    const endCol = Math.min(Math.ceil(WORLD_WIDTH / size) - 1, Math.ceil((bounds.right + size) / size));
+    const startRow = Math.max(0, Math.floor((bounds.top - size) / size));
+    const endRow = Math.min(Math.ceil(WORLD_HEIGHT / size) - 1, Math.ceil((bounds.bottom + size) / size));
+    const frameCount = Math.max(1, Number(CITY_MAP.encounterGrass?.frames) || 1);
+    const tiles = [];
+    for (let row = startRow; row <= endRow; row += 1) {
+      for (let col = startCol; col <= endCol; col += 1) {
+        if (mapTileType(col, row) !== "encounter") continue;
+        const hash = ((col * 73856093) ^ (row * 19349663)) >>> 0;
+        tiles.push({
+          col,
+          row,
+          x: (col + .5) * size,
+          y: (row + 1) * size + 2,
+          frame: hash % frameCount,
+          phase: (hash % 628) / 100,
+        });
+      }
+    }
+    return tiles;
+  }
+
+  function encounterGrassMotion(tile, now) {
+    const age = now - lastGrassStepAt;
+    const distanceFromStep = Math.hypot(tile.x - lastGrassStepX, tile.y - 12 - lastGrassStepY);
+    const active = age >= 0 && age < 360 && distanceFromStep < 76;
+    const strength = active ? (1 - age / 360) * (1 - distanceFromStep / 76) : 0;
+    return {
+      angle: Math.sin(now / 780 + tile.phase) * .012 + Math.sin(now / 54 + tile.phase) * .115 * strength,
+      scaleY: 1 - .09 * strength,
+      offsetX: Math.sin(now / 48 + tile.phase) * 3.2 * strength,
+      active,
+    };
+  }
+
+  function drawEncounterGrassTile(context, tile, now, foreground = false) {
+    if (!encounterGrassSheetReady) return;
+    const config = CITY_MAP.encounterGrass || {};
+    const frameSize = Number(config.frameSize) || 64;
+    const width = Number(config.drawWidth) || 44;
+    const height = Number(config.drawHeight) || 48;
+    const sourceY = foreground ? Math.max(0, Math.min(frameSize - 1, Number(config.frontCropY) || 31)) : 0;
+    const sourceHeight = frameSize - sourceY;
+    const targetHeight = height * sourceHeight / frameSize;
+    const motion = encounterGrassMotion(tile, now);
+    const size = CITY_MAP.tileSize;
+    context.save();
+    context.beginPath();
+    context.rect(tile.col * size, tile.row * size - 18, size, size + 20);
+    context.clip();
+    context.translate(Math.round(tile.x + motion.offsetX), Math.round(tile.y));
+    context.rotate(motion.angle);
+    context.scale(1, motion.scaleY);
+    context.imageSmoothingEnabled = false;
+    context.drawImage(
+      encounterGrassSheet,
+      tile.frame * frameSize,
+      sourceY,
+      frameSize,
+      sourceHeight,
+      -width / 2,
+      -targetHeight,
+      width,
+      targetHeight,
+    );
+    context.restore();
+  }
+
+  function drawEncounterGrassBack(context) {
+    const bounds = visibleBounds(72);
+    const tiles = visibleEncounterGrassTiles(bounds);
+    const now = performance.now();
+    if (encounterGrassSheetReady) tiles.forEach((tile) => drawEncounterGrassTile(context, tile, now, false));
+    document.documentElement.dataset.encounterGrassVisible = String(tiles.length);
+    document.documentElement.dataset.encounterGrassAnimated = String(
+      currentEncounterZone() && now - lastGrassStepAt < 360,
+    );
+    return { tiles, now };
+  }
+
+  function drawWorldEntities(context, encounterGrass = { tiles: [], now: performance.now() }) {
+    const bounds = visibleBounds(96);
+    const visibleAssets = cityWorldAssets.filter((asset) => worldAssetInView(asset, bounds));
+    const entities = visibleAssets.map((asset) => ({
+      y: Number(asset.depthY ?? asset.y),
+      priority: 0,
+      draw: () => drawWorldAsset(context, asset),
+    }));
+    if (entityInView(PORTAL_POSITION, bounds, 110)) {
+      entities.push({
+        y: PORTAL_POSITION.y,
+        priority: 1,
+        draw: () => drawPortal(context, PORTAL_POSITION.x, PORTAL_POSITION.y, state.inventory.prismShards >= 3),
+      });
+    }
+    (CITY_MAP.npcs || []).forEach((npc) => entities.push({
+      y: mapNpcPosition(npc).y,
+      priority: 1,
+      draw: () => drawWorldNpc(context, npc),
+    }));
+    worldObjects
+      .filter((object) => object.dimension === state.dimension
+        && !state.collectedObjects.includes(object.id)
+        && entityInView(object, bounds, 45))
+      .forEach((object) => entities.push({
+        y: object.y,
+        priority: 1,
+        draw: () => drawWorldObject(context, object, performance.now()),
+      }));
+    encounterGrass.tiles.forEach((tile) => entities.push({
+      y: tile.y,
+      priority: 3,
+      draw: () => drawEncounterGrassTile(context, tile, encounterGrass.now, true),
+    }));
+    entities.push({ y: state.worldY, priority: 2, draw: () => drawPlayer(context) });
+    entities.sort((a, b) => (a.y - b.y) || (a.priority - b.priority)).forEach((entity) => entity.draw());
+    return visibleAssets;
+  }
+
+  function playerSourceFrame() {
+    const gait = playerRunning ? "run" : "walk";
+    const frames = playerFrames.get(`${gait}-${state.direction}`) || [];
+    if (!frames.length) return null;
+    const frameIndex = animationFrame % frames.length;
+    document.documentElement.dataset.playerAnimationFrame = String(frameIndex);
+    document.documentElement.dataset.playerAnimationDirection = state.direction;
+    document.documentElement.dataset.playerAnimationGait = gait;
+    return frames[frameIndex];
   }
 
   function drawPlayer(context) {
     const x = state.worldX;
     const y = state.worldY;
+    const moving = animationTime > 0;
     context.save();
     context.fillStyle = "rgba(28,52,42,.24)";
-    context.beginPath(); context.ellipse(x, y + 2, 11, 4, 0, 0, Math.PI * 2); context.fill();
+    context.beginPath(); context.ellipse(Math.round(x), Math.round(y + 1), 15, 5, 0, 0, Math.PI * 2); context.fill();
+    if (playerRunning && moving) {
+      const back = { up: [0, 6], down: [0, 6], left: [10, 4], right: [-10, 4] }[state.direction] || [0, 6];
+      const puff = 0.5 + Math.abs(Math.sin(performance.now() / 90));
+      context.fillStyle = "rgba(220,210,180,.5)";
+      context.beginPath(); context.ellipse(x + back[0], y + back[1], 8 * puff, 3 * puff, 0, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "rgba(220,210,180,.3)";
+      context.beginPath(); context.ellipse(x + back[0] * 1.6, y + back[1] + 2, 6 * puff, 2.5 * puff, 0, 0, Math.PI * 2); context.fill();
+    }
     if (playerSheetReady) {
       const frame = playerSourceFrame();
-      const bounce = playerRunning && playerAlternateFoot() ? -1 : 0;
-      if (frame) context.drawImage(frame, x - 15, y - 37 + bounce, 30, 40);
+      /* Celda 64×64 con punto de apoyo fijo en y=60: no hay fondo ni temblor. */
+      if (frame) context.drawImage(frame, Math.round(x) - 32, Math.round(y) - 60, 64, 64);
     } else {
-      context.fillStyle = "#d94e49"; context.fillRect(x - 8, y - 27, 16, 8);
-      context.fillStyle = "#f0c099"; context.fillRect(x - 6, y - 19, 12, 8);
-      context.fillStyle = "#3f6f9c"; context.fillRect(x - 8, y - 11, 16, 14);
+      context.fillStyle = "#d94e49"; context.fillRect(Math.round(x) - 12, Math.round(y) - 54, 24, 12);
+      context.fillStyle = "#f0c099"; context.fillRect(Math.round(x) - 9, Math.round(y) - 42, 18, 14);
+      context.fillStyle = "#3f6f9c"; context.fillRect(Math.round(x) - 12, Math.round(y) - 28, 24, 28);
     }
     context.restore();
   }
@@ -2619,12 +4670,31 @@
     floor.addColorStop(0, "#332b4c"); floor.addColorStop(1, "#080710");
     context.fillStyle = floor; context.fillRect(0, horizon, width, height - horizon);
 
+    /* Rejilla de perspectiva, neblina y pulsos ambientales para que la sala no
+       sea un plano vacío. Se dibujan antes de las paredes para conservar profundidad. */
+    context.save();
+    context.strokeStyle = "rgba(151,112,190,.13)"; context.lineWidth = 1;
+    for (let band = 1; band <= 11; band += 1) {
+      const amount = band / 11; const y = horizon + Math.pow(amount, 2.15) * (height - horizon);
+      context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke();
+    }
+    for (let spoke = -8; spoke <= 8; spoke += 1) {
+      context.beginPath(); context.moveTo(width / 2, horizon); context.lineTo(width / 2 + spoke * 118, height); context.stroke();
+    }
+    const pulse = .06 + (Math.sin(performance.now() / 700) + 1) * .025;
+    const haze = context.createRadialGradient(width / 2, horizon, 20, width / 2, horizon, width * .72);
+    haze.addColorStop(0, `rgba(174,115,218,${pulse})`); haze.addColorStop(1, "rgba(3,2,9,.28)");
+    context.fillStyle = haze; context.fillRect(0, 0, width, height);
+    context.restore();
+
     const rayCount = 240;
     const sliceWidth = width / rayCount + 1;
+    const wallDepths = new Array(rayCount);
     for (let index = 0; index < rayCount; index += 1) {
       const rayAngle = maze.angle - fov / 2 + fov * (index / (rayCount - 1));
       const rawDistance = castMazeRay(maze.playerX, maze.playerY, rayAngle);
       const correctedDistance = Math.max(.12, rawDistance * Math.cos(rayAngle - maze.angle));
+      wallDepths[index] = correctedDistance;
       const wallHeight = Math.min(height * 1.55, height * .92 / correctedDistance);
       const brightness = clamp(1 - correctedDistance / 16, .11, .92);
       const stripe = index % 2 ? 5 : 0;
@@ -2637,8 +4707,9 @@
       context.fillRect(index * width / rayCount, horizon - wallHeight / 2, 1, wallHeight);
     }
 
-    drawMazeSecretPokemon(context, fov);
-    drawMazeShadow(context, fov);
+    drawMazeBlackMarket(context, fov, wallDepths);
+    drawMazeSecretPokemon(context, fov, wallDepths);
+    drawMazeShadow(context, fov, wallDepths);
     drawSprintShadow(context);
     drawFlashlightCone(context);
     drawThirdPersonTrainer(context);
@@ -2654,19 +4725,100 @@
     const entityDistance = Math.hypot(dx, dy);
     const angleDifference = normalizeAngle(Math.atan2(dy, dx) - maze.angle);
     if (Math.abs(angleDifference) > fov * .62 || !rayClear(maze.playerX, maze.playerY, x, y)) return null;
-    return { distance: entityDistance, screenX: VIEW_WIDTH * (.5 + angleDifference / fov) };
+    return { distance: entityDistance, angleDifference, screenX: VIEW_WIDTH * (.5 + angleDifference / fov) };
   }
 
-  function drawMazeShadow(context, fov) {
+  function clipEntityByWallDepth(context, projection, entityWidth, wallDepths) {
+    if (!wallDepths?.length) return;
+    const rayWidth = VIEW_WIDTH / wallDepths.length;
+    const left = Math.max(0, Math.floor((projection.screenX - entityWidth / 2) / rayWidth));
+    const right = Math.min(wallDepths.length - 1, Math.ceil((projection.screenX + entityWidth / 2) / rayWidth));
+    const correctedEntityDistance = projection.distance * Math.cos(projection.angleDifference);
+    context.beginPath();
+    for (let ray = left; ray <= right; ray += 1) {
+      if (wallDepths[ray] > correctedEntityDistance - .16) context.rect(ray * rayWidth - 1, 0, rayWidth + 2, VIEW_HEIGHT);
+    }
+    context.clip();
+  }
+
+  function drawMazeBlackMarket(context, fov, wallDepths) {
+    const market = mazeDefinition.market;
+    if (!market) return;
+    const projection = projectedEntityData(market.x + .5, market.y + .5, fov);
+    if (!projection || projection.distance < .24) return;
+    const height = clamp(470 / Math.max(.55, projection.distance), 54, 350);
+    const width = height * .9;
+    const baseY = VIEW_HEIGHT * .5 + height * .5;
+    const pulse = .78 + Math.sin(performance.now() / 230) * .16;
+    context.save();
+    clipEntityByWallDepth(context, projection, width * 1.35, wallDepths);
+    context.translate(projection.screenX, baseY);
+    context.globalAlpha = clamp(1.25 - projection.distance / 22, .62, 1);
+    context.shadowColor = `rgba(255,48,116,${pulse})`;
+    context.shadowBlur = Math.max(10, height * .18);
+
+    context.fillStyle = "#170b1b";
+    context.fillRect(-width * .47, -height * .74, width * .94, height * .7);
+    context.fillStyle = "#8c173f";
+    context.fillRect(-width * .54, -height * .79, width * 1.08, height * .12);
+    context.fillStyle = "#f24d7d";
+    for (let stripe = -2; stripe <= 2; stripe += 1) {
+      context.fillRect(stripe * width * .19 - width * .045, -height * .79, width * .09, height * .12);
+    }
+
+    context.shadowBlur = Math.max(6, height * .08);
+    context.fillStyle = "#060509";
+    context.beginPath();
+    context.arc(0, -height * .49, height * .095, 0, Math.PI * 2);
+    context.fill();
+    context.fillRect(-height * .11, -height * .41, height * .22, height * .28);
+    context.fillStyle = "#ff315f";
+    context.fillRect(-height * .052, -height * .51, height * .026, height * .018);
+    context.fillRect(height * .026, -height * .51, height * .026, height * .018);
+
+    context.fillStyle = "#2a1027";
+    context.fillRect(-width * .58, -height * .18, width * 1.16, height * .2);
+    context.strokeStyle = "#ff4778";
+    context.lineWidth = Math.max(1, height * .012);
+    context.strokeRect(-width * .58, -height * .18, width * 1.16, height * .2);
+
+    context.fillStyle = "#ff315f";
+    context.beginPath();
+    context.arc(width * .39, -height * .57, height * .04, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = "rgba(255,90,130,.8)";
+    context.beginPath(); context.moveTo(width * .39, -height * .78); context.lineTo(width * .39, -height * .61); context.stroke();
+
+    if (height > 86) {
+      context.shadowBlur = height * .06;
+      context.fillStyle = "#ffd7e2";
+      context.font = `900 ${Math.max(8, height * .07)}px monospace`;
+      context.textAlign = "center";
+      context.fillText(height > 145 ? "MERCADO NEGRO" : "₽", 0, -height * .7);
+    }
+    context.restore();
+  }
+
+  function drawMazeShadow(context, fov, wallDepths) {
     if (sprintScare) return;
     const maze = ensureMazeState();
     const projection = projectedEntityData(maze.monsterX, maze.monsterY, fov);
     if (!projection) return;
     const height = clamp(650 / Math.max(.45, projection.distance), 74, 570);
     const width = height * .67;
-    const baseY = VIEW_HEIGHT * .5 + height * .49;
-    context.save(); context.translate(projection.screenX, baseY);
-    context.globalAlpha = maze.monsterRepel > 0 ? .38 : clamp(1.18 - projection.distance / 15, .5, 1);
+    const time = performance.now() / 1000;
+    const stride = Math.min(1, Math.hypot(maze.monsterX - maze.playerX, maze.monsterY - maze.playerY) / 8);
+    const sway = Math.sin(time * (2.4 + stride * 2)) * Math.min(13, width * .055);
+    const bob = Math.sin(time * (3.1 + stride)) * Math.min(7, height * .018);
+    const breathe = 1 + Math.sin(time * 2.1) * .025;
+    const baseY = VIEW_HEIGHT * .5 + height * .49 + bob;
+    context.save();
+    clipEntityByWallDepth(context, projection, width, wallDepths);
+    context.translate(projection.screenX + sway, baseY);
+    context.rotate(Math.sin(time * 1.7) * .018);
+    context.scale(1 / breathe, breathe);
+    const flicker = .91 + Math.sin(time * 13.7) * .045;
+    context.globalAlpha = (maze.monsterRepel > 0 ? .38 : clamp(1.18 - projection.distance / 15, .5, 1)) * flicker;
     context.filter = maze.monsterRepel > 0
       ? "hue-rotate(120deg) drop-shadow(0 0 20px #82dce5)"
       : "drop-shadow(0 0 24px rgba(128,69,154,.92))";
@@ -2718,7 +4870,7 @@
     context.restore();
   }
 
-  function drawMazeSecretPokemon(context, fov) {
+  function drawMazeSecretPokemon(context, fov, wallDepths) {
     if (state.secretPokemonSaved) return;
     const secretId = currentSecretPokemonId();
     const goal = mazeDefinition.goal;
@@ -2727,6 +4879,7 @@
     const size = clamp(330 / Math.max(.5, projection.distance), 35, 250);
     const image = getPokemonArtworkImage(secretId);
     context.save();
+    clipEntityByWallDepth(context, projection, size, wallDepths);
     context.translate(projection.screenX, VIEW_HEIGHT * .5 + size * .15);
     context.shadowColor = "#80edf0"; context.shadowBlur = 26;
     context.filter = "invert(1) hue-rotate(180deg) saturate(1.5)";
@@ -2747,14 +4900,18 @@
   }
 
   function drawThirdPersonTrainer(context) {
-    const isMoving = animationFrame % 2 === 1;
-    const frame = playerRunning ? (isMoving ? 6 : 1) : (isMoving ? 5 : 1);
     context.save();
     context.fillStyle = "rgba(0,0,0,.45)"; context.beginPath(); context.ellipse(VIEW_WIDTH / 2, VIEW_HEIGHT - 26, 46, 13, 0, 0, Math.PI * 2); context.fill();
     if (playerSheetReady) {
-      context.translate(VIEW_WIDTH / 2, VIEW_HEIGHT - 90);
-      if (isMoving) context.scale(-1, 1);
-      context.drawImage(playerSheet, frame * 16, 0, 16, 32, -42, -84, 84, 168);
+      const gait = playerRunning ? "run" : "walk";
+      const frames = playerFrames.get(`${gait}-up`) || [];
+      const order = animationFrame % Math.max(1, frames.length);
+      const frame = frames[order] || frames[0];
+      document.documentElement.dataset.playerAnimationFrame = String(order);
+      document.documentElement.dataset.playerAnimationDirection = "up";
+      document.documentElement.dataset.playerAnimationGait = gait;
+      context.translate(VIEW_WIDTH / 2, VIEW_HEIGHT - 28);
+      if (frame) context.drawImage(frame, -64, -120, 128, 128);
     } else { context.fillStyle = "#bb3e43"; context.fillRect(VIEW_WIDTH / 2 - 24, VIEW_HEIGHT - 132, 48, 96); }
     context.restore();
   }
@@ -2767,6 +4924,7 @@
     const startRow = Math.max(0, Math.floor(camera.y / size));
     const endRow = Math.min(Math.ceil(WORLD_HEIGHT / size) - 1, Math.ceil((camera.y + VIEW_HEIGHT) / size));
     const colors = { blocked: "rgba(214,59,52,.34)", door: "rgba(255,191,46,.48)", encounter: "rgba(52,183,91,.34)", event: "rgba(126,81,201,.42)" };
+    const npcTiles = new Set((CITY_MAP.npcs || []).map((npc) => tileKey(npc.col, npc.row)));
     context.save();
     context.lineWidth = 1;
     context.font = "8px monospace";
@@ -2776,8 +4934,10 @@
       for (let col = startCol; col <= endCol; col += 1) {
         const x = col * size; const y = row * size; const type = mapTileType(col, row);
         if (colors[type]) { context.fillStyle = colors[type]; context.fillRect(x, y, size, size); }
+        const npcHere = npcTiles.has(tileKey(col, row));
+        if (npcHere) { context.fillStyle = "rgba(48,174,214,.5)"; context.fillRect(x, y, size, size); }
         context.strokeStyle = "rgba(255,255,255,.48)"; context.strokeRect(x + .5, y + .5, size - 1, size - 1);
-        context.fillStyle = "rgba(15,45,32,.82)"; context.fillText(`${col},${row}`, x + 2, y + 2);
+        context.fillStyle = "rgba(15,45,32,.82)"; context.fillText(npcHere ? "NPC" : `${col},${row}`, x + 2, y + 2);
       }
     }
     if (selectedMapTile) {
@@ -2787,10 +4947,30 @@
     context.restore();
   }
 
+  function syncWorldCanvasResolution() {
+    const rect = elements.canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return { scaleX: 1, scaleY: 1 };
+    VIEW_HEIGHT = BASE_VIEW_HEIGHT;
+    VIEW_WIDTH = Math.max(1, Math.round(BASE_VIEW_HEIGHT * rect.width / rect.height));
+    const deviceRatio = Math.max(1, Number(window.devicePixelRatio) || 1);
+    const fourKCap = Math.min(MAX_RENDER_WIDTH / rect.width, MAX_RENDER_HEIGHT / rect.height);
+    const renderRatio = Math.max(.5, Math.min(deviceRatio, fourKCap));
+    const width = Math.max(1, Math.round(rect.width * renderRatio));
+    const height = Math.max(1, Math.round(rect.height * renderRatio));
+    if (elements.canvas.width !== width) elements.canvas.width = width;
+    if (elements.canvas.height !== height) elements.canvas.height = height;
+    document.documentElement.dataset.canvasResolution = `${width}x${height}`;
+    document.documentElement.dataset.logicalViewport = `${VIEW_WIDTH}x${VIEW_HEIGHT}`;
+    return { scaleX: width / VIEW_WIDTH, scaleY: height / VIEW_HEIGHT };
+  }
+
   function drawWorld() {
     const context = elements.canvas.getContext("2d");
+    const renderScale = syncWorldCanvasResolution();
+    context.setTransform(renderScale.scaleX, 0, 0, renderScale.scaleY, 0, 0);
     context.imageSmoothingEnabled = false;
     context.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    updateMapTileStreaming(renderScale);
     if (state.dimension === "prism") {
       drawMaze3D(context);
       return;
@@ -2805,12 +4985,25 @@
       return;
     }
 
+    if (state.interior === "building" || state.interior === "route") {
+      context.fillStyle = "#0e1a16"; context.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+      context.save();
+      context.translate(-Math.round(camera.x), -Math.round(camera.y));
+      drawInterior(context);
+      drawPlayer(context);
+      context.restore();
+      return;
+    }
+
     context.save();
-    context.translate(-Math.round(camera.x), -Math.round(camera.y));
-    if (cityMapReady) context.drawImage(cityMapImage, 0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    else { context.fillStyle = "#8fbf72"; context.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT); }
+    const renderedCamera = mapRenderCamera(renderScale);
+    context.translate(-renderedCamera.x, -renderedCamera.y);
+    drawStreamedCityMap(context);
+    drawStreetPolish(context);
+    const encounterGrass = drawEncounterGrassBack(context);
+    const visibleAssets = drawWorldEntities(context, encounterGrass);
     drawTileGrid(context);
-    drawPlayer(context);
+    drawWorldAssetColliders(context, visibleAssets);
     context.restore();
   }
 
@@ -2827,9 +5020,54 @@
     const scaleX = width / WORLD_WIDTH;
     const scaleY = height / WORLD_HEIGHT;
     context.clearRect(0, 0, width, height);
-    if (cityMapReady) context.drawImage(cityMapImage, 0, 0, width, height);
+    if (cityMapPreviewReady) context.drawImage(cityMapPreview, 0, 0, width, height);
     else { context.fillStyle = "#79a85d"; context.fillRect(0, 0, width, height); }
+    context.save();
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    cityWorldAssets.forEach((asset) => {
+      const record = cityWorldAssetImages.get(worldAssetSource(asset));
+      if (!record?.ready) return;
+      context.drawImage(
+        record.drawable || record.image,
+        (asset.x - asset.w / 2) * scaleX,
+        (asset.y - asset.h) * scaleY,
+        asset.w * scaleX,
+        asset.h * scaleY,
+      );
+    });
+    context.restore();
     context.fillStyle = "rgba(13,35,27,.12)"; context.fillRect(0, 0, width, height);
+    const size = CITY_MAP.tileSize;
+    context.fillStyle = "rgba(52,183,91,.5)";
+    (CITY_MAP.encounterAreas || []).forEach((area) => {
+      if (area.shape === "polygon" && Array.isArray(area.points) && area.points.length >= 3) {
+        context.beginPath();
+        area.points.forEach(([x, y], index) => {
+          if (index === 0) context.moveTo(x * scaleX, y * scaleY);
+          else context.lineTo(x * scaleX, y * scaleY);
+        });
+        context.closePath();
+        context.fill();
+      } else {
+        context.fillRect(area.x * scaleX, area.y * scaleY, area.w * scaleX, area.h * scaleY);
+      }
+    });
+    CITY_MAP.encounterRects.forEach((rect) => {
+      context.fillRect(rect[0] * size * scaleX, rect[1] * size * scaleY,
+        (rect[2] - rect[0] + 1) * size * scaleX, (rect[3] - rect[1] + 1) * size * scaleY);
+    });
+    CITY_MAP.doors.forEach((door) => {
+      context.fillStyle = door.action === "closed" ? "rgba(150,150,150,.8)" : "rgba(255,191,46,.95)";
+      context.beginPath();
+      context.arc(door.col * size * scaleX + size * scaleX / 2, door.row * size * scaleY + size * scaleY / 2, 2.4, 0, Math.PI * 2);
+      context.fill();
+    });
+    context.fillStyle = "rgba(48,174,214,.98)";
+    (CITY_MAP.npcs || []).forEach((npc) => {
+      const position = mapNpcPosition(npc);
+      context.beginPath(); context.arc(position.x * scaleX, position.y * scaleY, 2.7, 0, Math.PI * 2); context.fill();
+    });
     context.strokeStyle = "rgba(255,255,255,.58)";
     context.lineWidth = 1;
     context.strokeRect(camera.x * scaleX, camera.y * scaleY, VIEW_WIDTH * scaleX, VIEW_HEIGHT * scaleY);
@@ -2855,9 +5093,9 @@
   }
 
   function updateCamera(deltaSeconds) {
-    if (state.dimension === "prism") return;
-    const targetX = clamp(state.worldX - VIEW_WIDTH / 2, 0, currentWorldWidth() - VIEW_WIDTH);
-    const targetY = clamp(state.worldY - VIEW_HEIGHT / 2, 0, currentWorldHeight() - VIEW_HEIGHT);
+    if (state.dimension === "prism" || state.interior) return;
+    const targetX = clamp(state.worldX - VIEW_WIDTH / 2, 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
+    const targetY = clamp(state.worldY - VIEW_HEIGHT / 2, 0, Math.max(0, currentWorldHeight() - VIEW_HEIGHT));
     const smoothing = 1 - Math.pow(.0008, deltaSeconds);
     camera.x += (targetX - camera.x) * smoothing;
     camera.y += (targetY - camera.y) * smoothing;
@@ -2876,7 +5114,10 @@
   }
 
   function chooseWildPokemon() {
-    const table = state.dimension === "prism" ? PRISM_WILD_TABLE : WILD_TABLE;
+    if (LOCAL_DEBUG_BATTLE?.wildId && POKEMON[LOCAL_DEBUG_BATTLE.wildId]) return LOCAL_DEBUG_BATTLE.wildId;
+    let table = WILD_TABLE;
+    if (state.dimension === "prism") table = PRISM_WILD_TABLE;
+    else if (state.interior === "route") table = ROUTE_WILD_TABLE;
     const total = table.reduce((sum, entry) => sum + entry.weight, 0);
     let roll = Math.random() * total;
     for (const entry of table) { roll -= entry.weight; if (roll <= 0) return entry.id; }
@@ -2893,13 +5134,14 @@
     elements.flashOverlay.classList.add("encounter"); playJingle("encounter");
     window.setTimeout(() => {
       const active = activePokemon();
-      const levelBoost = state.dimension === "prism" ? 1 : -2;
+      const levelBoost = state.dimension === "prism" ? 1 : state.interior === "route" ? 0 : -2;
       const enemy = createPokemon(chooseWildPokemon(), clamp(active.level + levelBoost + Math.floor(Math.random() * 3), 2, 18));
       if (!state.seen.includes(enemy.id)) state.seen.push(enemy.id);
       battle = { enemy, busy: false, turns: 0 };
       elements.worldScreen.classList.add("hidden"); elements.titleScreen.classList.add("hidden"); elements.battleScreen.classList.remove("hidden");
       elements.battleScreen.classList.toggle("prism-battle", state.dimension === "prism");
-      elements.battleLabel.textContent = state.dimension === "prism" ? "ENCUENTRO · DIMENSIÓN PRISMA" : "ENCUENTRO SALVAJE · SAN PABLO";
+      const label = state.dimension === "prism" ? "ENCUENTRO · DIMENSIÓN PRISMA" : state.interior === "route" ? "ENCUENTRO SALVAJE · RUTA SILVESTRE" : "ENCUENTRO SALVAJE · SAN PABLO";
+      elements.battleLabel.textContent = label;
       elements.flashOverlay.classList.remove("encounter"); inputLocked = false;
       renderBattle(); setBattleMessage(`¡Un ${speciesOf(enemy).name} salvaje apareció!`); saveGame();
     }, 760);
@@ -2937,14 +5179,20 @@
   function renderBattle() {
     if (!battle) return;
     const enemy = battle.enemy; const active = activePokemon();
+    elements.enemySprite.classList.remove("fainting");
+    elements.activeSprite.classList.remove("fainting");
     elements.enemyName.textContent = speciesOf(enemy).name.toUpperCase();
     elements.enemyLevel.textContent = `Nv. ${enemy.level}`;
     elements.enemySprite.src = frontSpriteUrl(enemy.id); attachSpriteFallback(elements.enemySprite, enemy.id);
+    elements.enemySprite.classList.toggle("custom-pokemon-sprite", isCustomPokemon(enemy.id));
+    setBattlePokemonMotion(elements.enemySprite, enemy.id);
     elements.enemySprite.classList.toggle("inverted-secret", Boolean(battle.secretBattle));
     elements.activeName.textContent = speciesOf(active).name.toUpperCase();
     elements.activeLevel.textContent = `Nv. ${active.level}`;
     elements.battleActiveName.textContent = speciesOf(active).name.toUpperCase();
     elements.activeSprite.src = backSpriteUrl(active.id); attachSpriteFallback(elements.activeSprite, active.id, true);
+    elements.activeSprite.classList.toggle("custom-pokemon-sprite", isCustomPokemon(active.id));
+    setBattlePokemonMotion(elements.activeSprite, active.id);
     updateBattleHealth(); renderMoves(); renderHud();
     setBattleBusy(Boolean(battle.busy));
   }
@@ -2989,13 +5237,14 @@
   function typeMultiplier(moveType, defenderSpecies) {
     const types = [defenderSpecies.type, defenderSpecies.secondaryType].filter(Boolean);
     const strong = {
-      Fuego: ["Planta", "Bicho"], Agua: ["Fuego", "Tierra"], Planta: ["Agua", "Tierra"],
+      Fuego: ["Planta", "Bicho"], Agua: ["Fuego", "Tierra", "Roca"], Planta: ["Agua", "Tierra", "Roca"],
       Eléctrico: ["Agua", "Volador"], Volador: ["Planta", "Bicho"], Bicho: ["Planta", "Psíquico"],
-      Psíquico: ["Veneno"], Fantasma: ["Psíquico", "Fantasma"], Dragón: ["Dragón"], Tierra: ["Eléctrico", "Acero"],
+      Psíquico: ["Veneno"], Fantasma: ["Psíquico", "Fantasma"], Dragón: ["Dragón"], Tierra: ["Eléctrico", "Acero", "Roca"],
+      Roca: ["Fuego", "Volador", "Bicho"], Hada: ["Dragón", "Siniestro"], Siniestro: ["Psíquico", "Fantasma"],
     };
     const weak = {
       Fuego: ["Agua"], Agua: ["Planta"], Planta: ["Fuego", "Bicho", "Volador"],
-      Eléctrico: ["Planta", "Tierra"], Psíquico: ["Psíquico", "Acero"], Fantasma: ["Normal"],
+      Eléctrico: ["Planta", "Tierra"], Psíquico: ["Psíquico", "Acero"], Fantasma: ["Normal"], Roca: ["Tierra", "Acero"], Hada: ["Veneno", "Acero"], Siniestro: ["Hada", "Bicho"],
     };
     if (types.some((type) => strong[moveType]?.includes(type))) return 1.5;
     if (types.some((type) => weak[moveType]?.includes(type))) return .65;
@@ -3009,41 +5258,169 @@
     return { damage, multiplier, critical };
   }
 
-  function animateAttack(attacker, defender) {
+  function moveFxClass(moveType) {
+    const classes = {
+      Fuego: "fire", Agua: "water", Planta: "grass", Eléctrico: "electric",
+      Psíquico: "psychic", Fantasma: "ghost", Siniestro: "ghost", Dragón: "dragon", Hada: "psychic", Volador: "wind",
+      Bicho: "bug", Veneno: "poison", Acero: "steel", Tierra: "ground", Roca: "ground", Normal: "normal",
+    };
+    return classes[moveType] || "normal";
+  }
+
+  function spawnMoveVisual(attacker, defender, moveType) {
+    const scene = elements.battleScene; if (!scene) return [];
+    const sceneRect = scene.getBoundingClientRect();
+    const a = attacker.getBoundingClientRect(); const d = defender.getBoundingClientRect();
+    const startX = a.left + a.width / 2 - sceneRect.left; const startY = a.top + a.height * .48 - sceneRect.top;
+    const endX = d.left + d.width / 2 - sceneRect.left; const endY = d.top + d.height * .48 - sceneRect.top;
+    const dx = endX - startX; const dy = endY - startY;
+    const distancePx = Math.hypot(dx, dy); const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    const fxClass = moveFxClass(moveType); const nodes = [];
+
+    const trail = document.createElement("span");
+    trail.className = `fx-move-trail fx-${fxClass}`;
+    trail.style.left = `${startX}px`; trail.style.top = `${startY}px`;
+    trail.style.width = `${distancePx}px`; trail.style.setProperty("--angle", `${angle}deg`);
+    scene.appendChild(trail); nodes.push(trail);
+
+    const count = ["electric", "psychic", "ghost", "dragon"].includes(fxClass) ? 3 : 6;
+    for (let index = 0; index < count; index += 1) {
+      const projectile = document.createElement("span");
+      projectile.className = `fx-move-projectile fx-${fxClass}`;
+      projectile.style.left = `${startX}px`; projectile.style.top = `${startY}px`;
+      projectile.style.setProperty("--tx", `${dx}px`); projectile.style.setProperty("--ty", `${dy}px`);
+      projectile.style.setProperty("--mx", `${dx * .56}px`); projectile.style.setProperty("--my", `${dy * .56}px`);
+      projectile.style.setProperty("--curve", `${(index - (count - 1) / 2) * 13}px`);
+      projectile.style.setProperty("--delay", `${index * 35}ms`);
+      projectile.textContent = fxClass === "grass" ? "◆" : fxClass === "wind" ? "◌" : "";
+      scene.appendChild(projectile); nodes.push(projectile);
+    }
+
+    if (["electric", "psychic", "ghost", "dragon"].includes(fxClass)) {
+      for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
+        const ring = document.createElement("span");
+        ring.className = `fx-move-ring fx-${fxClass}`;
+        ring.style.left = `${endX}px`; ring.style.top = `${endY}px`;
+        ring.style.setProperty("--delay", `${180 + ringIndex * 80}ms`);
+        scene.appendChild(ring); nodes.push(ring);
+      }
+    }
+    return nodes;
+  }
+
+  async function animateMove(attacker, defender, moveType, intensity = 1) {
     attacker.classList.remove("attacking"); defender.classList.remove("hit"); void attacker.offsetWidth;
-    attacker.classList.add("attacking"); window.setTimeout(() => defender.classList.add("hit"), 180);
-    window.setTimeout(() => { attacker.classList.remove("attacking"); defender.classList.remove("hit"); }, 500);
+    attacker.classList.add("attacking");
+    const nodes = spawnMoveVisual(attacker, defender, moveType);
+    window.setTimeout(() => {
+      defender.classList.add("hit");
+      spawnHitParticles(defender, moveType, intensity);
+      if (["Eléctrico", "Dragón", "Tierra", "Acero"].includes(moveType)) shakeBattle(.65 * intensity);
+    }, 260);
+    await wait(560);
+    attacker.classList.remove("attacking"); defender.classList.remove("hit");
+    nodes.forEach((node) => node.remove());
+  }
+
+  function fxOrigin(defender) {
+    const scene = elements.battleScene; if (!scene) return null;
+    const sceneRect = scene.getBoundingClientRect();
+    const r = defender.getBoundingClientRect();
+    return { scene, x: r.left + r.width / 2 - sceneRect.left, y: r.top + r.height / 2 - sceneRect.top, top: r.top - sceneRect.top };
+  }
+
+  function spawnHitParticles(defender, moveType, intensity = 1) {
+    const origin = fxOrigin(defender); if (!origin) return;
+    const { scene, x, y } = origin;
+    const color = TYPE_COLORS[moveType] || "#ffffff";
+    const count = Math.round(9 * intensity);
+    for (let i = 0; i < count; i += 1) {
+      const p = document.createElement("span");
+      p.className = "fx-particle";
+      const angle = (Math.PI * 2 * i) / count + Math.random() * .5;
+      const dist = 36 + Math.random() * 58 * intensity;
+      p.style.left = x + "px"; p.style.top = y + "px"; p.style.background = color;
+      p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      const size = 5 + Math.random() * 7;
+      p.style.width = size + "px"; p.style.height = size + "px";
+      scene.appendChild(p);
+      window.setTimeout(() => p.remove(), 640);
+    }
+  }
+
+  function spawnDamageNumber(defender, amount, color) {
+    const origin = fxOrigin(defender); if (!origin) return;
+    const { scene, x, top } = origin;
+    const el = document.createElement("span");
+    el.className = "fx-damage";
+    el.textContent = "-" + amount;
+    el.style.left = x + "px"; el.style.top = top + "px";
+    if (color) el.style.color = color;
+    scene.appendChild(el);
+    window.setTimeout(() => el.remove(), 900);
+  }
+
+  function shakeBattle(intensity = 1) {
+    const scene = elements.battleScene; if (!scene) return;
+    scene.style.setProperty("--shake", String(Math.round(6 * intensity)));
+    scene.classList.remove("shake"); void scene.offsetWidth;
+    scene.classList.add("shake");
+    window.setTimeout(() => { scene.classList.remove("shake"); scene.style.removeProperty("--shake"); }, 440);
+  }
+
+  function spawnCaptureStars() {
+    const origin = fxOrigin(elements.enemySprite); if (!origin) return;
+    const { scene, x, y } = origin;
+    for (let i = 0; i < 14; i += 1) {
+      const s = document.createElement("span");
+      s.className = "fx-star";
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 50 + Math.random() * 90;
+      s.style.left = x + "px"; s.style.top = y + "px";
+      s.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      s.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      scene.appendChild(s);
+      window.setTimeout(() => s.remove(), 900);
+    }
   }
 
   async function playerAttack(index) {
     if (!battle || battle.busy) return;
     const active = activePokemon(); const move = speciesOf(active).moves[index];
     setBattleBusy(true); elements.movesMenu.classList.add("hidden"); elements.battleMenu.classList.remove("hidden");
-    setBattleMessage(`¡${speciesOf(active).name} usó ${move.name}!`); animateAttack(elements.activeSprite, elements.enemySprite);
-    playTone(move.type === "Eléctrico" ? 740 : 260, .12, "square", .04); await wait(430);
+    setBattleMessage(`¡${speciesOf(active).name} usó ${move.name}!`);
+    playTone(move.type === "Eléctrico" ? 740 : 260, .12, "square", .04); await animateMove(elements.activeSprite, elements.enemySprite, move.type);
     if (Math.random() * 100 > move.accuracy) { setBattleMessage("¡El ataque falló!"); await wait(700); await enemyTurn(); return; }
     const result = calculateDamage(active, battle.enemy, move);
     battle.enemy.hp = Math.max(0, battle.enemy.hp - result.damage);
     if (move.drain) active.hp = Math.min(active.maxHp, active.hp + Math.max(1, Math.floor(result.damage / 3)));
     updateBattleHealth();
-    if (result.critical) setBattleMessage("¡Un golpe crítico!"); else if (result.multiplier > 1) setBattleMessage("¡Es supereficaz!"); else if (result.multiplier < 1) setBattleMessage("No es muy eficaz…");
+    spawnDamageNumber(elements.enemySprite, result.damage, result.critical ? "#ffd24a" : "#ffffff");
+    if (result.critical) { setBattleMessage("¡Un golpe crítico!"); shakeBattle(1.5); spawnHitParticles(elements.enemySprite, move.type, 1.7); }
+    else if (result.multiplier > 1) { setBattleMessage("¡Es supereficaz!"); shakeBattle(1); spawnHitParticles(elements.enemySprite, move.type, 1.3); }
+    else if (result.multiplier < 1) setBattleMessage("No es muy eficaz…");
     await wait(700);
-    if (battle.enemy.hp <= 0) { await winBattle(); return; }
+    if (battle.enemy.hp <= 0) { elements.enemySprite.classList.add("fainting"); await wait(640); await winBattle(); return; }
     await enemyTurn();
   }
 
   async function enemyTurn() {
     if (!battle) return;
     const enemy = battle.enemy; const move = speciesOf(enemy).moves[Math.floor(Math.random() * speciesOf(enemy).moves.length)]; const active = activePokemon();
-    setBattleMessage(`¡${speciesOf(enemy).name} salvaje usó ${move.name}!`); animateAttack(elements.enemySprite, elements.activeSprite); playTone(180, .11, "sawtooth", .03); await wait(430);
+    setBattleMessage(`¡${speciesOf(enemy).name} salvaje usó ${move.name}!`); playTone(180, .11, "sawtooth", .03);
+    await animateMove(elements.enemySprite, elements.activeSprite, move.type);
     if (Math.random() * 100 <= move.accuracy) {
       const result = calculateDamage(enemy, active, move); active.hp = Math.max(0, active.hp - result.damage);
       if (move.drain) enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.max(1, Math.floor(result.damage / 3)));
       updateBattleHealth();
+      spawnDamageNumber(elements.activeSprite, result.damage, result.critical ? "#ffd24a" : "#ffe3e3");
+      if (result.critical) { shakeBattle(1.4); spawnHitParticles(elements.activeSprite, move.type, 1.5); }
+      else if (result.multiplier > 1) { shakeBattle(.8); spawnHitParticles(elements.activeSprite, move.type, 1.2); }
     } else setBattleMessage("¡El ataque enemigo falló!");
     await wait(700);
     if (active.hp <= 0) {
-      setBattleMessage(`¡${speciesOf(active).name} no puede continuar!`); await wait(850);
+      setBattleMessage(`¡${speciesOf(active).name} no puede continuar!`); elements.activeSprite.classList.add("fainting"); await wait(640);
       const next = firstHealthyTeamIndex();
       if (next === -1) { await loseBattle(); return; }
       state.activeTeamIndex = next; renderBattle(); setBattleMessage(`¡Adelante, ${speciesOf(activePokemon()).name}!`); await wait(700);
@@ -3052,11 +5429,20 @@
   }
 
   async function awardExperience(member, amount) {
+    const previousName = speciesOf(member).name;
     member.exp += amount; let levelUp = false;
-    while (member.exp >= expNeeded(member.level)) { member.exp -= expNeeded(member.level); member.level += 1; member.maxHp += 3; member.hp = Math.min(member.maxHp, member.hp + 5); levelUp = true; }
+    while (member.level < 50 && member.exp >= expNeeded(member.level)) { member.exp -= expNeeded(member.level); member.level += 1; member.maxHp += 3; member.hp = Math.min(member.maxHp, member.hp + 5); levelUp = true; }
+    if (member.level >= 50) member.exp = 0;
     if (levelUp) {
+      const evolutions = evolvePokemonIfReady(member);
       state.trainerLevel = Math.max(1, Math.floor(state.team.reduce((sum, item) => sum + item.level, 0) / state.team.length) - 3);
-      renderBattle(); setBattleMessage(`¡${speciesOf(member).name} subió al nivel ${member.level}!`); playJingle("level"); await wait(1050);
+      renderBattle(); setBattleMessage(`¡${previousName} subió al nivel ${member.level}!`); playJingle("level"); await wait(1050);
+      for (const evolution of evolutions) {
+        renderBattle();
+        setBattleMessage(`¡${evolution.from} evolucionó a ${evolution.to}!`);
+        playJingle("success");
+        await wait(1200);
+      }
     }
   }
 
@@ -3066,8 +5452,10 @@
       return;
     }
     const defeated = battle.enemy; const reward = 10 + defeated.level * 4;
+    const moneyReward = 12 + defeated.level * 4;
+    state.battlesWon += 1; state.money += moneyReward;
     setBattleMessage(`¡${speciesOf(defeated).name} salvaje fue derrotado!`); playJingle("success"); await wait(750);
-    setBattleMessage(`${speciesOf(activePokemon()).name} ganó ${reward} puntos de experiencia.`); await wait(700);
+    setBattleMessage(`${speciesOf(activePokemon()).name} ganó ${reward} puntos de experiencia (+${moneyReward} ₽).`); await wait(700);
     await awardExperience(activePokemon(), reward);
     if (Math.random() < .22) { state.balls += 1; setBattleMessage("Encontraste una Poké Ball junto a la acera."); await wait(800); }
     finishBattle();
@@ -3120,7 +5508,7 @@
     setBattleMessage("Tu equipo está agotado… Os llevan al Centro de Salud San Pablo."); playJingle("lose"); await wait(1300);
     stopMicrophone();
     state.team.forEach((member) => { member.hp = member.maxHp; });
-    state.dimension = "san_pablo"; state.returnPosition = null; state.interior = null; state.maintenanceReturn = null;
+    state.dimension = "san_pablo"; state.returnPosition = null; state.interior = null; state.interiorData = null; state.maintenanceReturn = null;
     state.worldX = 560; state.worldY = 765; state.direction = "down";
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
@@ -3135,17 +5523,21 @@
       return;
     }
     const ultra = ballType === "ultra";
-    const available = ultra ? state.inventory.ultraBalls : state.balls;
-    if (available <= 0) { setBattleMessage(`No te quedan ${ultra ? "Ultra Balls" : "Poké Balls"}.`); playTone(95, .15, "square", .03); return; }
+    const master = ballType === "master";
+    const available = master ? state.inventory.masterBalls : ultra ? state.inventory.ultraBalls : state.balls;
+    const ballName = master ? "Master Ball" : ultra ? "Ultra Ball" : "Poké Ball";
+    if (available <= 0) { setBattleMessage(`No te quedan ${ballName}s.`); playTone(95, .15, "square", .03); return; }
     setBattleBusy(true);
-    if (ultra) state.inventory.ultraBalls -= 1; else state.balls -= 1;
+    if (master) state.inventory.masterBalls -= 1;
+    else if (ultra) state.inventory.ultraBalls -= 1;
+    else state.balls -= 1;
     renderHud();
     const enemy = battle.enemy; const species = speciesOf(enemy);
-    setBattleMessage(`¡Lanzaste una ${ultra ? "Ultra Ball" : "Poké Ball"}!`); createThrownBall(ultra); playTone(520, .12, "sine", .04); await wait(800);
-    const chance = clamp(species.catchRate + (1 - enemy.hp / enemy.maxHp) * .48 + (ultra ? .24 : 0), .2, .98);
+    setBattleMessage(`¡Lanzaste una ${ballName}!`); createThrownBall(ballType); playTone(520, .12, "sine", .04); await wait(800);
+    const chance = master ? 1 : clamp(species.catchRate + (1 - enemy.hp / enemy.maxHp) * .48 + (ultra ? .24 : 0), .2, .98);
     if (Math.random() < chance) {
       elements.enemySprite.classList.add("caught"); setBattleMessage("…"); await wait(650);
-      setBattleMessage(`¡Genial! ${species.name} ha sido capturado.`); playJingle("capture");
+      setBattleMessage(`¡Genial! ${species.name} ha sido capturado.`); playJingle("capture"); spawnCaptureStars();
       if (!state.caught.includes(enemy.id)) state.caught.push(enemy.id);
       if (state.dimension === "prism") state.caughtDimension = true;
       let message;
@@ -3158,8 +5550,8 @@
     setBattleMessage(`¡Oh, no! ${species.name} se ha escapado.`); playTone(130, .18, "sawtooth", .03); await wait(800); await enemyTurn();
   }
 
-  function createThrownBall(ultra = false) {
-    const ball = document.createElement("span"); ball.className = `thrown-ball ${ultra ? "ultra" : ""}`; ball.innerHTML = "<i></i>";
+  function createThrownBall(type = "poke") {
+    const ball = document.createElement("span"); ball.className = `thrown-ball ${type === "poke" ? "" : type}`; ball.innerHTML = "<i></i>";
     elements.battleScreen.appendChild(ball); window.setTimeout(() => ball.remove(), 1100);
   }
 
@@ -3181,13 +5573,107 @@
     battle = null; inputLocked = false;
     [elements.fightButton, elements.bagButton, elements.teamBattleButton, elements.runButton]
       .forEach((button) => { button.disabled = false; });
-    elements.enemySprite.classList.remove("caught", "hit", "attacking", "inverted-secret"); elements.activeSprite.classList.remove("caught", "hit", "attacking");
+    elements.enemySprite.classList.remove("caught", "hit", "attacking", "inverted-secret", "fainting"); elements.activeSprite.classList.remove("caught", "hit", "attacking", "fainting");
     elements.movesMenu.classList.add("hidden"); elements.battleMenu.classList.remove("hidden"); showWorld(); saveGame();
+  }
+
+  function sanpledexFamilyOf(id) {
+    return SANPLEDEX_FAMILIES.find((family) => family.ids.includes(Number(id))) || SANPLEDEX_FAMILIES[0];
+  }
+
+  function sanpledexStatus(id) {
+    const numericId = Number(id);
+    const captured = state.caught.some((caughtId) => Number(caughtId) === numericId);
+    const seen = captured || state.seen.some((seenId) => Number(seenId) === numericId);
+    if (captured) return { label: "Capturada", className: "captured" };
+    if (seen) return { label: "Avistada", className: "seen" };
+    return { label: "Sin avistar", className: "unknown" };
+  }
+
+  function sanpledexTypeBadges(species, compact = false) {
+    return [species.type, species.secondaryType].filter(Boolean).map((type) =>
+      `<span class="sanpledex-type ${compact ? "compact" : ""}" style="--type-color:${TYPE_COLORS[type] || "#718078"}">${type}</span>`
+    ).join("");
+  }
+
+  function renderSanpledex() {
+    if (!elements.sanpledexList || !elements.sanpledexDetail) return;
+    if (!SANPLEDEX_IDS.includes(selectedSanpledexId)) selectedSanpledexId = SANPLEDEX_IDS[0];
+
+    const customCaught = SANPLEDEX_IDS.filter((id) => state.caught.some((caughtId) => Number(caughtId) === id)).length;
+    const customSeen = SANPLEDEX_IDS.filter((id) => state.seen.some((seenId) => Number(seenId) === id) || state.caught.some((caughtId) => Number(caughtId) === id)).length;
+    elements.sanpledexCaughtCount.textContent = `${customCaught} / ${SANPLEDEX_IDS.length}`;
+    elements.sanpledexSeenCount.textContent = `${customSeen} / ${SANPLEDEX_IDS.length}`;
+    elements.sanpledexProgress.style.width = `${clamp(customCaught / SANPLEDEX_IDS.length * 100, 0, 100)}%`;
+
+    elements.sanpledexList.innerHTML = SANPLEDEX_IDS.map((id, index) => {
+      const species = POKEMON[id];
+      const status = sanpledexStatus(id);
+      const selected = id === selectedSanpledexId;
+      return `<button type="button" class="sanpledex-entry ${selected ? "selected" : ""}" data-sanpledex-id="${id}" role="option" aria-selected="${selected}">
+        <img src="${iconUrl(id)}" alt="" draggable="false" />
+        <span><small>S-${String(index + 1).padStart(3, "0")}</small><strong>${species.name}</strong><span class="sanpledex-entry-types">${sanpledexTypeBadges(species, true)}</span></span>
+        <i class="sanpledex-state ${status.className}" aria-label="${status.label}" title="${status.label}"></i>
+      </button>`;
+    }).join("");
+
+    const species = POKEMON[selectedSanpledexId];
+    const family = sanpledexFamilyOf(selectedSanpledexId);
+    const status = sanpledexStatus(selectedSanpledexId);
+    const motion = CUSTOM_POKEMON_MOTIONS[selectedSanpledexId];
+    const entryNumber = SANPLEDEX_IDS.indexOf(selectedSanpledexId) + 1;
+    const evolutionHtml = family.ids.map((id, index) => {
+      const stage = POKEMON[id];
+      const previous = index > 0 ? POKEMON[family.ids[index - 1]] : null;
+      return `<button type="button" class="sanpledex-evolution ${id === selectedSanpledexId ? "selected" : ""}" data-sanpledex-id="${id}" aria-label="Ver ficha de ${stage.name}">
+        <img src="${iconUrl(id)}" alt="" draggable="false" />
+        <span><strong>${stage.name}</strong><small>${previous?.evolveLevel ? `Nv. ${previous.evolveLevel}` : "Origen"}</small></span>
+      </button>`;
+    }).join('<span class="sanpledex-evolution-arrow" aria-hidden="true">→</span>');
+
+    elements.sanpledexDetail.innerHTML = `<div class="sanpledex-detail-heading">
+        <div><small>S-${String(entryNumber).padStart(3, "0")} · ${family.name}</small><h3>${species.name}</h3></div>
+        <span class="sanpledex-status ${status.className}">${status.label}</span>
+      </div>
+      <div class="sanpledex-types" aria-label="Tipos de ${species.name}">${sanpledexTypeBadges(species)}</div>
+      <div class="sanpledex-sprites" aria-label="Animación frontal y trasera de ${species.name}">
+        <figure><div class="sanpledex-platform"><img class="sanpledex-sprite custom-pokemon-sprite" data-pokemon-motion="${motion}" data-view="front" src="${frontSpriteUrl(selectedSanpledexId)}" alt="${species.name} de frente" draggable="false" /></div><figcaption>Frontal · rival</figcaption></figure>
+        <figure><div class="sanpledex-platform"><img class="sanpledex-sprite custom-pokemon-sprite" data-pokemon-motion="${motion}" data-view="back" src="${backSpriteUrl(selectedSanpledexId)}" alt="${species.name} de espaldas" draggable="false" /></div><figcaption>Espalda · compañero</figcaption></figure>
+      </div>
+      <p class="sanpledex-description">${species.description}</p>
+      <div class="sanpledex-evolution-title"><strong>CADENA EVOLUTIVA</strong><span>${family.name}</span></div>
+      <div class="sanpledex-evolutions">${evolutionHtml}</div>`;
+  }
+
+  function selectSanpledexEntry(id, focusSelected = false) {
+    const numericId = Number(id);
+    if (!SANPLEDEX_IDS.includes(numericId)) return;
+    selectedSanpledexId = numericId;
+    renderSanpledex();
+    if (focusSelected) elements.sanpledexList.querySelector(`[data-sanpledex-id="${numericId}"]`)?.focus({ preventScroll: true });
+  }
+
+  function openSanpledex() {
+    if (!elements.sanpledexModal) return;
+    lastSanpledexFocus = document.activeElement instanceof HTMLElement ? document.activeElement : elements.sanpledexButton;
+    closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); clearDirectionalInput();
+    renderSanpledex();
+    elements.sanpledexModal.classList.remove("hidden");
+    elements.sanpledexModal.setAttribute("aria-hidden", "false");
+    elements.closeSanpledex?.focus({ preventScroll: true });
+  }
+
+  function closeSanpledex(restoreFocus = true) {
+    if (!elements.sanpledexModal || elements.sanpledexModal.classList.contains("hidden")) return;
+    elements.sanpledexModal.classList.add("hidden");
+    elements.sanpledexModal.setAttribute("aria-hidden", "true");
+    if (restoreFocus) (lastSanpledexFocus?.isConnected ? lastSanpledexFocus : elements.sanpledexButton)?.focus({ preventScroll: true });
+    lastSanpledexFocus = null;
   }
 
   function openTeam() {
     if (!state.started) return;
-    closeBuildingEditorPanel(); closeInventoryPanel(); clearDirectionalInput(); renderTeam(); elements.teamDrawer.classList.add("open"); elements.teamDrawer.setAttribute("aria-hidden", "false"); elements.drawerScrim.classList.remove("hidden");
+    closeSanpledex(false); closeBuildingEditorPanel(); closeInventoryPanel(); clearDirectionalInput(); renderTeam(); elements.teamDrawer.classList.add("open"); elements.teamDrawer.setAttribute("aria-hidden", "false"); elements.drawerScrim.classList.remove("hidden");
   }
   function closeTeam() { elements.teamDrawer.classList.remove("open"); elements.teamDrawer.setAttribute("aria-hidden", "true"); elements.drawerScrim.classList.add("hidden"); }
 
@@ -3195,7 +5681,7 @@
     const members = state.team.map((member, index) => {
       const species = speciesOf(member); const percent = clamp(member.hp / member.maxHp * 100, 0, 100); const active = index === state.activeTeamIndex;
       return `<article class="team-member ${active ? "active" : ""}">
-        <img class="${member.inverted ? "inverted-member" : ""}" src="${iconUrl(member.id)}" alt="${species.name}" draggable="false" />
+        <img class="${member.inverted ? "inverted-member" : ""} ${isCustomPokemon(member.id) ? "custom-pokemon-sprite" : ""} ${isPetrillo(member.id) ? "petrillo-sprite petrillo-team-sprite" : ""}" src="${iconUrl(member.id)}" alt="${species.name}" draggable="false" />
         <div class="member-info"><div><strong>${species.name}</strong><small>Nv. ${member.level}</small></div>
         <div class="member-hp"><i style="width:${percent}%;background:${hpColor(percent)}"></i></div><span class="member-status">${member.hp} / ${member.maxHp} PS · ${species.type}</span></div>
         <button type="button" data-team-index="${index}" ${(member.hp <= 0 || active || battle?.busy) ? "disabled" : ""}>${active ? "ACTIVO" : "ELEGIR"}</button></article>`;
@@ -3345,6 +5831,44 @@
   }
 
   function handleKeyDown(event) {
+    if (elements.sanpledexModal && !elements.sanpledexModal.classList.contains("hidden")) {
+      if (event.key === "Escape") closeSanpledex();
+      else if (event.key === "Tab") {
+        const focusable = [...elements.sanpledexModal.querySelectorAll("button:not([disabled]), select:not([disabled]), input:not([disabled])")]
+          .filter((element) => element.offsetParent !== null);
+        if (!focusable.length) event.preventDefault();
+        else {
+          const first = focusable[0]; const last = focusable[focusable.length - 1];
+          if (!elements.sanpledexModal.contains(document.activeElement)) {
+            event.preventDefault(); first.focus();
+          } else if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault(); last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault(); first.focus();
+          }
+        }
+      }
+      return;
+    }
+    if (elements.shopModal && !elements.shopModal.classList.contains("hidden")) {
+      if (event.key === "Escape") closeShop();
+      else if (event.key === "Tab") {
+        const focusable = [...elements.shopModal.querySelectorAll("button:not([disabled])")]
+          .filter((button) => button.offsetParent !== null);
+        if (!focusable.length) event.preventDefault();
+        else {
+          const first = focusable[0]; const last = focusable[focusable.length - 1];
+          if (!elements.shopModal.contains(document.activeElement)) {
+            event.preventDefault(); first.focus();
+          } else if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault(); last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault(); first.focus();
+          }
+        }
+      }
+      return;
+    }
     const control = keyToControl(event.key);
     if (control) { event.preventDefault(); input[control] = true; }
     if (!elements.dialogBox.classList.contains("hidden")) {
@@ -3356,8 +5880,9 @@
       useFlashlight();
     }
     if ((event.key === "e" || event.key === "E" || event.key === "Enter") && !event.repeat) interact();
+    if ((event.key === "p" || event.key === "P") && !event.repeat) { event.preventDefault(); openSanpledex(); }
     if ((event.key === "m" || event.key === "M") && !event.repeat) elements.teamDrawer.classList.contains("open") ? closeTeam() : openTeam();
-    if (event.key === "Escape") { closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); }
+    if (event.key === "Escape") { closeSanpledex(); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); }
   }
 
   function handleKeyUp(event) { const control = keyToControl(event.key); if (control) input[control] = false; }
@@ -3373,6 +5898,13 @@
     elements.newGameButton.addEventListener("click", startNewGame); elements.continueButton.addEventListener("click", continueGame);
     elements.closeStarter.addEventListener("click", () => elements.starterModal.classList.add("hidden")); elements.dialogNext.addEventListener("click", advanceDialog);
     elements.teamButton.addEventListener("click", openTeam); elements.closeTeamButton.addEventListener("click", closeTeam); elements.drawerScrim.addEventListener("click", closeTeam);
+    elements.sanpledexButton.addEventListener("click", openSanpledex);
+    elements.closeSanpledex.addEventListener("click", () => closeSanpledex());
+    elements.sanpledexModal.addEventListener("click", (event) => {
+      if (event.target === elements.sanpledexModal) { closeSanpledex(); return; }
+      const trigger = event.target instanceof Element ? event.target.closest("[data-sanpledex-id]") : null;
+      if (trigger) selectSanpledexEntry(trigger.dataset.sanpledexId, true);
+    });
     elements.saveButton.addEventListener("click", () => { closeTeam(); saveGame(true); });
     elements.resetButton.addEventListener("click", () => { if (window.confirm("¿Quieres borrar la partida guardada y empezar de nuevo?")) { window.localStorage.removeItem(SAVE_KEY); window.location.reload(); } });
     elements.soundButton.addEventListener("click", toggleSound);
@@ -3389,8 +5921,16 @@
     }));
     elements.copyTileButton.addEventListener("click", async () => {
       if (!selectedMapTile) return;
-      const text = `C${selectedMapTile.col}, F${selectedMapTile.row}: ${mapTileType(selectedMapTile.col, selectedMapTile.row)}`;
+      const centerX = selectedMapTile.col * CITY_MAP.tileSize + CITY_MAP.tileSize / 2;
+      const centerY = selectedMapTile.row * CITY_MAP.tileSize + CITY_MAP.tileSize / 2;
+      const text = `C${selectedMapTile.col}, F${selectedMapTile.row} (centro X${centerX}, Y${centerY}): ${mapTileType(selectedMapTile.col, selectedMapTile.row)}`;
       try { await navigator.clipboard.writeText(text); elements.tileEditorHint.textContent = `Copiado: ${text}`; }
+      catch (error) { elements.tileEditorHint.textContent = text; }
+    });
+    elements.copyNpcButton.addEventListener("click", async () => {
+      if (!selectedMapTile) return;
+      const text = `{ id: "nuevo-npc", col: ${selectedMapTile.col}, row: ${selectedMapTile.row}, direction: "down", name: "Nombre", sprite: "guide", lines: ["Diálogo"] }`;
+      try { await navigator.clipboard.writeText(text); elements.tileEditorHint.textContent = `NPC copiado para C${selectedMapTile.col}, F${selectedMapTile.row}`; }
       catch (error) { elements.tileEditorHint.textContent = text; }
     });
     elements.resetTileMap.addEventListener("click", () => {
@@ -3401,14 +5941,44 @@
     elements.fightButton.addEventListener("click", () => { if (!battle || battle.busy) return; elements.battleMenu.classList.add("hidden"); elements.movesMenu.classList.remove("hidden"); renderMoves(); });
     elements.movesBack.addEventListener("click", () => { elements.movesMenu.classList.add("hidden"); elements.battleMenu.classList.remove("hidden"); });
     elements.bagButton.addEventListener("click", () => openInventory(true)); elements.runButton.addEventListener("click", attemptRun); elements.teamBattleButton.addEventListener("click", openTeam);
+    if (elements.closeShop) elements.closeShop.addEventListener("click", closeShop);
     document.addEventListener("keydown", handleKeyDown); document.addEventListener("keyup", handleKeyUp); window.addEventListener("blur", clearDirectionalInput);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) return;
       clearDirectionalInput();
+      releaseAllMapTiles();
       if (state.started) saveGame();
     });
     window.addEventListener("pagehide", () => { if (state.started) saveGame(); });
     $$('[data-control]').forEach(bindTouchControl); $$('[data-action]').forEach((button) => button.addEventListener("click", primaryAction));
+  }
+
+  function startPrismDebugSession(money = 2500, target = "start") {
+    if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return false;
+    closeShop(); stopMicrophone();
+    state = defaultState();
+    state.started = true; state.starterChosen = true;
+    state.team = [createPokemon(1, 12)]; state.caught = [1]; state.seen = [1];
+    state.money = Math.max(0, Math.floor(Number(money) || 0));
+    state.inventory.prismShards = 3;
+    state.returnPosition = { x: PORTAL_POSITION.x, y: PORTAL_POSITION.y + field.h / 2 + 70 };
+    state.dimension = "prism"; state.dimensionVisited = true; state.secretPokemonId = chooseSecretPokemonId();
+    const maze = ensureMazeState(true);
+    const marketViewPath = target === "market_view"
+      ? findMazePath(mazeDefinition.start.x + .5, mazeDefinition.start.y + .5, mazeDefinition.market.x + .5, mazeDefinition.market.y + .5)
+      : [];
+    const point = target === "market_view"
+      ? marketViewPath[Math.max(0, marketViewPath.length - 3)] || mazeDefinition.start
+      : mazeDefinition[target] || mazeDefinition.start;
+    maze.playerX = point.x + .5; maze.playerY = point.y + .5;
+    maze.angle = target === "market_view"
+      ? Math.atan2(mazeDefinition.market.y + .5 - maze.playerY, mazeDefinition.market.x + .5 - maze.playerX)
+      : firstOpenDirection(mazeDefinition.grid, point);
+    microphoneFallbackMode = true;
+    state.worldX = 1050; state.worldY = 1830; state.direction = "up";
+    if (elements.noiseLabel) elements.noiseLabel.textContent = "MOVIMIENTO";
+    showWorld(); updateMazeHud(0); updateInteractPrompt(); saveGame();
+    return true;
   }
 
   function initialize() {
@@ -3417,15 +5987,147 @@
     document.documentElement.dataset.cityMapReady = "loading";
     const hasSave = loadGame(); elements.continueButton.classList.toggle("hidden", !hasSave);
     updateFullscreenButton(); renderHud(); updateAreaLabel(); updateInteractPrompt(); window.requestAnimationFrame(gameLoop);
+    if (LOCAL_DEBUG_PRISM) {
+      startPrismDebugSession(LOCAL_DEBUG_PRISM.money, LOCAL_DEBUG_PRISM.target);
+    } else if (LOCAL_DEBUG_BATTLE?.teamId && POKEMON[LOCAL_DEBUG_BATTLE.teamId]) {
+      state = defaultState();
+      state.started = true; state.starterChosen = true;
+      state.team = [createPokemon(LOCAL_DEBUG_BATTLE.teamId, LOCAL_DEBUG_BATTLE.teamLevel)];
+      evolvePokemonIfReady(state.team[0]);
+      state.caught = [state.team[0].id]; state.seen = [state.team[0].id];
+      showWorld();
+      if (LOCAL_DEBUG_BATTLE.wildId && POKEMON[LOCAL_DEBUG_BATTLE.wildId]) window.setTimeout(beginEncounter, 120);
+    }
     window.__pokemonCityDebug = Object.freeze({
       tileType: (col, row) => mapTileType(Number(col), Number(row)),
       canOccupy: (x, y) => cityMapCanOccupy(Number(x), Number(y)),
+      worldAssets: () => cityWorldAssets.map((asset) => ({
+        id: asset.id,
+        kind: asset.kind,
+        x: asset.x,
+        y: asset.y,
+        depthY: asset.depthY ?? asset.y,
+        w: asset.w,
+        h: asset.h,
+        door: asset.door || null,
+        approach: asset.approach || null,
+        ready: Boolean(cityWorldAssetImages.get(worldAssetSource(asset))?.ready),
+        colliders: worldAssetColliderRects(asset),
+      })),
+      moveTo: (x, y) => {
+        const nextX = Number(x); const nextY = Number(y);
+        if (!cityMapCanOccupy(nextX, nextY)) return false;
+        state.worldX = nextX; state.worldY = nextY;
+        camera.x = clamp(nextX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
+        camera.y = clamp(nextY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
+        return true;
+      },
+      pos: () => ({ x: state.worldX, y: state.worldY, dir: state.direction, interior: state.interior, interiorData: state.interiorData, poi: nearestPointOfInterest() }),
+      captureArea: () => currentGreenArea(),
+      grassState: () => ({
+        ready: encounterGrassSheetReady,
+        active: currentEncounterZone(),
+        lastStepAgeMs: lastGrassStepAt ? Math.max(0, performance.now() - lastGrassStepAt) : null,
+        lastStep: lastGrassStepAt ? { x: lastGrassStepX, y: lastGrassStepY } : null,
+        visibleTiles: Number(document.documentElement.dataset.encounterGrassVisible || 0),
+      }),
+      encounter: () => beginEncounter(),
+      gameState: () => ({
+        dimension: state.dimension,
+        money: state.money,
+        inventory: { ...state.inventory },
+        blackMarket: { ...state.blackMarket, purchases: { ...state.blackMarket.purchases } },
+        maze: state.maze ? { ...state.maze } : null,
+        shop: activeShopType,
+      }),
+      prismLayout: () => {
+        const { start, goal, monster, market } = mazeDefinition;
+        const marketPath = findMazePath(start.x + .5, start.y + .5, market.x + .5, market.y + .5);
+        const goalPath = findMazePath(start.x + .5, start.y + .5, goal.x + .5, goal.y + .5);
+        return {
+          start: { ...start }, goal: { ...goal }, monster: { ...monster }, market: { ...market },
+          marketReachable: marketPath.length > 0,
+          marketDistance: Math.max(0, marketPath.length - 1),
+          goalDistance: Math.max(0, goalPath.length - 1),
+        };
+      },
+      startPrismDebug: (money = 2500) => {
+        return startPrismDebugSession(money);
+      },
+      movePrismDebug: (target = "market") => {
+        if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname) || state.dimension !== "prism") return false;
+        const point = mazeDefinition[target];
+        if (!point || mazeDefinition.grid[point.y]?.[point.x] !== 0) return false;
+        const maze = ensureMazeState();
+        maze.playerX = point.x + .5; maze.playerY = point.y + .5;
+        maze.angle = firstOpenDirection(mazeDefinition.grid, point);
+        updateMazeHud(0); updateInteractPrompt();
+        return true;
+      },
+      setMoneyDebug: (money) => {
+        if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return false;
+        state.money = Math.max(0, Math.floor(Number(money) || 0)); renderHud(); saveGame(); return true;
+      },
+      mapStreaming: () => ({
+        current: mapTileAtWorld(state.worldX, state.worldY)?.id || null,
+        visible: [...cityMapVisibleTileIds],
+        cached: [...cityMapTileCache.values()].map((record) => ({ id: record.tile.id, ready: record.ready, bytes: record.bytes })),
+        bytes: [...cityMapTileCache.values()].reduce((total, record) => total + (record.bytes || 0), 0),
+        budgetBytes: MAP_MEMORY_BUDGET_BYTES,
+        preview: cityMapPreviewReady,
+      }),
       grid: { cols: Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize), rows: Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize), tileSize: CITY_MAP.tileSize },
     });
     document.documentElement.dataset.cityGrid = `${Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize)}x${Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize)}@${CITY_MAP.tileSize}`;
+    document.documentElement.dataset.encounterAreaCount = String((CITY_MAP.encounterAreas || []).length);
+    document.documentElement.dataset.encounterTileCount = String((CITY_MAP.encounterTiles || []).length);
     document.documentElement.dataset.spawnOpen = String(cityMapCanOccupy(NORMAL_START.x, NORMAL_START.y));
     document.documentElement.dataset.boundaryOpen = String(cityMapCanOccupy(16, 16));
-    document.documentElement.dataset.centerDoor = mapTileType(65, 33);
+    document.documentElement.dataset.backgroundCollisionProbesSolid = String((CITY_MAP.blockedProbes || [])
+      .every(([x, y]) => !cityMapCanOccupy(Number(x), Number(y))));
+    document.documentElement.dataset.centerDoor = mapTileType(18, 21);
+    const prismDoor = (CITY_MAP.doors || []).find((door) => door.action === "prism");
+    document.documentElement.dataset.prismDoor = prismDoor ? mapTileType(prismDoor.col, prismDoor.row) : "missing";
+    const prismMarketPath = findMazePath(
+      mazeDefinition.start.x + .5, mazeDefinition.start.y + .5,
+      mazeDefinition.market.x + .5, mazeDefinition.market.y + .5,
+    );
+    document.documentElement.dataset.prismMarketReachable = String(prismMarketPath.length > 0);
+    document.documentElement.dataset.prismMarketDistinct = String(
+      ![mazeDefinition.start, mazeDefinition.goal, mazeDefinition.monster]
+        .some((point) => point.x === mazeDefinition.market.x && point.y === mazeDefinition.market.y),
+    );
+    const configuredAssetColliders = cityWorldAssets.flatMap((asset) => worldAssetColliderRects(asset));
+    document.documentElement.dataset.worldAssetCollidersSolid = String(configuredAssetColliders.every((rect) => (
+      worldAssetBlocksPosition(rect.x + rect.w / 2, rect.y + rect.h / 2, 0)
+    )));
+    document.documentElement.dataset.worldAssetDoorsSolid = String(cityWorldAssets
+      .filter((asset) => Array.isArray(asset.door))
+      .every((asset) => {
+        const [col, row] = asset.door;
+        return !cityMapCanOccupy((col + .5) * CITY_MAP.tileSize, (row + .5) * CITY_MAP.tileSize);
+      }));
+    document.documentElement.dataset.worldAssetApproachesOpen = String(cityWorldAssets
+      .filter((asset) => Array.isArray(asset.approach))
+      .every((asset) => cityMapCanOccupy(Number(asset.approach[0]), Number(asset.approach[1]))));
+    const configuredNpcs = CITY_MAP.npcs || [];
+    document.documentElement.dataset.mapNpcCount = String(configuredNpcs.length);
+    document.documentElement.dataset.mapNpcIdsUnique = String(new Set(configuredNpcs.map((npc) => npc.id)).size === configuredNpcs.length);
+    document.documentElement.dataset.mapNpcPositionsOpen = String(configuredNpcs.every((npc) => {
+      const position = mapNpcPosition(npc);
+      return cityMapCanOccupy(position.x, position.y);
+    }));
+    document.documentElement.dataset.mapNpcDialogReady = String(configuredNpcs.every((npc) => (
+      typeof npc.name === "string" && npc.name.length > 0 && Array.isArray(npc.lines) && npc.lines.length >= 2
+    )));
+    updateNpcDeploymentDataset();
+    if (configuredNpcs[0]) {
+      const npc = configuredNpcs[0];
+      const position = mapNpcPosition(npc);
+      document.documentElement.dataset.guideNpc = `${npc.id}@C${npc.col},F${npc.row}`;
+      document.documentElement.dataset.guideNpcTile = mapTileType(npc.col, npc.row);
+      document.documentElement.dataset.guideNpcBlocks = String(worldNpcBlocksPosition(position.x, position.y));
+    }
   }
 
   initialize();

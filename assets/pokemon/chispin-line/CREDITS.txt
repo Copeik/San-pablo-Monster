@@ -1,0 +1,8 @@
+Chispin y Chisporc
+
+Concepto, nombres y referencia: imagen proporcionada por el usuario.
+Sprites de frente y espalda: extraídos directamente de la ficha original, sin regenerar las poses, y convertidos a PNG con transparencia.
+
+Archivos:
+- chispin-front.png / chispin-back.png
+- chisporc-front.png / chisporc-back.png

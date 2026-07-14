@@ -1,0 +1,10 @@
+Criascama, Aliscama y Dracoscama
+
+Concepto, nombres y referencia: imágenes proporcionadas por el usuario.
+Vistas frontales y vistas de Criascama: generadas inicialmente con OpenAI ImageGen a partir de la referencia.
+Vistas traseras de Aliscama y Dracoscama: extraídas directamente de la ficha original y convertidas a PNG con transparencia para conservar la anatomía correcta.
+
+Archivos:
+- criascama-front.png / criascama-back.png
+- aliscama-front.png / aliscama-back.png
+- dracoscama-front.png / dracoscama-back.png

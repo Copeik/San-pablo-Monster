@@ -1,0 +1,1123 @@
+{
+  "chunks": {
+    "chunkSize": 512,
+    "columns": 5,
+    "count": 25,
+    "enabled": true,
+    "gutter": 2,
+    "items": [
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r0-c0.webp",
+        "h": 512,
+        "id": "r0-c0",
+        "pixelHeight": 1028,
+        "pixelWidth": 1028,
+        "w": 512,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r0-c1.webp",
+        "h": 512,
+        "id": "r0-c1",
+        "pixelHeight": 1028,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 512,
+        "y": 0
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r0-c2.webp",
+        "h": 512,
+        "id": "r0-c2",
+        "pixelHeight": 1028,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1024,
+        "y": 0
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r0-c3.webp",
+        "h": 512,
+        "id": "r0-c3",
+        "pixelHeight": 1028,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1536,
+        "y": 0
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r0-c4.webp",
+        "h": 512,
+        "id": "r0-c4",
+        "pixelHeight": 1028,
+        "pixelWidth": 924,
+        "w": 460,
+        "x": 2048,
+        "y": 0
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r1-c0.webp",
+        "h": 512,
+        "id": "r1-c0",
+        "pixelHeight": 1032,
+        "pixelWidth": 1028,
+        "w": 512,
+        "x": 0,
+        "y": 512
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r1-c1.webp",
+        "h": 512,
+        "id": "r1-c1",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 512,
+        "y": 512
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r1-c2.webp",
+        "h": 512,
+        "id": "r1-c2",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1024,
+        "y": 512
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r1-c3.webp",
+        "h": 512,
+        "id": "r1-c3",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1536,
+        "y": 512
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r1-c4.webp",
+        "h": 512,
+        "id": "r1-c4",
+        "pixelHeight": 1032,
+        "pixelWidth": 924,
+        "w": 460,
+        "x": 2048,
+        "y": 512
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r2-c0.webp",
+        "h": 512,
+        "id": "r2-c0",
+        "pixelHeight": 1032,
+        "pixelWidth": 1028,
+        "w": 512,
+        "x": 0,
+        "y": 1024
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r2-c1.webp",
+        "h": 512,
+        "id": "r2-c1",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 512,
+        "y": 1024
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r2-c2.webp",
+        "h": 512,
+        "id": "r2-c2",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1024,
+        "y": 1024
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r2-c3.webp",
+        "h": 512,
+        "id": "r2-c3",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1536,
+        "y": 1024
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r2-c4.webp",
+        "h": 512,
+        "id": "r2-c4",
+        "pixelHeight": 1032,
+        "pixelWidth": 924,
+        "w": 460,
+        "x": 2048,
+        "y": 1024
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r3-c0.webp",
+        "h": 512,
+        "id": "r3-c0",
+        "pixelHeight": 1032,
+        "pixelWidth": 1028,
+        "w": 512,
+        "x": 0,
+        "y": 1536
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r3-c1.webp",
+        "h": 512,
+        "id": "r3-c1",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 512,
+        "y": 1536
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r3-c2.webp",
+        "h": 512,
+        "id": "r3-c2",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1024,
+        "y": 1536
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r3-c3.webp",
+        "h": 512,
+        "id": "r3-c3",
+        "pixelHeight": 1032,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1536,
+        "y": 1536
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r3-c4.webp",
+        "h": 512,
+        "id": "r3-c4",
+        "pixelHeight": 1032,
+        "pixelWidth": 924,
+        "w": 460,
+        "x": 2048,
+        "y": 1536
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r4-c0.webp",
+        "h": 460,
+        "id": "r4-c0",
+        "pixelHeight": 924,
+        "pixelWidth": 1028,
+        "w": 512,
+        "x": 0,
+        "y": 2048
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r4-c1.webp",
+        "h": 460,
+        "id": "r4-c1",
+        "pixelHeight": 924,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 512,
+        "y": 2048
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r4-c2.webp",
+        "h": 460,
+        "id": "r4-c2",
+        "pixelHeight": 924,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1024,
+        "y": 2048
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r4-c3.webp",
+        "h": 460,
+        "id": "r4-c3",
+        "pixelHeight": 924,
+        "pixelWidth": 1032,
+        "w": 512,
+        "x": 1536,
+        "y": 2048
+      },
+      {
+        "file": "assets/maps/san-pablo-rebuilt-chunks-2x/san-pablo-r4-c4.webp",
+        "h": 460,
+        "id": "r4-c4",
+        "pixelHeight": 924,
+        "pixelWidth": 924,
+        "w": 460,
+        "x": 2048,
+        "y": 2048
+      }
+    ],
+    "rows": 5
+  },
+  "compiler": "tools/compile-san-pablo-map.py",
+  "determinism": {
+    "losslessWebp": true,
+    "seed": 1978
+  },
+  "dimensions": {
+    "density": 2,
+    "logicalHeight": 2508,
+    "logicalWidth": 2508,
+    "pixelHeight": 5016,
+    "pixelWidth": 5016,
+    "tileSize": 32
+  },
+  "encounters": {
+    "areaCount": 6,
+    "areaIds": [
+      "grass-uned-west",
+      "grass-north-park-west",
+      "grass-north-park-east",
+      "grass-south-park-west",
+      "grass-tesalonica-garden",
+      "grass-south-park-east"
+    ],
+    "grassTilesComposited": 98
+  },
+  "geometry": {
+    "counts": {
+      "assetColliders": 245,
+      "blockedRects": 4,
+      "blockedSegments": 5,
+      "blockers": 5,
+      "surface:dirt": 15,
+      "surface:grass": 8,
+      "surface:road": 17,
+      "surface:sidewalk": 16
+    },
+    "features": [
+      {
+        "collection": "surfaceRects",
+        "id": "northwest-paved-entry",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "uned-front-plaza",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "north-park",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "north-farm-soil",
+        "surface": "dirt",
+        "walkable": false
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "clinic-precinct",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "gallery-courtyard",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "football-pitch",
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "field-south-plaza",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "central-civic-plaza",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "red-quarter-courtyard",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "bank-plaza",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "south-services-plaza",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "grass-uned-west",
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "grass-north-park-west",
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "grass-north-park-east",
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "grass-south-park-west",
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "grass-tesalonica-garden",
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "surfacePolygons",
+        "id": "south-park-lawn",
+        "surface": "grass",
+        "walkable": false
+      },
+      {
+        "collection": "surfacePolygons",
+        "id": "tesalonica-garden",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "surfacePolygons",
+        "id": "grass-south-park-east",
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "path-uned-west",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "path-north-park",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "path-north-park-branch",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-clinic",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-gallery",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-house-estambul",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-house-persepolis",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-house-siracusa",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-house-sidon",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-house-ninive",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-house-hebron",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-red-home",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-campus",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-park-house",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-route",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-bank",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "access-modern",
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "south-park-main",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "south-park-loop",
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "ada-north",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "northwest-link",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "jerusalen",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "ada",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "jaffa",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "miletos",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "estambul",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "memphis",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "persepolis",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "siracusa",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "residencial-sur-1",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "residencial-sur-2",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "ninive",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "hebron",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "east-access",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "tesalonica",
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "southwest-extension",
+        "surface": "road",
+        "walkable": true
+      }
+    ],
+    "ids": {
+      "blockers": [
+        "edge-top",
+        "edge-bottom",
+        "edge-left",
+        "edge-right",
+        "field-fence-top",
+        "field-fence-left",
+        "field-fence-right",
+        "field-fence-bottom-left",
+        "field-fence-bottom-right",
+        "blocker-north-exit",
+        "blocker-east-jerusalen",
+        "blocker-southwest-road",
+        "blocker-south-complex",
+        "blocker-north-farm"
+      ],
+      "paths": [
+        "path-uned-west",
+        "path-north-park",
+        "path-north-park-branch",
+        "access-clinic",
+        "access-gallery",
+        "access-house-estambul",
+        "access-house-persepolis",
+        "access-house-siracusa",
+        "access-house-sidon",
+        "access-house-ninive",
+        "access-house-hebron",
+        "access-red-home",
+        "access-campus",
+        "access-park-house",
+        "access-route",
+        "access-bank",
+        "access-modern",
+        "south-park-main",
+        "south-park-loop"
+      ],
+      "roads": [
+        "ada-north",
+        "northwest-link",
+        "jerusalen",
+        "ada",
+        "jaffa",
+        "miletos",
+        "estambul",
+        "memphis",
+        "persepolis",
+        "siracusa",
+        "residencial-sur-1",
+        "residencial-sur-2",
+        "ninive",
+        "hebron",
+        "east-access",
+        "tesalonica",
+        "southwest-extension"
+      ],
+      "surfacePolygons": [
+        "south-park-lawn",
+        "tesalonica-garden",
+        "grass-south-park-east"
+      ],
+      "surfaceRects": [
+        "northwest-paved-entry",
+        "uned-front-plaza",
+        "north-park",
+        "north-farm-soil",
+        "clinic-precinct",
+        "gallery-courtyard",
+        "football-pitch",
+        "field-south-plaza",
+        "central-civic-plaza",
+        "red-quarter-courtyard",
+        "bank-plaza",
+        "south-services-plaza",
+        "grass-uned-west",
+        "grass-north-park-west",
+        "grass-north-park-east",
+        "grass-south-park-west",
+        "grass-tesalonica-garden"
+      ]
+    },
+    "legacyWalkabilityIncluded": false,
+    "nonWalkableGroundFeatureIds": [
+      "north-farm-soil"
+    ],
+    "semanticWalkableShapes": 54,
+    "walkableFeatureIds": [
+      "northwest-paved-entry",
+      "uned-front-plaza",
+      "north-park",
+      "clinic-precinct",
+      "gallery-courtyard",
+      "football-pitch",
+      "field-south-plaza",
+      "central-civic-plaza",
+      "red-quarter-courtyard",
+      "bank-plaza",
+      "south-services-plaza",
+      "grass-uned-west",
+      "grass-north-park-west",
+      "grass-north-park-east",
+      "grass-south-park-west",
+      "grass-tesalonica-garden",
+      "tesalonica-garden",
+      "grass-south-park-east",
+      "path-uned-west",
+      "path-north-park",
+      "path-north-park-branch",
+      "access-clinic",
+      "access-gallery",
+      "access-house-estambul",
+      "access-house-persepolis",
+      "access-house-siracusa",
+      "access-house-sidon",
+      "access-house-ninive",
+      "access-house-hebron",
+      "access-red-home",
+      "access-campus",
+      "access-park-house",
+      "access-route",
+      "access-bank",
+      "access-modern",
+      "south-park-main",
+      "south-park-loop",
+      "ada-north",
+      "northwest-link",
+      "jerusalen",
+      "ada",
+      "jaffa",
+      "miletos",
+      "estambul",
+      "memphis",
+      "persepolis",
+      "siracusa",
+      "residencial-sur-1",
+      "residencial-sur-2",
+      "ninive",
+      "hebron",
+      "east-access",
+      "tesalonica",
+      "southwest-extension"
+    ]
+  },
+  "inputs": {
+    "assets/generated/san-pablo-derived/tileset-grass-dirt.png": "4d4f5941a49d6f1c1ab002e9f2a83febc106dc26ee11ce86127090aafec9243f",
+    "assets/generated/san-pablo-derived/tileset-road-sidewalk.png": "8eceec88d699d765a8a2e5d0ff90daf787fb72bff6abdfe6e8656eb027cded47",
+    "assets/generated/san-pablo-rebuilt/runtime/grass-tall-spritesheet.png": "605c4d19212c8830a91c5a26d19b25d26340f395dc94788aaf596374451738ef",
+    "map-data.js": "ece91e6af9b5e47840bc78691dd817244ad53f0c73fb300d481a6b4ac6144a4a",
+    "map-layout.js": "82dd7d40cb0a924f95b023c899c74ca22b661b49853296e56fd627432a321a38"
+  },
+  "outputs": {
+    "base": "assets/maps/san-pablo-rebuilt-base-hd.webp",
+    "chunks": "assets/maps/san-pablo-rebuilt-chunks-2x",
+    "navigationMask": "assets/maps/san-pablo-rebuilt-navigation-v2.png",
+    "preview": "assets/maps/san-pablo-rebuilt-preview.webp",
+    "report": "assets/maps/san-pablo-rebuilt-report-v2.json",
+    "sectorSheet": "assets/maps/san-pablo-rebuilt-sectors-v2.png",
+    "walkabilityOverlay": "assets/maps/san-pablo-rebuilt-walkability-v2.png"
+  },
+  "schemaVersion": 1,
+  "sections": [
+    {
+      "h": 836,
+      "id": "north-west",
+      "name": "San Pablo · Noroeste",
+      "w": 836,
+      "walkablePercent": 51.811,
+      "walkablePixelsApprox": 362108,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "h": 836,
+      "id": "north-center",
+      "name": "San Pablo · Norte Centro",
+      "w": 836,
+      "walkablePercent": 45.951,
+      "walkablePixelsApprox": 321149,
+      "x": 836,
+      "y": 0
+    },
+    {
+      "h": 836,
+      "id": "north-east",
+      "name": "San Pablo · Nordeste",
+      "w": 836,
+      "walkablePercent": 53.933,
+      "walkablePixelsApprox": 376937,
+      "x": 1672,
+      "y": 0
+    },
+    {
+      "h": 836,
+      "id": "central-west",
+      "name": "San Pablo · Oeste",
+      "w": 836,
+      "walkablePercent": 41.362,
+      "walkablePixelsApprox": 289077,
+      "x": 0,
+      "y": 836
+    },
+    {
+      "h": 836,
+      "id": "central-center",
+      "name": "San Pablo · Centro Civico",
+      "w": 836,
+      "walkablePercent": 73.362,
+      "walkablePixelsApprox": 512727,
+      "x": 836,
+      "y": 836
+    },
+    {
+      "h": 836,
+      "id": "central-east",
+      "name": "San Pablo · Barrio Este",
+      "w": 836,
+      "walkablePercent": 52.065,
+      "walkablePixelsApprox": 363878,
+      "x": 1672,
+      "y": 836
+    },
+    {
+      "h": 836,
+      "id": "south-west",
+      "name": "San Pablo · Parque Sur",
+      "w": 836,
+      "walkablePercent": 38.205,
+      "walkablePixelsApprox": 267016,
+      "x": 0,
+      "y": 1672
+    },
+    {
+      "h": 836,
+      "id": "south-center",
+      "name": "San Pablo · Tesalonica",
+      "w": 836,
+      "walkablePercent": 65.095,
+      "walkablePixelsApprox": 454948,
+      "x": 836,
+      "y": 1672
+    },
+    {
+      "h": 836,
+      "id": "south-east",
+      "name": "San Pablo · Distrito Moderno",
+      "w": 836,
+      "walkablePercent": 72.949,
+      "walkablePixelsApprox": 509835,
+      "x": 1672,
+      "y": 1672
+    }
+  ],
+  "swatches": {
+    "dirt": {
+      "cell": [
+        1,
+        0
+      ],
+      "height": 290,
+      "width": 289
+    },
+    "grass": {
+      "cell": [
+        0,
+        0
+      ],
+      "height": 290,
+      "width": 290
+    },
+    "road": {
+      "cell": [
+        0,
+        0
+      ],
+      "height": 290,
+      "width": 290
+    },
+    "sidewalk": {
+      "cell": [
+        1,
+        0
+      ],
+      "height": 290,
+      "width": 289
+    }
+  },
+  "walkability": {
+    "blockedProbeFailures": 0,
+    "blockedProbes": [
+      {
+        "label": "huella de la UNED",
+        "passes": true,
+        "walkable": false,
+        "x": 1464.0,
+        "y": 400.0
+      },
+      {
+        "label": "fachada del Centro de Salud",
+        "passes": true,
+        "walkable": false,
+        "x": 588.0,
+        "y": 665.0
+      },
+      {
+        "label": "fachada de Galeria Jazmin",
+        "passes": true,
+        "walkable": false,
+        "x": 1490.0,
+        "y": 825.0
+      },
+      {
+        "label": "fachada del Campus Civico",
+        "passes": true,
+        "walkable": false,
+        "x": 1360.0,
+        "y": 1710.0
+      },
+      {
+        "label": "fachada del Banco San Pablo",
+        "passes": true,
+        "walkable": false,
+        "x": 2224.0,
+        "y": 1900.0
+      },
+      {
+        "label": "fachada de Servicios del Sureste",
+        "passes": true,
+        "walkable": false,
+        "x": 2144.0,
+        "y": 2350.0
+      },
+      {
+        "label": "banco del parque sur",
+        "passes": true,
+        "walkable": false,
+        "x": 720.0,
+        "y": 2260.0
+      },
+      {
+        "label": "tronco del parque sur",
+        "passes": true,
+        "walkable": false,
+        "x": 560.0,
+        "y": 2310.0
+      },
+      {
+        "label": "barrera de la salida norte",
+        "passes": true,
+        "walkable": false,
+        "x": 208.0,
+        "y": 158.0
+      },
+      {
+        "label": "barrera de la salida este",
+        "passes": true,
+        "walkable": false,
+        "x": 2410.0,
+        "y": 505.0
+      }
+    ],
+    "doorApproachFailures": 0,
+    "doorCentersBlockedByGeometry": 8,
+    "doorCentersOpenInMask": 8,
+    "doors": [
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 18,
+        "label": "Centro de Salud San Pablo",
+        "row": 21,
+        "walkableAtCenter": false
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 46,
+        "label": "Galería Jazmín",
+        "row": 25,
+        "walkableAtCenter": false
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 50,
+        "label": "Umbral Prisma",
+        "row": 34,
+        "walkableAtCenter": true
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 21,
+        "label": "Casa",
+        "row": 30,
+        "walkableAtCenter": false
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 30,
+        "label": "Casa",
+        "row": 40,
+        "walkableAtCenter": true
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 21,
+        "label": "Casa",
+        "row": 53,
+        "walkableAtCenter": false
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 30,
+        "label": "Casa",
+        "row": 62,
+        "walkableAtCenter": false
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 61,
+        "label": "Casa",
+        "row": 28,
+        "walkableAtCenter": false
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 71,
+        "label": "Casa",
+        "row": 40,
+        "walkableAtCenter": true
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 61,
+        "label": "Casa",
+        "row": 51,
+        "walkableAtCenter": true
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 39,
+        "label": "Casa del parque",
+        "row": 69,
+        "walkableAtCenter": true
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 53,
+        "label": "Jardín Tesalónica",
+        "row": 71,
+        "walkableAtCenter": true
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 45,
+        "label": "UNED Sevilla",
+        "row": 13,
+        "walkableAtCenter": false
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 42,
+        "label": "Campus Cívico",
+        "row": 54,
+        "walkableAtCenter": true
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 69,
+        "label": "Banco San Pablo",
+        "row": 60,
+        "walkableAtCenter": true
+      },
+      {
+        "approachableFromAdjacentTile": true,
+        "col": 67,
+        "label": "Servicios del Sureste",
+        "row": 73,
+        "walkableAtCenter": false
+      }
+    ],
+    "navigationMask": {
+      "cellSize": 8,
+      "columns": 314,
+      "rows": 314
+    },
+    "totalPixels": 6290064,
+    "walkablePercent": 54.97,
+    "walkablePixelsApprox": 3457675
+  }
+}
