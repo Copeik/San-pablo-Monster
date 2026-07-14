@@ -32,3 +32,11 @@ protagonist-walk.png as the structural and pixel-art style reference. The flat
 chroma backgrounds were removed locally and every sheet was normalized to the
 same 4×4, 64-pixel-cell contract. Character prompts and final assets were made
 for this fan project; no third-party sprite was copied into these 30 sheets.
+
+doctor-potato-source.png / npcs/doctor-potato-walk.png
+=====================================================
+
+Character animation reference supplied by the project owner. The game reads
+the permanent transparent 4×4 walking atlas directly. It was built
+deterministically from the supplied 6×3 sheet, without generative changes to
+the character, and follows the 64-pixel-cell contract used by overworld NPCs.

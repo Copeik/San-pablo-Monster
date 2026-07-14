@@ -169,8 +169,8 @@ kbd { display: inline-grid; min-width: 24px; height: 22px; padding: 0 6px; place
 .title-visual { position: absolute; right: 0; bottom: 0; width: 48%; height: 100%; }
 .sun { position: absolute; top: 11%; left: 10%; width: 365px; height: 365px; border-radius: 50%; background: rgba(253,232,154,.63); box-shadow: 0 0 0 24px rgba(255,255,255,.1); }
 .title-pokemon { position: absolute; z-index: 3; object-fit: contain; filter: drop-shadow(0 13px 7px rgba(23,54,41,.22)); }
-.pikachu { right: 2%; bottom: 4%; width: 290px; }
-.eevee { left: -10%; bottom: 0; width: 215px; }
+.petrillo { right: 2%; bottom: 4%; width: 290px; }
+.luminio { left: -10%; bottom: 0; width: 215px; }
 .city-silhouette { position: absolute; right: -8%; bottom: -7%; left: -16%; height: 190px; border-radius: 50% 50% 0 0; background: repeating-linear-gradient(105deg, #4e823a 0 9px, #5b9244 10px 19px); transform: rotate(-2deg); }
 
 /* Intro after choosing a partner */
@@ -251,6 +251,74 @@ kbd { display: inline-grid; min-width: 24px; height: 22px; padding: 0 6px; place
 .starter-intro-play { top: 50%; left: 50%; padding: 0 21px; background: rgba(26,92,62,.88); transform: translate(-50%,-50%); }
 .starter-intro-skip:hover,
 .starter-intro-play:hover { border-color: #f8d456; background: rgba(18,70,48,.9); }
+
+/* Vision shown once when the three Prisma fragments have been collected. */
+.fragment-cinematic-screen {
+  position: absolute;
+  z-index: 130;
+  inset: 0;
+  overflow: hidden;
+  color: #fff;
+  background: #030504;
+  isolation: isolate;
+}
+
+.fragment-cinematic-screen video {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #030504;
+}
+
+.fragment-cinematic-shade {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(3,5,4,.28), transparent 28%, transparent 62%, rgba(3,5,4,.82));
+  pointer-events: none;
+}
+
+.fragment-cinematic-copy {
+  position: absolute;
+  right: 28px;
+  bottom: 28px;
+  left: 28px;
+  display: flex;
+  max-width: 620px;
+  flex-direction: column;
+  gap: 6px;
+  text-shadow: 0 2px 14px rgba(0,0,0,.8);
+}
+
+.fragment-cinematic-copy span { color: #d9b8ff; font-size: .52rem; font-weight: 900; letter-spacing: .2em; }
+.fragment-cinematic-copy strong { font-size: clamp(1rem,2.2vw,1.45rem); letter-spacing: .06em; }
+.fragment-cinematic-copy p { margin: 0; color: rgba(255,255,255,.82); font-size: .68rem; font-weight: 700; }
+
+.fragment-cinematic-play,
+.fragment-cinematic-skip {
+  position: absolute;
+  z-index: 2;
+  min-height: 43px;
+  padding: 0 16px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.36);
+  border-radius: 12px;
+  color: #fff;
+  background: rgba(18,10,31,.7);
+  box-shadow: 0 8px 24px rgba(0,0,0,.32);
+  backdrop-filter: blur(8px);
+  font-size: .6rem;
+  font-weight: 900;
+}
+
+.fragment-cinematic-skip { top: 84px; right: 30px; }
+.fragment-cinematic-skip span { margin-left: 8px; color: #d9b8ff; }
+.fragment-cinematic-play { top: 50%; left: 50%; padding: 0 21px; background: rgba(78,36,116,.9); transform: translate(-50%,-50%); }
+.fragment-cinematic-play:hover,
+.fragment-cinematic-skip:hover { border-color: #d9b8ff; background: rgba(78,36,116,.94); }
 
 /* World */
 .world-screen { background: #d7e4be; }
@@ -391,9 +459,27 @@ kbd { display: inline-grid; min-width: 24px; height: 22px; padding: 0 6px; place
 .keyboard-help span { display: flex; align-items: center; gap: 5px; }
 .touch-controls { display: none; }
 
-.dialog-box { position: absolute; z-index: 60; right: 6%; bottom: 64px; left: 6%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; min-height: 88px; padding: 15px 17px; gap: 14px; border: 4px solid #faf8e9; border-radius: 13px; color: white; background: #1f4939; box-shadow: 0 0 0 3px #132d24, 0 15px 38px rgba(12,38,28,.35); }
+.world-screen.cinematic-dialog::after {
+  position: absolute;
+  z-index: 55;
+  inset: 0;
+  content: "";
+  background: rgba(5, 12, 9, .54);
+  pointer-events: none;
+  animation: cinematic-dialog-dim 180ms ease-out both;
+}
+@keyframes cinematic-dialog-dim { from { opacity: 0; } to { opacity: 1; } }
+
+.dialog-box { position: absolute; z-index: 60; right: 6%; bottom: 64px; left: 6%; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; min-height: 88px; padding: 15px 17px; gap: 14px; border: 4px solid #faf8e9; border-radius: 13px; color: white; background: #1f4939; box-shadow: 0 0 0 3px #132d24, 0 15px 38px rgba(12,38,28,.35); }
 .dialog-avatar { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 50%; color: #604708; background: var(--yellow); box-shadow: inset 0 -5px rgba(130,91,10,.15); font-size: 1.3rem; font-weight: 900; }
+.dialog-copy { min-width: 0; }
+.dialog-speaker { display: block; margin-bottom: 7px; color: #f7d35a; font-size: .61rem; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
 .dialog-box p { margin: 0; font-size: .82rem; font-weight: 700; line-height: 1.5; }
+.dialog-portrait { width: 178px; height: 132px; border: 3px solid rgba(255,255,255,.9); border-radius: 10px; object-fit: cover; object-position: 54% 48%; background: #f8f5e9; box-shadow: 0 7px 18px rgba(4,19,13,.38); }
+.dialog-box.has-portrait { grid-template-columns: minmax(0,1fr) 178px auto; min-height: 164px; padding: 13px 15px 13px 20px; background: linear-gradient(105deg,#17372c,#245744); }
+.dialog-box.has-portrait .dialog-avatar { display: none; }
+.dialog-box.has-portrait .dialog-copy { align-self: center; }
+.dialog-box.has-portrait p { font-size: clamp(.78rem,1.65vw,1.02rem); line-height: 1.48; }
 .dialog-box button { display: grid; width: 33px; height: 33px; cursor: pointer; place-items: center; border: 0; border-radius: 50%; color: #1f4939; background: white; animation: bounce 700ms alternate infinite; }
 @keyframes bounce { to { transform: translateY(4px); } }
 
@@ -1127,7 +1213,7 @@ kbd { display: inline-grid; min-width: 24px; height: 22px; padding: 0 6px; place
   .hud-summary { grid-row: 2; grid-column: 1 / -1; justify-self: center; }
   .title-copy { width: 65%; padding-top: 78px; }
   .title-visual { right: -10%; }
-  .eevee { display: none; }
+  .luminio { display: none; }
   .status-card { width: 205px; }
   .enemy-status { left: -29%; }
   .player-status { right: -34%; }
@@ -1155,8 +1241,8 @@ kbd { display: inline-grid; min-width: 24px; height: 22px; padding: 0 6px; place
   .title-controls { display: none; }
   .title-visual { right: 0; bottom: -1%; width: 100%; height: 46%; }
   .sun { top: -10%; left: 50%; width: 235px; height: 235px; transform: translateX(-50%); }
-  .pikachu { right: 3%; width: 155px; }
-  .eevee { display: block; left: 0; width: 130px; }
+  .petrillo { right: 3%; width: 155px; }
+  .luminio { display: block; left: 0; width: 130px; }
 
   .starter-intro-location { top: 100px; left: 14px; padding: 9px 11px; }
   .starter-intro-location strong { font-size: .63rem; }
@@ -1164,6 +1250,10 @@ kbd { display: inline-grid; min-width: 24px; height: 22px; padding: 0 6px; place
   .starter-intro-copy { right: 18px; bottom: 28px; left: 18px; }
   .starter-intro-copy h2 { font-size: clamp(2rem,11vw,3.3rem); }
   .starter-intro-copy p { font-size: .65rem; }
+  .fragment-cinematic-skip { top: 76px; right: 12px; min-height: 38px; padding: 0 12px; }
+  .fragment-cinematic-copy { right: 16px; bottom: 22px; left: 16px; }
+  .fragment-cinematic-copy strong { font-size: .92rem; }
+  .fragment-cinematic-copy p { font-size: .58rem; }
 
   .world-overlay { top: 8px; right: 8px; left: 8px; }
   .location-card { min-width: 116px; padding: 7px 9px; }
@@ -1188,6 +1278,11 @@ kbd { display: inline-grid; min-width: 24px; height: 22px; padding: 0 6px; place
   .dialog-box { right: 4%; bottom: 195px; left: 4%; min-height: 78px; padding: 10px; }
   .dialog-avatar { width: 37px; height: 37px; }
   .dialog-box p { font-size: .63rem; }
+  .dialog-box.has-portrait { grid-template-columns: minmax(0,1fr) 104px 28px; min-height: 132px; padding: 9px 9px 9px 13px; gap: 9px; }
+  .dialog-box.has-portrait p { font-size: .66rem; }
+  .dialog-speaker { margin-bottom: 5px; font-size: .48rem; }
+  .dialog-portrait { width: 104px; height: 98px; border-width: 2px; border-radius: 8px; }
+  .dialog-box.has-portrait button { width: 28px; height: 28px; }
   .run-badge { top: 65px; }
 
   .battle-scene { bottom: 235px; }

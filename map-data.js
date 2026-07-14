@@ -277,7 +277,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
       sprite: "npc-17-musician",
       lines: [
         "Mi Jigglypuff canta afinado. El público se duerme antes del estribillo.",
-        "Estoy ensayando un solo en Re menor... Re menor que Pikachu.",
+        "Estoy ensayando un solo en Re menor... Re menor que Chispin.",
       ],
     },
     {
@@ -324,7 +324,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
       name: "Entrenadora Nerea",
       sprite: "npc-21-teen-girl",
       lines: [
-        "Entrené a mi Eevee para posar. Combatir ya si eso mañana.",
+        "Entrené a mi Luminio para posar. Combatir ya si eso mañana.",
         "Mi estrategia secreta es gritar «¡crítico!». Funciona estadísticamente alguna vez.",
       ],
     },
@@ -336,7 +336,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
       name: "Entrenador Dani",
       sprite: "npc-22-teen-boy",
       lines: [
-        "Mi Magikarp sabe Salpicadura. Yo también, pero solo en los charcos.",
+        "Mi Alúa sabe revolcarse en las hojas. Yo también, pero solo los domingos.",
         "Quise ser líder de gimnasio, pero había que madrugar.",
       ],
     },
@@ -372,7 +372,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
       name: "Doctor Mateo",
       sprite: "npc-25-doctor",
       lines: [
-        "Receto descanso, agua y no luchar contra seis Rattata antes del desayuno.",
+        "Receto descanso, agua y no luchar contra seis Moskito antes del desayuno.",
         "Tu pulso está bien. El mío sube cuando alguien dice «será un combate rápido».",
       ],
     },
@@ -397,7 +397,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
       sprite: "npc-27-librarian",
       lines: [
         "Shhh... hasta mi Exploud usa voz interior aquí.",
-        "Presté un libro sobre Abra. Cuando fui a buscarlo, ya no estaba.",
+        "Presté un libro sobre Luminio. Cuando fui a buscarlo, ya no estaba.",
       ],
     },
     {

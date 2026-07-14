@@ -58,6 +58,8 @@
       money: Math.max(0, Math.floor(Number(params.get("debugMoney")) || 2500)),
     };
   })();
+  const LOCAL_DEBUG_FRAGMENT_CINEMATIC = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
+    && new URLSearchParams(window.location.search).has("debugFragmentCinematic");
   const LOCAL_DEBUG_PLAYER_ATLAS = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
     && new URLSearchParams(window.location.search).has("debugPlayerAtlas");
   function clampDebugLevel(value) { return Math.max(1, Math.min(50, Number(value) || 5)); }
@@ -101,10 +103,10 @@
   ];
   const ROUTE_POND = { x: 350, y: 410, w: 150, h: 90 };
   const ROUTE_WILD_TABLE = [
-    { id: 16, weight: 20 }, { id: 19, weight: 18 }, { id: 10, weight: 13 },
-    { id: 13, weight: 12 }, { id: 43, weight: 12 }, { id: 104, weight: 9 },
-    { id: 9601, weight: 9 }, { id: 96, weight: 6 }, { id: 25, weight: 6 },
-    { id: 9101, weight: 8 }, { id: 9201, weight: 4 }, { id: 133, weight: 4 },
+    { id: 9601, weight: 18 }, { id: 9701, weight: 18 }, { id: 9001, weight: 14 },
+    { id: 9101, weight: 12 }, { id: 9501, weight: 12 }, { id: 9201, weight: 10 },
+    { id: 9301, weight: 9 }, { id: 9401, weight: 7 }, { id: 9602, weight: 4 },
+    { id: 9702, weight: 4 }, { id: 9202, weight: 3 },
   ];
 
   const INTERIOR_PALETTES = {
@@ -119,12 +121,12 @@
     clerk: { spriteIndex: 3, sprite: "npc-02-shopkeeper", layout: "shop", color: "#4f8fc3", name: "Dependiente", lines: [] },
     professor: { spriteIndex: 1, sprite: "npc-03-professor", layout: "lab", color: "#8a8d8f", name: "Investigador", lines: [] },
     abuela: { spriteIndex: 0, sprite: "npc-04-grandmother", layout: "cozy", color: "#9b6ad0", name: "Abuela Lola", lines: ["Tu equipo está precioso. Come poco, combate mucho y deja pelos en el sofá.", "La Galería Jazmín está al este. Di que vas de mi parte; no servirá de nada, pero suena importante."] },
-    nino: { spriteIndex: 6, sprite: "npc-05-child", layout: "playroom", color: "#e0a23a", name: "Niño Teo", lines: ["¡Mi Rattata es el más fuerte del barrio! El barrio incluye esta habitación.", "Busco Pokémon raros en el Jardín Tesalónica. De momento solo encontré un calcetín raro."] },
+    nino: { spriteIndex: 6, sprite: "npc-05-child", layout: "playroom", color: "#e0a23a", name: "Niño Teo", lines: ["¡Mi Moskito es el más fuerte del barrio! El barrio incluye esta habitación.", "Busco monstruos raros en el Jardín Tesalónica. De momento solo encontré un calcetín raro."] },
     pescador: { spriteIndex: 3, sprite: "npc-06-fisher", layout: "coastal", color: "#3f7fae", name: "Pescador Berto", lines: ["Hoy solo ha picado una bota. Tiene buena Defensa, pero pésimo Ataque.", "Voy a Tesalónica por los Pokémon de Agua y por fingir que entiendo el viento."] },
     jubilado: { spriteIndex: 1, sprite: "npc-07-grandfather", layout: "study", color: "#8a8d8f", name: "Don Ramón", lines: ["Conozco cada calle desde antes del minimapa. Nos perdíamos con dignidad.", "En la UNED investigan señales extrañas. Yo digo que es el wifi."] },
     estudiante: { spriteIndex: 2, sprite: "npc-08-student", layout: "study", color: "#4b9b6a", name: "Estudiante Ana", lines: ["Estudio para líder de gimnasio. La asignatura más difícil es posar sin parpadear.", "Fuego gana a Planta, Agua a Fuego y el sueño gana a mis apuntes."] },
     comerciante: { spriteIndex: 4, sprite: "npc-09-merchant", layout: "cozy", color: "#c75a4b", name: "Comerciante Poli", lines: ["Mis ofertas son tan buenas que a veces intento comprármelas yo mismo.", "Los combates dan dinero. Mis discursos comerciales, por desgracia, no."] },
-    artista: { spriteIndex: 5, sprite: "npc-10-artist", layout: "studio", color: "#d96fae", name: "Artista Lua", lines: ["Retrato a los Pokémon salvajes. Los Zubat siempre salen movidos y ofendidos.", "Mi estilo es hiperrealismo pixelado. Cuantos menos píxeles, más caro."] },
+    artista: { spriteIndex: 5, sprite: "npc-10-artist", layout: "studio", color: "#d96fae", name: "Artista Lua", lines: ["Retrato a los monstruos salvajes. Los Sombrañol siempre salen movidos y ofendidos.", "Mi estilo es hiperrealismo pixelado. Cuantos menos píxeles, más caro."] },
     deportista: { spriteIndex: 7, sprite: "npc-11-athlete", layout: "playroom", color: "#5aa0c8", name: "Deportista Max", lines: ["Corro todas las mañanas. Algunas incluso hacia delante.", "Usa SHIFT para correr; úsalo con moderación si acabas de comer."] },
     guarderia: { spriteIndex: 8, sprite: "npc-12-caretaker", layout: "cozy", color: "#e0b34a", name: "Cuidadora Veva", lines: ["Cuido a todos los Pokémon del barrio. Ellos creen que yo soy la mascota.", "Cuando completes el equipo, vuelve. Tengo seis toallas y ninguna esperanza."] },
     jardinera: { spriteIndex: 9, sprite: "npc-13-gardener", layout: "studio", color: "#6aa84f", name: "Jardinera Sol", lines: ["Hablo con las plantas. Ellas responden con fotosíntesis pasivo-agresiva.", "La hierba alta esconde especies distintas y, en mi caso, las tijeras."] },
@@ -134,14 +136,19 @@
   const PLAYER_SHEET_URL = "assets/sprites/protagonist-walk.png";
   const NPC_SHEET_URL = "assets/sprites/hgss-npc-idle.png";
   const GUIDE_NPC_SHEET_URL = "assets/sprites/npc-guide-walk.png";
-  const NPC_ROSTER_SHEET_URLS = Object.freeze(Object.fromEntries([
-    "nurse", "shopkeeper", "professor", "grandmother", "child", "fisher", "grandfather", "student", "merchant", "artist",
-    "athlete", "caretaker", "gardener", "officer", "chef", "mechanic", "musician", "cyclist", "hiker", "office-worker",
-    "teen-girl", "teen-boy", "baker", "builder", "doctor", "vendor", "librarian", "tourist", "dancer", "ranger",
-  ].map((role, index) => {
-    const id = `npc-${String(index + 1).padStart(2, "0")}-${role}`;
-    return [id, `assets/sprites/npcs/${id}-walk.png`];
-  })));
+  const DOCTOR_POTATO_PORTRAIT_URL = "assets/portraits/doctor-potato.png";
+  const DOCTOR_POTATO_THEME_URL = "assets/audio/patata-de-barrio.mp3";
+  const NPC_ROSTER_SHEET_URLS = Object.freeze({
+    ...Object.fromEntries([
+      "nurse", "shopkeeper", "professor", "grandmother", "child", "fisher", "grandfather", "student", "merchant", "artist",
+      "athlete", "caretaker", "gardener", "officer", "chef", "mechanic", "musician", "cyclist", "hiker", "office-worker",
+      "teen-girl", "teen-boy", "baker", "builder", "doctor", "vendor", "librarian", "tourist", "dancer", "ranger",
+    ].map((role, index) => {
+      const id = `npc-${String(index + 1).padStart(2, "0")}-${role}`;
+      return [id, `assets/sprites/npcs/${id}-walk.png`];
+    })),
+    "doctor-potato": "assets/sprites/npcs/doctor-potato-walk.png",
+  });
   const CUSTOM_POKEMON_ASSETS = Object.freeze({
     9001: { front: "assets/pokemon/petrillo-line/petrillo-front.png", back: "assets/pokemon/petrillo-line/petrillo-back.png" },
     9002: { front: "assets/pokemon/petrillo-line/musgolem-front.png", back: "assets/pokemon/petrillo-line/musgolem-back.png" },
@@ -245,52 +252,28 @@
   };
 
   const POKEMON = {
-    1: { id: 1, name: "Bulbasaur", type: "Planta", secondaryType: "Veneno", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Paciente y resistente. Una elección muy equilibrada." },
-    4: { id: 4, name: "Charmander", type: "Fuego", baseHp: 23, catchRate: .34, moves: [MOVES.scratch, MOVES.ember], description: "Valiente y enérgico. Sus ataques golpean con fuerza." },
-    7: { id: 7, name: "Squirtle", type: "Agua", baseHp: 27, catchRate: .34, moves: [MOVES.tackle, MOVES.waterGun], description: "Sereno y tenaz. Aguanta muy bien los combates." },
-    10: { id: 10, name: "Caterpie", type: "Bicho", baseHp: 20, catchRate: .68, moves: [MOVES.tackle, MOVES.bugBite] },
-    13: { id: 13, name: "Weedle", type: "Bicho", secondaryType: "Veneno", baseHp: 20, catchRate: .66, moves: [MOVES.tackle, MOVES.poisonSting] },
-    16: { id: 16, name: "Pidgey", type: "Volador", baseHp: 22, catchRate: .58, moves: [MOVES.tackle, MOVES.gust] },
-    19: { id: 19, name: "Rattata", type: "Normal", baseHp: 21, catchRate: .60, moves: [MOVES.tackle, MOVES.quickAttack] },
-    25: { id: 25, name: "Pikachu", type: "Eléctrico", baseHp: 23, catchRate: .32, moves: [MOVES.quickAttack, MOVES.thunderShock] },
-    43: { id: 43, name: "Oddish", type: "Planta", secondaryType: "Veneno", baseHp: 24, catchRate: .53, moves: [MOVES.tackle, MOVES.absorb] },
-    63: { id: 63, name: "Abra", type: "Psíquico", baseHp: 20, catchRate: .36, moves: [MOVES.confusion, MOVES.quickAttack] },
-    81: { id: 81, name: "Magnemite", type: "Eléctrico", secondaryType: "Acero", baseHp: 25, catchRate: .42, moves: [MOVES.thunderShock, MOVES.metalSound] },
-    92: { id: 92, name: "Gastly", type: "Fantasma", secondaryType: "Veneno", baseHp: 21, catchRate: .38, moves: [MOVES.lick, MOVES.confusion] },
-    96: { id: 96, name: "Drowzee", type: "Psíquico", baseHp: 27, catchRate: .46, moves: [MOVES.confusion, MOVES.headbutt] },
-    104: { id: 104, name: "Cubone", type: "Tierra", baseHp: 28, catchRate: .43, moves: [MOVES.headbutt, MOVES.tackle] },
-    133: { id: 133, name: "Eevee", type: "Normal", baseHp: 25, catchRate: .28, moves: [MOVES.quickAttack, MOVES.headbutt] },
-    147: { id: 147, name: "Dratini", type: "Dragón", baseHp: 29, catchRate: .22, moves: [MOVES.dragonRage, MOVES.tackle] },
-    151: { id: 151, name: "Mew Espejo", type: "Psíquico", baseHp: 36, catchRate: 0, moves: [MOVES.confusion, MOVES.lick] },
-    149: { id: 149, name: "Dragonite", type: "Dragón", secondaryType: "Volador", baseHp: 42, catchRate: 0, moves: [MOVES.dragonRage, MOVES.gust] },
-    248: { id: 248, name: "Tyranitar", type: "Tierra", baseHp: 44, catchRate: 0, moves: [MOVES.headbutt, MOVES.lick] },
-    373: { id: 373, name: "Salamence", type: "Dragón", secondaryType: "Volador", baseHp: 40, catchRate: 0, moves: [MOVES.dragonRage, MOVES.gust] },
-    376: { id: 376, name: "Metagross", type: "Acero", secondaryType: "Psíquico", baseHp: 43, catchRate: 0, moves: [MOVES.metalSound, MOVES.confusion] },
-    399: { id: 399, name: "Bidoof", type: "Normal", baseHp: 25, catchRate: 0, moves: [MOVES.tackle, MOVES.headbutt] },
-    445: { id: 445, name: "Garchomp", type: "Dragón", secondaryType: "Tierra", baseHp: 41, catchRate: 0, moves: [MOVES.dragonRage, MOVES.headbutt] },
-    635: { id: 635, name: "Hydreigon", type: "Dragón", baseHp: 40, catchRate: 0, moves: [MOVES.dragonRage, MOVES.lick] },
-    9001: { id: 9001, name: "Petrillo", type: "Roca", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Pokémon Semilla. Resistente como Bulbasaur y capaz de absorber minerales del suelo.", evolvesTo: 9002, evolveLevel: 16 },
-    9002: { id: 9002, name: "Musgólem", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Pokémon Coloso Musgo. Sus brazos de roca se afianzan al suelo mientras las enredaderas absorben humedad.", evolvesTo: 9003, evolveLevel: 32 },
-    9003: { id: 9003, name: "Terravórdeo", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Pokémon Montaña Viviente. Cada paso mezcla minerales y semillas; allí donde descansa, vuelve a brotar la vida." },
-    9101: { id: 9101, name: "Peyote", type: "Roca", secondaryType: "Tierra", baseHp: 30, catchRate: .52, moves: [MOVES.tackle, MOVES.stoneSeal], description: "Pokémon Adobe. Compacta capas de tierra y roca hasta convertirlas en una coraza orgullosamente sellada.", evolvesTo: 9102, evolveLevel: 18 },
-    9102: { id: 9102, name: "Prensalito", type: "Roca", secondaryType: "Tierra", baseHp: 44, catchRate: .16, moves: [MOVES.stoneSeal, MOVES.earthPress, MOVES.headbutt], description: "Pokémon Bloque Prensado. Protege su territorio con un cuerpo de densidad extraordinaria." },
-    9201: { id: 9201, name: "Criascama", type: "Dragón", baseHp: 23, catchRate: .42, moves: [MOVES.tackle, MOVES.scaleRush], description: "Pokémon Cría Dragón. Salta entre piedras mientras aprende a leer las corrientes de la pradera.", evolvesTo: 9202, evolveLevel: 18 },
-    9202: { id: 9202, name: "Aliscama", type: "Dragón", secondaryType: "Bicho", baseHp: 31, catchRate: .18, moves: [MOVES.scaleRush, MOVES.razorWing, MOVES.gust], description: "Pokémon Ala Cortadora. Sus antenas anticipan cada cambio del viento.", evolvesTo: 9203, evolveLevel: 36 },
-    9203: { id: 9203, name: "Dracoscama", type: "Dragón", secondaryType: "Bicho", baseHp: 42, catchRate: .07, moves: [MOVES.dragonRage, MOVES.razorWing, MOVES.prairieDive], description: "Pokémon Dragón Veloz. Custodia las praderas con maniobras imposibles de seguir a simple vista." },
-    9301: { id: 9301, name: "Luminio", type: "Psíquico", baseHp: 21, catchRate: .50, moves: [MOVES.confusion, MOVES.moonGleam], description: "Pokémon Brillo. Baila junto a fuentes tranquilas y deja sueños de paz a su paso.", evolvesTo: 9302, evolveLevel: 17 },
-    9302: { id: 9302, name: "Lunaria", type: "Psíquico", secondaryType: "Hada", baseHp: 30, catchRate: .20, moves: [MOVES.moonGleam, MOVES.dreamWhisper, MOVES.confusion], description: "Pokémon Susurro. Sus cintas luminosas guían a quien se pierde en sus propios pensamientos.", evolvesTo: 9303, evolveLevel: 34 },
-    9303: { id: 9303, name: "Lusdria", type: "Psíquico", secondaryType: "Hada", baseHp: 38, catchRate: .08, moves: [MOVES.dreamWhisper, MOVES.astralGuard, MOVES.moonGleam], description: "Pokémon Luminar. Purifica las pesadillas con una luz telepática serena." },
-    9401: { id: 9401, name: "Sombrañol", type: "Fantasma", baseHp: 22, catchRate: .48, moves: [MOVES.lick, MOVES.shadowPrank], description: "Pokémon Sombra. Apaga luces para jugar bromas y se esconde entre llamas violetas.", evolvesTo: 9402, evolveLevel: 20 },
-    9402: { id: 9402, name: "Penumbra", type: "Fantasma", secondaryType: "Siniestro", baseHp: 32, catchRate: .19, moves: [MOVES.shadowPrank, MOVES.lanternDrain, MOVES.lick], description: "Pokémon Sombra. Su farol absorbe energía para sostener su cuerpo nebuloso.", evolvesTo: 9403, evolveLevel: 38 },
-    9403: { id: 9403, name: "Tenebrantor", type: "Fantasma", secondaryType: "Siniestro", baseHp: 43, catchRate: .07, moves: [MOVES.lanternDrain, MOVES.eternalNight, MOVES.shadowPrank], description: "Pokémon Ánima Oscura. Sus faroles marcan caminos secretos entre las sombras." },
-    9501: { id: 9501, name: "Chispin", type: "Eléctrico", baseHp: 24, catchRate: .46, moves: [MOVES.quickAttack, MOVES.sparkSnout], description: "Pokémon Cerdito Eléctrico. Al correr, carga sus mejillas y deja pequeñas chispas entre las briznas de hierba.", evolvesTo: 9502, evolveLevel: 24 },
-    9502: { id: 9502, name: "Chisporc", type: "Eléctrico", secondaryType: "Volador", baseHp: 36, catchRate: .13, moves: [MOVES.sparkSnout, MOVES.stormWing, MOVES.gust], description: "Pokémon Cerdito Tormenta. Sus alas acumulan electricidad hasta arrastrar nubes cargadas a su paso." },
-    9601: { id: 9601, name: "Moskito", type: "Bicho", baseHp: 19, catchRate: .65, moves: [MOVES.bugBite, MOVES.nectarNeedle], description: "Pokémon Mosquito. Bebe néctar y savia con un aguijón aún más curioso que peligroso.", evolvesTo: 9602, evolveLevel: 15 },
-    9602: { id: 9602, name: "Zumkito", type: "Bicho", baseHp: 27, catchRate: .25, moves: [MOVES.nectarNeedle, MOVES.wingFeint, MOVES.bugBite], description: "Pokémon Zumbido. Convierte el néctar en energía y confunde a sus rivales con patrones de sus alas.", evolvesTo: 9603, evolveLevel: 30 },
-    9603: { id: 9603, name: "Sanguento", type: "Bicho", secondaryType: "Volador", baseHp: 37, catchRate: .10, moves: [MOVES.bloodStinger, MOVES.wingFeint, MOVES.nectarNeedle], description: "Pokémon Aguijón. Planea desde las sombras y perfora defensas con extremidades afiladas." },
-    9701: { id: 9701, name: "Alúa", type: "Bicho", baseHp: 20, catchRate: .64, moves: [MOVES.tackle, MOVES.silkEscape], description: "Pokémon Oruga Hoja. Se camufla entre el follaje y segrega un hilo pegajoso cuando peligra.", evolvesTo: 9702, evolveLevel: 14 },
-    9702: { id: 9702, name: "Capulúa", type: "Bicho", secondaryType: "Veneno", baseHp: 29, catchRate: .24, moves: [MOVES.silkEscape, MOVES.toxicThread, MOVES.poisonSting], description: "Pokémon Crisálida Tóxica. Sus glándulas producen un líquido capaz de paralizar a quien lo toque.", evolvesTo: 9703, evolveLevel: 28 },
-    9703: { id: 9703, name: "Maripulúa", type: "Bicho", secondaryType: "Veneno", baseHp: 38, catchRate: .09, moves: [MOVES.toxicThread, MOVES.hallucinationDust, MOVES.wingFeint], description: "Pokémon Polilla Ilusoria. Sus escamas venenosas provocan espejismos en los bosques sombríos." },
+    9001: { id: 9001, name: "Petrillo", type: "Roca", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Monstruo Semilla. Robusto y capaz de absorber minerales del suelo.", evolvesTo: 9002, evolveLevel: 16 },
+    9002: { id: 9002, name: "Musgólem", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Monstruo Coloso Musgo. Sus brazos de roca se afianzan al suelo mientras las enredaderas absorben humedad.", evolvesTo: 9003, evolveLevel: 32 },
+    9003: { id: 9003, name: "Terravórdeo", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Monstruo Montaña Viviente. Cada paso mezcla minerales y semillas; allí donde descansa, vuelve a brotar la vida." },
+    9101: { id: 9101, name: "Peyote", type: "Roca", secondaryType: "Tierra", baseHp: 30, catchRate: .52, moves: [MOVES.tackle, MOVES.stoneSeal], description: "Monstruo Adobe. Compacta capas de tierra y roca hasta convertirlas en una coraza orgullosamente sellada.", evolvesTo: 9102, evolveLevel: 18 },
+    9102: { id: 9102, name: "Prensalito", type: "Roca", secondaryType: "Tierra", baseHp: 44, catchRate: .16, moves: [MOVES.stoneSeal, MOVES.earthPress, MOVES.headbutt], description: "Monstruo Bloque Prensado. Protege su territorio con un cuerpo de densidad extraordinaria." },
+    9201: { id: 9201, name: "Criascama", type: "Dragón", baseHp: 23, catchRate: .42, moves: [MOVES.tackle, MOVES.scaleRush], description: "Monstruo Cría Dragón. Salta entre piedras mientras aprende a leer las corrientes de la pradera.", evolvesTo: 9202, evolveLevel: 18 },
+    9202: { id: 9202, name: "Aliscama", type: "Dragón", secondaryType: "Bicho", baseHp: 31, catchRate: .18, moves: [MOVES.scaleRush, MOVES.razorWing, MOVES.gust], description: "Monstruo Ala Cortadora. Sus antenas anticipan cada cambio del viento.", evolvesTo: 9203, evolveLevel: 36 },
+    9203: { id: 9203, name: "Dracoscama", type: "Dragón", secondaryType: "Bicho", baseHp: 42, catchRate: .07, moves: [MOVES.dragonRage, MOVES.razorWing, MOVES.prairieDive], description: "Monstruo Dragón Veloz. Custodia las praderas con maniobras imposibles de seguir a simple vista." },
+    9301: { id: 9301, name: "Luminio", type: "Psíquico", baseHp: 21, catchRate: .50, moves: [MOVES.confusion, MOVES.moonGleam], description: "Monstruo Brillo. Baila junto a fuentes tranquilas y deja sueños de paz a su paso.", evolvesTo: 9302, evolveLevel: 17 },
+    9302: { id: 9302, name: "Lunaria", type: "Psíquico", secondaryType: "Hada", baseHp: 30, catchRate: .20, moves: [MOVES.moonGleam, MOVES.dreamWhisper, MOVES.confusion], description: "Monstruo Susurro. Sus cintas luminosas guían a quien se pierde en sus propios pensamientos.", evolvesTo: 9303, evolveLevel: 34 },
+    9303: { id: 9303, name: "Lusdria", type: "Psíquico", secondaryType: "Hada", baseHp: 38, catchRate: .08, moves: [MOVES.dreamWhisper, MOVES.astralGuard, MOVES.moonGleam], description: "Monstruo Luminar. Purifica las pesadillas con una luz telepática serena." },
+    9401: { id: 9401, name: "Sombrañol", type: "Fantasma", baseHp: 22, catchRate: .48, moves: [MOVES.lick, MOVES.shadowPrank], description: "Monstruo Sombra. Apaga luces para jugar bromas y se esconde entre llamas violetas.", evolvesTo: 9402, evolveLevel: 20 },
+    9402: { id: 9402, name: "Penumbra", type: "Fantasma", secondaryType: "Siniestro", baseHp: 32, catchRate: .19, moves: [MOVES.shadowPrank, MOVES.lanternDrain, MOVES.lick], description: "Monstruo Sombra. Su farol absorbe energía para sostener su cuerpo nebuloso.", evolvesTo: 9403, evolveLevel: 38 },
+    9403: { id: 9403, name: "Tenebrantor", type: "Fantasma", secondaryType: "Siniestro", baseHp: 43, catchRate: .07, moves: [MOVES.lanternDrain, MOVES.eternalNight, MOVES.shadowPrank], description: "Monstruo Ánima Oscura. Sus faroles marcan caminos secretos entre las sombras." },
+    9501: { id: 9501, name: "Chispin", type: "Eléctrico", baseHp: 24, catchRate: .46, moves: [MOVES.quickAttack, MOVES.sparkSnout], description: "Monstruo Cerdito Eléctrico. Al correr, carga sus mejillas y deja pequeñas chispas entre las briznas de hierba.", evolvesTo: 9502, evolveLevel: 24 },
+    9502: { id: 9502, name: "Chisporc", type: "Eléctrico", secondaryType: "Volador", baseHp: 36, catchRate: .13, moves: [MOVES.sparkSnout, MOVES.stormWing, MOVES.gust], description: "Monstruo Cerdito Tormenta. Sus alas acumulan electricidad hasta arrastrar nubes cargadas a su paso." },
+    9601: { id: 9601, name: "Moskito", type: "Bicho", baseHp: 19, catchRate: .65, moves: [MOVES.bugBite, MOVES.nectarNeedle], description: "Monstruo Mosquito. Bebe néctar y savia con un aguijón aún más curioso que peligroso.", evolvesTo: 9602, evolveLevel: 15 },
+    9602: { id: 9602, name: "Zumkito", type: "Bicho", baseHp: 27, catchRate: .25, moves: [MOVES.nectarNeedle, MOVES.wingFeint, MOVES.bugBite], description: "Monstruo Zumbido. Convierte el néctar en energía y confunde a sus rivales con patrones de sus alas.", evolvesTo: 9603, evolveLevel: 30 },
+    9603: { id: 9603, name: "Sanguento", type: "Bicho", secondaryType: "Volador", baseHp: 37, catchRate: .10, moves: [MOVES.bloodStinger, MOVES.wingFeint, MOVES.nectarNeedle], description: "Monstruo Aguijón. Planea desde las sombras y perfora defensas con extremidades afiladas." },
+    9701: { id: 9701, name: "Alúa", type: "Bicho", baseHp: 20, catchRate: .64, moves: [MOVES.tackle, MOVES.silkEscape], description: "Monstruo Oruga Hoja. Se camufla entre el follaje y segrega un hilo pegajoso cuando peligra.", evolvesTo: 9702, evolveLevel: 14 },
+    9702: { id: 9702, name: "Capulúa", type: "Bicho", secondaryType: "Veneno", baseHp: 29, catchRate: .24, moves: [MOVES.silkEscape, MOVES.toxicThread, MOVES.poisonSting], description: "Monstruo Crisálida Tóxica. Sus glándulas producen un líquido capaz de paralizar a quien lo toque.", evolvesTo: 9703, evolveLevel: 28 },
+    9703: { id: 9703, name: "Maripulúa", type: "Bicho", secondaryType: "Veneno", baseHp: 38, catchRate: .09, moves: [MOVES.toxicThread, MOVES.hallucinationDust, MOVES.wingFeint], description: "Monstruo Polilla Ilusoria. Sus escamas venenosas provocan espejismos en los bosques sombríos." },
   };
 
   const SANPLEDEX_FAMILIES = Object.freeze([
@@ -305,20 +288,27 @@
   ]);
   const SANPLEDEX_IDS = Object.freeze(SANPLEDEX_FAMILIES.flatMap((family) => family.ids));
 
-  const SECRET_POWERHOUSE_IDS = [149, 248, 373, 376, 445, 635];
-  const SECRET_POKEMON_IDS = [...SECRET_POWERHOUSE_IDS, 399];
-  const LOCAL_DEX_SIZE = Object.keys(POKEMON).length - SECRET_POKEMON_IDS.length;
+  const LEGACY_MONSTER_REPLACEMENTS = Object.freeze({
+    1: 9001, 4: 9501, 7: 9301, 10: 9701, 13: 9601, 16: 9201, 19: 9001,
+    25: 9501, 43: 9001, 63: 9301, 81: 9501, 92: 9401, 96: 9301, 104: 9101,
+    133: 9701, 147: 9201, 149: 9203, 151: 9303, 248: 9102, 373: 9203,
+    376: 9502, 399: 9001, 445: 9203, 635: 9403,
+  });
+  const SECRET_MONSTER_IDS = Object.freeze([9003, 9102, 9203, 9303, 9403, 9502, 9603, 9703]);
+  const LOCAL_DEX_SIZE = SANPLEDEX_IDS.length;
 
-  const STARTERS = [POKEMON[1], POKEMON[4], POKEMON[7], POKEMON[9001]];
+  const STARTERS = [POKEMON[9001], POKEMON[9201], POKEMON[9301], POKEMON[9501]];
   const WILD_TABLE = [
-    { id: 16, weight: 24 }, { id: 19, weight: 22 }, { id: 10, weight: 18 },
-    { id: 13, weight: 15 }, { id: 43, weight: 14 }, { id: 9701, weight: 8 },
-    { id: 25, weight: 7 }, { id: 9501, weight: 6 }, { id: 9001, weight: 4 },
+    { id: 9701, weight: 22 }, { id: 9601, weight: 20 }, { id: 9501, weight: 16 },
+    { id: 9001, weight: 14 }, { id: 9101, weight: 10 }, { id: 9301, weight: 8 },
+    { id: 9401, weight: 6 }, { id: 9201, weight: 4 },
   ];
 
   const PRISM_WILD_TABLE = [
-    { id: 92, weight: 22 }, { id: 63, weight: 19 }, { id: 81, weight: 18 },
-    { id: 96, weight: 16 }, { id: 104, weight: 13 }, { id: 9301, weight: 8 }, { id: 133, weight: 8 }, { id: 9401, weight: 7 }, { id: 147, weight: 4 },
+    { id: 9401, weight: 22 }, { id: 9301, weight: 18 }, { id: 9402, weight: 14 },
+    { id: 9302, weight: 12 }, { id: 9201, weight: 12 }, { id: 9202, weight: 8 },
+    { id: 9101, weight: 8 }, { id: 9501, weight: 8 }, { id: 9602, weight: 7 },
+    { id: 9702, weight: 7 }, { id: 9102, weight: 4 },
   ];
 
   const BUILDING_SPRITES = {
@@ -431,7 +421,9 @@
   const carPositions = [];
 
   const defaultState = () => ({
-    version: 6, mapRevision: MAP_REVISION, started: false, starterChosen: false,
+    version: 7, mapRevision: MAP_REVISION, started: false, starterChosen: false,
+    doctorPotatoIntroPending: false, doctorPotatoIntroSeen: false,
+    fragmentCinematicSeen: false,
     worldX: NORMAL_START.x, worldY: NORMAL_START.y, direction: NORMAL_START.direction,
     distance: 0, grassDistance: 0, balls: 6, trainerLevel: 1,
     activeTeamIndex: 0, caught: [], seen: [], team: [], questStage: 0,
@@ -452,6 +444,7 @@
   let inputLocked = false;
   let dialogQueue = [];
   let dialogCallback = null;
+  let dialogPresentation = null;
   let audioContext = null;
   let lastFrameTime = 0;
   let animationTime = 0;
@@ -489,6 +482,8 @@
   let activeShopType = "mart";
   let lastShopFocus = null;
   let starterIntroActive = false;
+  let fragmentCinematicActive = false;
+  let doctorPotatoScene = null;
   const mazeMotion = { forward: 0, strafe: 0, turn: 0 };
   const input = {
     up: false, down: false, left: false, right: false,
@@ -523,6 +518,13 @@
     audio.loop = key === "chase" || key === "breathing";
     return [key, audio];
   }));
+  let loadedDialogMusicSource = null;
+  let pendingDialogMusicSource = null;
+  let dialogMusicBuffer = null;
+  let dialogMusicBufferPromise = null;
+  let dialogMusicSourceNode = null;
+  let dialogMusicGainNode = null;
+  let activeDialogMusicSource = null;
   const activeScareClips = new Set();
   let buildingSheetReady = false;
   let playerSheetReady = false;
@@ -564,12 +566,16 @@
     starterIntroScreen: $("#starterIntroScreen"), starterIntroVideo: $("#starterIntroVideo"),
     starterIntroStatus: $("#starterIntroStatus"), playStarterIntro: $("#playStarterIntro"),
     skipStarterIntro: $("#skipStarterIntro"),
+    fragmentCinematicScreen: $("#fragmentCinematicScreen"), fragmentCinematicVideo: $("#fragmentCinematicVideo"),
+    fragmentCinematicStatus: $("#fragmentCinematicStatus"), playFragmentCinematic: $("#playFragmentCinematic"),
+    skipFragmentCinematic: $("#skipFragmentCinematic"),
     continueButton: $("#continueButton"), closeStarter: $("#closeStarter"), canvas: $("#worldCanvas"),
     assetNotice: $("#assetNotice"), runBadge: $("#runBadge"), interactPrompt: $("#interactPrompt"),
     areaToast: $("#areaToast"), flashOverlay: $("#flashOverlay"), areaName: $("#areaName"),
     trainerLevel: $("#trainerLevel"), ballCount: $("#ballCount"), caughtCount: $("#caughtCount"),
     questPill: $("#questPill"), dialogBox: $("#dialogBox"), dialogAvatar: $("#dialogAvatar"),
-    dialogText: $("#dialogText"), dialogNext: $("#dialogNext"), teamDrawer: $("#teamDrawer"),
+    dialogSpeaker: $("#dialogSpeaker"), dialogText: $("#dialogText"),
+    dialogPortrait: $("#dialogPortrait"), dialogNext: $("#dialogNext"), teamDrawer: $("#teamDrawer"),
     drawerScrim: $("#drawerScrim"), teamList: $("#teamList"), drawerCaughtCount: $("#drawerCaughtCount"),
     dexProgress: $("#dexProgress"), teamButton: $("#teamButton"), closeTeamButton: $("#closeTeamButton"),
     sanpledexButton: $("#sanpledexButton"), sanpledexModal: $("#sanpledexModal"),
@@ -758,12 +764,11 @@
   }
 
   function chooseSecretPokemonId() {
-    if (Math.random() < .2) return 399;
-    return SECRET_POWERHOUSE_IDS[Math.floor(Math.random() * SECRET_POWERHOUSE_IDS.length)];
+    return SECRET_MONSTER_IDS[Math.floor(Math.random() * SECRET_MONSTER_IDS.length)];
   }
 
   function currentSecretPokemonId() {
-    if (!SECRET_POKEMON_IDS.includes(state.secretPokemonId)) state.secretPokemonId = chooseSecretPokemonId();
+    if (!SECRET_MONSTER_IDS.includes(state.secretPokemonId)) state.secretPokemonId = chooseSecretPokemonId();
     return state.secretPokemonId;
   }
 
@@ -980,22 +985,16 @@
     if (motion) element.dataset.pokemonMotion = motion;
     else delete element.dataset.pokemonMotion;
   }
-  function artworkUrl(id) { return customPokemonAsset(id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`; }
-  function iconUrl(id) { return customPokemonAsset(id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/${id}.png`; }
-  function frontSpriteUrl(id) { return customPokemonAsset(id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif`; }
-  function backSpriteUrl(id) { return customPokemonAsset(id, "back") || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/back/${id}.gif`; }
+  function artworkUrl(id) { return customPokemonAsset(id) || ""; }
+  function iconUrl(id) { return customPokemonAsset(id) || ""; }
+  function frontSpriteUrl(id) { return customPokemonAsset(id) || ""; }
+  function backSpriteUrl(id) { return customPokemonAsset(id, "back") || ""; }
   function itemSpriteUrl(name) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${name}.png`; }
   function currentWorldWidth() { return state.dimension === "prism" ? PRISM_WIDTH : WORLD_WIDTH; }
   function currentWorldHeight() { return state.dimension === "prism" ? PRISM_HEIGHT : WORLD_HEIGHT; }
 
   function attachSpriteFallback(image, id, back = false) {
-    if (isCustomPokemon(id)) { image.onerror = null; return; }
-    image.onerror = () => {
-      image.onerror = null;
-      image.src = back
-        ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/${id}.png`
-        : `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
-    };
+    image.onerror = null;
   }
 
   function worldAssetSource(asset) {
@@ -1089,7 +1088,7 @@
     const interior = (CITY_MAP.doors || [])
       .map((door) => NPC_DEFS[door.npc]?.sprite)
       .filter((sprite) => typeof sprite === "string" && sprite.startsWith("npc-"));
-    return new Set([...interior, ...exterior]);
+    return new Set([...interior, ...exterior, "doctor-potato"]);
   }
 
   function updateNpcDeploymentDataset() {
@@ -1108,6 +1107,10 @@
     document.documentElement.dataset.npcRosterCount = String(records.length);
     document.documentElement.dataset.npcRosterLoaded = String(ready);
     document.documentElement.dataset.npcRosterReady = failed ? "error" : (ready === records.length ? "true" : "loading");
+    const doctorPotato = npcRosterSheets.get("doctor-potato");
+    document.documentElement.dataset.doctorPotatoSpriteReady = doctorPotato?.failed
+      ? "error"
+      : String(Boolean(doctorPotato?.ready));
     updateNpcDeploymentDataset();
   }
 
@@ -2190,8 +2193,15 @@
     return evolutions;
   }
 
+  function normalizeMonsterId(id) {
+    const numericId = Number(id);
+    if (POKEMON[numericId]) return numericId;
+    return LEGACY_MONSTER_REPLACEMENTS[numericId] || null;
+  }
+
   function hydratePokemon(member) {
-    const species = POKEMON[member.id];
+    if (!member || typeof member !== "object") return null;
+    const species = POKEMON[normalizeMonsterId(member.id)];
     if (!species) return null;
     const level = clamp(Number(member.level) || 1, 1, 50);
     const storedMaxHp = Number(member.maxHp);
@@ -2221,8 +2231,8 @@
       const saved = JSON.parse(raw);
       const next = { ...defaultState(), ...saved };
       next.team = Array.isArray(saved.team) ? saved.team.map(hydratePokemon).filter(Boolean).slice(0, MAX_TEAM) : [];
-      next.caught = Array.isArray(saved.caught) ? [...new Set(saved.caught.filter((id) => POKEMON[id]))] : [];
-      next.seen = Array.isArray(saved.seen) ? [...new Set(saved.seen.filter((id) => POKEMON[id]))] : [];
+      next.caught = Array.isArray(saved.caught) ? [...new Set(saved.caught.map(normalizeMonsterId).filter(Boolean))] : [];
+      next.seen = Array.isArray(saved.seen) ? [...new Set(saved.seen.map(normalizeMonsterId).filter(Boolean))] : [];
       next.worldX = clamp(Number(saved.worldX) || NORMAL_START.x, 35, WORLD_WIDTH - 35);
       next.worldY = clamp(Number(saved.worldY) || NORMAL_START.y, 45, WORLD_HEIGHT - 30);
       if (saved.mapRevision !== MAP_REVISION) {
@@ -2235,6 +2245,9 @@
       }
       next.buildingSkins = saved.buildingSkins && typeof saved.buildingSkins === "object" ? { ...saved.buildingSkins } : {};
       next.gifts = saved.gifts && typeof saved.gifts === "object" ? { ...saved.gifts } : {};
+      next.doctorPotatoIntroSeen = Boolean(saved.doctorPotatoIntroSeen || next.gifts.doctorPotato);
+      next.doctorPotatoIntroPending = Boolean(saved.doctorPotatoIntroPending) && !next.doctorPotatoIntroSeen;
+      next.fragmentCinematicSeen = Boolean(saved.fragmentCinematicSeen);
       next.inventory = { ...defaultState().inventory, ...(saved.inventory || {}) };
       const defaultBlackMarket = defaultState().blackMarket;
       const savedBlackMarket = saved.blackMarket && typeof saved.blackMarket === "object" ? saved.blackMarket : {};
@@ -2251,7 +2264,7 @@
         next.blackMarket.purchases[key] = clamp(Math.floor(Number(savedBlackMarketPurchases[key]) || 0), 0, limit);
       });
       next.collectedObjects = Array.isArray(saved.collectedObjects) ? [...new Set(saved.collectedObjects)] : [];
-      next.secretPokemonId = POKEMON[saved.secretPokemonId] ? Number(saved.secretPokemonId) : null;
+      next.secretPokemonId = normalizeMonsterId(saved.secretPokemonId);
       next.interior = saved.interior === "maintenance" ? "maintenance" : null;
       next.interiorData = null;
       next.maintenanceReturn = saved.maintenanceReturn && Number.isFinite(saved.maintenanceReturn.x) && Number.isFinite(saved.maintenanceReturn.y)
@@ -2339,6 +2352,12 @@
 
   function startNewGame() {
     requestGameFullscreen();
+    fragmentCinematicActive = false;
+    elements.fragmentCinematicVideo.pause();
+    elements.fragmentCinematicScreen.classList.add("hidden");
+    doctorPotatoScene = null;
+    document.documentElement.dataset.doctorPotatoScene = "idle";
+    elements.worldScreen.classList.remove("cinematic-dialog");
     state = defaultState();
     elements.starterModal.classList.remove("hidden");
     playTone(560, .08, "square", .035);
@@ -2386,29 +2405,88 @@
     if (playback?.then) playback.then(() => elements.playStarterIntro.classList.add("hidden")).catch(() => {});
   }
 
+  function startFragmentCinematic() {
+    if (fragmentCinematicActive || state.fragmentCinematicSeen || state.inventory.prismShards < 3 || !state.started) return false;
+    fragmentCinematicActive = true;
+    inputLocked = true;
+    clearDirectionalInput();
+    closeSanpledex(false); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop();
+    stopBackgroundMusic();
+    elements.fragmentCinematicScreen.classList.remove("hidden");
+    elements.playFragmentCinematic.classList.add("hidden");
+    elements.fragmentCinematicStatus.textContent = "Una presencia desconocida despierta al otro lado del portal.";
+    elements.fragmentCinematicVideo.muted = !state.sound;
+    try { elements.fragmentCinematicVideo.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
+    document.documentElement.dataset.fragmentCinematic = "playing";
+    const playback = elements.fragmentCinematicVideo.play();
+    if (playback?.catch) {
+      playback.catch(() => {
+        if (!fragmentCinematicActive) return;
+        document.documentElement.dataset.fragmentCinematic = "waiting";
+        elements.playFragmentCinematic.classList.remove("hidden");
+        elements.fragmentCinematicStatus.textContent = "Pulsa reproducir para contemplar la visión de los fragmentos.";
+      });
+    }
+    return true;
+  }
+
+  function resumeFragmentCinematic() {
+    if (!fragmentCinematicActive) return;
+    elements.fragmentCinematicVideo.muted = !state.sound;
+    const playback = elements.fragmentCinematicVideo.play();
+    if (playback?.then) {
+      playback.then(() => {
+        document.documentElement.dataset.fragmentCinematic = "playing";
+        elements.playFragmentCinematic.classList.add("hidden");
+        elements.fragmentCinematicStatus.textContent = "Una presencia desconocida despierta al otro lado del portal.";
+      }).catch(() => {});
+    }
+  }
+
+  function finishFragmentCinematic() {
+    if (!fragmentCinematicActive) return;
+    fragmentCinematicActive = false;
+    elements.fragmentCinematicVideo.pause();
+    elements.fragmentCinematicScreen.classList.add("hidden");
+    elements.playFragmentCinematic.classList.add("hidden");
+    state.fragmentCinematicSeen = true;
+    inputLocked = false;
+    document.documentElement.dataset.fragmentCinematic = "complete";
+    saveGame();
+    if (state.sound) startBackgroundMusic();
+    showDialog([
+      "La visión se desvanece, pero su llamada permanece dentro de los fragmentos.",
+      "El portal del campo de fútbol ya puede abrirse.",
+    ], "◇", () => showAreaToast("PORTAL PRISMA DESBLOQUEADO"));
+  }
+
+  function beginWorldEvents(onComplete) {
+    const afterDoctorPotato = () => {
+      if (!startFragmentCinematic() && typeof onComplete === "function") onComplete();
+    };
+    if (!startDoctorPotatoIntro(afterDoctorPotato)) afterDoctorPotato();
+  }
+
   function finishStarterIntro() {
     if (!starterIntroActive) return;
-    const starterName = speciesOf(state.team[0])?.name || "Tu Pokémon";
+    primeDialogMusic(DOCTOR_POTATO_THEME_URL);
     starterIntroActive = false;
     elements.starterIntroVideo.pause();
     elements.starterIntroScreen.classList.add("hidden");
     state.started = true;
+    state.doctorPotatoIntroPending = true;
+    state.doctorPotatoIntroSeen = false;
     showWorld();
     saveGame();
     playJingle("success");
-    showDialog([
-      `¡${starterName} será tu compañero por la ciudad!`,
-      "Mantén SHIFT para correr. Ethan usa animaciones distintas para caminar y correr en las cuatro direcciones.",
-      "El botón # abre la cuadrícula: pulsa una casilla para marcarla como transitable, bloqueada, puerta, hierba o evento.",
-      "Cuando quieras indicarme cambios puedes copiar una coordenada, por ejemplo: C18, F21 = puerta.",
-    ], "P", () => showAreaToast("CIUDAD POKÉMON"));
+    beginWorldEvents(showOpeningTutorial);
   }
 
   function continueGame() {
     requestGameFullscreen();
     if (!loadGame()) return;
     showWorld();
-    showAreaToast("CIUDAD POKÉMON");
+    beginWorldEvents(() => showAreaToast("CIUDAD POKÉMON"));
   }
 
   function showWorld() {
@@ -2455,12 +2533,131 @@
     window.setTimeout(() => elements.areaToast.classList.add("hidden"), 1850);
   }
 
-  function showDialog(messages, avatar = "!", callback = null) {
+  function prepareDialogMusic(source) {
+    if (loadedDialogMusicSource === source && dialogMusicBuffer) return Promise.resolve(dialogMusicBuffer);
+    if (pendingDialogMusicSource === source && dialogMusicBufferPromise) return dialogMusicBufferPromise;
+    const context = ensureAudio();
+    if (!context) return Promise.resolve(null);
+    pendingDialogMusicSource = source;
+    dialogMusicBufferPromise = fetch(source)
+      .then((response) => {
+        if (!response.ok) throw new Error(`No se pudo cargar el tema de diálogo: ${response.status}`);
+        return response.arrayBuffer();
+      })
+      .then((encodedAudio) => context.decodeAudioData(encodedAudio))
+      .then((decodedAudio) => {
+        if (pendingDialogMusicSource !== source) return null;
+        loadedDialogMusicSource = source;
+        dialogMusicBuffer = decodedAudio;
+        document.documentElement.dataset.dialogMusic = activeDialogMusicSource ? "ready" : "primed";
+        return decodedAudio;
+      })
+      .catch((error) => {
+        if (pendingDialogMusicSource === source) {
+          document.documentElement.dataset.dialogMusic = "error";
+          document.documentElement.dataset.dialogMusicError = error?.name || "DecodeError";
+        }
+        return null;
+      });
+    return dialogMusicBufferPromise;
+  }
+
+  function playDialogMusic(source) {
+    if (typeof source !== "string" || !source) return;
+    stopBackgroundMusic();
+    activeDialogMusicSource = source;
+    if (!state.sound) {
+      document.documentElement.dataset.dialogMusic = "muted";
+      return;
+    }
+    document.documentElement.dataset.dialogMusic = "starting";
+    prepareDialogMusic(source).then((buffer) => {
+      if (!buffer || activeDialogMusicSource !== source || !state.sound) return;
+      const context = ensureAudio();
+      if (!context) return;
+      if (dialogMusicSourceNode) {
+        try { dialogMusicSourceNode.stop(); } catch (error) { /* already stopped */ }
+        dialogMusicSourceNode.disconnect();
+      }
+      if (dialogMusicGainNode) dialogMusicGainNode.disconnect();
+      dialogMusicGainNode = context.createGain();
+      dialogMusicGainNode.gain.value = .22;
+      dialogMusicGainNode.connect(context.destination);
+      dialogMusicSourceNode = context.createBufferSource();
+      dialogMusicSourceNode.buffer = buffer;
+      dialogMusicSourceNode.loop = true;
+      dialogMusicSourceNode.connect(dialogMusicGainNode);
+      dialogMusicSourceNode.start(0);
+      document.documentElement.dataset.dialogMusic = "playing";
+      delete document.documentElement.dataset.dialogMusicError;
+    });
+  }
+
+  function primeDialogMusic(source) {
+    if (typeof source !== "string" || !source) return;
+    prepareDialogMusic(source);
+  }
+
+  function stopDialogMusic(resumeBackground = true) {
+    const hadDialogMusic = Boolean(activeDialogMusicSource);
+    activeDialogMusicSource = null;
+    if (dialogMusicSourceNode) {
+      try { dialogMusicSourceNode.stop(); } catch (error) { /* already stopped */ }
+      dialogMusicSourceNode.disconnect();
+      dialogMusicSourceNode = null;
+    }
+    if (dialogMusicGainNode) {
+      dialogMusicGainNode.disconnect();
+      dialogMusicGainNode = null;
+    }
+    if (hadDialogMusic) document.documentElement.dataset.dialogMusic = "stopped";
+    if (hadDialogMusic && resumeBackground && state.sound && state.started && !elements.worldScreen.classList.contains("hidden")) {
+      startBackgroundMusic();
+    }
+  }
+
+  function applyDialogPresentation(options = {}) {
+    const hasPortrait = typeof options.portrait === "string" && options.portrait.length > 0;
+    const hasSpeaker = typeof options.speaker === "string" && options.speaker.length > 0;
+    dialogPresentation = options;
+    elements.dialogBox.classList.toggle("has-portrait", hasPortrait);
+    elements.worldScreen.classList.toggle("cinematic-dialog", Boolean(options.cinematic));
+    elements.dialogSpeaker.textContent = hasSpeaker ? options.speaker : "";
+    elements.dialogSpeaker.classList.toggle("hidden", !hasSpeaker);
+    elements.dialogPortrait.classList.toggle("hidden", !hasPortrait);
+    if (options.music) playDialogMusic(options.music);
+    if (hasPortrait) {
+      elements.dialogPortrait.alt = options.portraitAlt || `Retrato de ${options.speaker || "personaje"}`;
+      elements.dialogPortrait.onload = () => { document.documentElement.dataset.dialogPortraitReady = "true"; };
+      elements.dialogPortrait.onerror = () => { document.documentElement.dataset.dialogPortraitReady = "error"; };
+      document.documentElement.dataset.dialogPortraitReady = "loading";
+      elements.dialogPortrait.src = options.portrait;
+    } else {
+      elements.dialogPortrait.removeAttribute("src");
+      elements.dialogPortrait.alt = "";
+      delete document.documentElement.dataset.dialogPortraitReady;
+    }
+  }
+
+  function clearDialogPresentation() {
+    stopDialogMusic();
+    dialogPresentation = null;
+    elements.dialogBox.classList.remove("has-portrait");
+    elements.worldScreen.classList.remove("cinematic-dialog");
+    elements.dialogSpeaker.textContent = "";
+    elements.dialogSpeaker.classList.add("hidden");
+    elements.dialogPortrait.classList.add("hidden");
+    elements.dialogPortrait.removeAttribute("src");
+    elements.dialogPortrait.alt = "";
+  }
+
+  function showDialog(messages, avatar = "!", callback = null, options = {}) {
     dialogQueue = Array.isArray(messages) ? [...messages] : [String(messages)];
     dialogCallback = callback;
     inputLocked = true;
     clearDirectionalInput();
     elements.dialogAvatar.textContent = avatar;
+    applyDialogPresentation(options);
     elements.dialogBox.classList.remove("hidden");
     advanceDialog();
   }
@@ -2472,10 +2669,102 @@
       return;
     }
     elements.dialogBox.classList.add("hidden");
+    clearDialogPresentation();
     inputLocked = false;
     const callback = dialogCallback;
     dialogCallback = null;
     if (callback) callback();
+  }
+
+  function showOpeningTutorial() {
+    const starterName = speciesOf(state.team[0])?.name || "Tu Pokémon";
+    showDialog([
+      `¡${starterName} será tu compañero por la ciudad!`,
+      "Mantén SHIFT para correr. Ethan usa animaciones distintas para caminar y correr en las cuatro direcciones.",
+      "El botón # abre la cuadrícula: pulsa una casilla para marcarla como transitable, bloqueada, puerta, hierba o evento.",
+      "Cuando quieras indicarme cambios puedes copiar una coordenada, por ejemplo: C18, F21 = puerta.",
+    ], "P", () => showAreaToast("CIUDAD POKÉMON"));
+  }
+
+  function setDoctorPotatoScenePhase(phase) {
+    if (!doctorPotatoScene) return;
+    doctorPotatoScene.phase = phase;
+    doctorPotatoScene.phaseElapsed = 0;
+    document.documentElement.dataset.doctorPotatoScene = phase;
+    document.documentElement.dataset.doctorPotatoSlowMotion = String(phase === "exiting");
+  }
+
+  function startDoctorPotatoIntro(onComplete = showOpeningTutorial) {
+    if (!state.doctorPotatoIntroPending || doctorPotatoScene) return false;
+    clearDirectionalInput();
+    inputLocked = true;
+    state.direction = "right";
+    camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
+    camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+    const viewRight = camera.x + VIEW_WIDTH;
+    doctorPotatoScene = {
+      x: viewRight + 58,
+      y: state.worldY,
+      targetX: state.worldX + 70,
+      exitX: viewRight + 58,
+      direction: "left",
+      phase: "entering",
+      phaseElapsed: 0,
+      animationElapsed: 0,
+      onComplete,
+    };
+    document.documentElement.dataset.doctorPotatoScene = "entering";
+    document.documentElement.dataset.doctorPotatoSlowMotion = "false";
+    return true;
+  }
+
+  function beginDoctorPotatoExit() {
+    if (!doctorPotatoScene) return;
+    inputLocked = true;
+    clearDirectionalInput();
+    doctorPotatoScene.direction = "right";
+    setDoctorPotatoScenePhase("exiting");
+  }
+
+  function completeDoctorPotatoIntro() {
+    if (!doctorPotatoScene) return;
+    const onComplete = doctorPotatoScene.onComplete;
+    doctorPotatoScene = null;
+    state.doctorPotatoIntroPending = false;
+    state.doctorPotatoIntroSeen = true;
+    state.gifts.doctorPotato = true;
+    inputLocked = false;
+    document.documentElement.dataset.doctorPotatoScene = "complete";
+    document.documentElement.dataset.doctorPotatoSlowMotion = "false";
+    delete document.documentElement.dataset.doctorPotatoX;
+    saveGame();
+    if (typeof onComplete === "function") onComplete();
+  }
+
+  function updateDoctorPotatoCutscene(deltaSeconds) {
+    if (!doctorPotatoScene) return;
+    const scene = doctorPotatoScene;
+    scene.phaseElapsed += deltaSeconds;
+    scene.animationElapsed += deltaSeconds * 1000;
+    if (scene.phase === "entering") {
+      scene.x = Math.max(scene.targetX, scene.x - 185 * deltaSeconds);
+      if (scene.x <= scene.targetX) setDoctorPotatoScenePhase("pausing");
+    } else if (scene.phase === "pausing" && scene.phaseElapsed >= .42) {
+      setDoctorPotatoScenePhase("dialog");
+      showDialog([
+        "¿QUÉ MIERDAS HACES AQUÍ, NIÑATO?!! ¡DAME UN POCO DE PELLOTE Y VETE!",
+      ], "D", beginDoctorPotatoExit, {
+        speaker: "Doctor Potato",
+        portrait: DOCTOR_POTATO_PORTRAIT_URL,
+        portraitAlt: "Retrato del Doctor Potato",
+        cinematic: true,
+        music: DOCTOR_POTATO_THEME_URL,
+      });
+    } else if (scene.phase === "exiting") {
+      scene.x += 72 * deltaSeconds;
+      if (scene.x >= scene.exitX) completeDoctorPotatoIntro();
+    }
+    if (doctorPotatoScene) document.documentElement.dataset.doctorPotatoX = doctorPotatoScene.x.toFixed(1);
   }
 
   function pointInPolygon(x, y, polygon) {
@@ -2807,7 +3096,7 @@
       }
       renderHud(); saveGame(); showDialog(messages, "+");
     }
-    if (poi.id === "cafe") showDialog(["Cafetería Jasmín: Los entrenadores dicen que se ve algún Pikachu cerca del campo de fútbol."], "☕");
+    if (poi.id === "cafe") showDialog(["Cafetería Jasmín: Los entrenadores dicen que se ve algún Chispin cerca del campo de fútbol."], "☕");
     if (poi.id === "uned") showDialog([`UNED Sevilla: Has avistado ${state.seen.length} especies y capturado ${state.caught.length}.`, "Desde aquí se ven los bloques de Memphis, Persépolis y Siracusa."], "U");
     if (poi.id === "school") showDialog(["CEIP Miguel Hernández: Al otro lado de Jerusalén comienza el corazón de San Pablo."], "i");
     if (poi.id === "field") showDialog(["Campo de San Pablo: La zona verde atrae Pokémon de tipo Planta, Bicho y Volador."], "⚽");
@@ -3115,8 +3404,8 @@
     playJingle("capture");
     renderHud(); saveGame();
     const objective = state.secretPokemonSaved
-      ? "El Pokémon ya está a salvo, pero el Mercado Negro sigue abierto entre los muros."
-      : "Resuelve el laberinto y derrota al Pokémon invertido para liberarlo.";
+      ? "El monstruo ya está a salvo, pero el Mercado Negro sigue abierto entre los muros."
+      : "Resuelve el laberinto y derrota al monstruo invertido para liberarlo.";
     const noiseRule = noiseMode === "microphone"
       ? "La Sombra oye el ruido de tu habitación y se mueve más rápido cuando te escucha."
       : "Modo sin micrófono activo: la Sombra reaccionará a tus pasos, giros y carreras.";
@@ -3425,7 +3714,7 @@
       ? Math.hypot(maze.playerX - (objectiveTarget.x + .5), maze.playerY - (objectiveTarget.y + .5))
       : Infinity;
     const signal = objectiveDistance < 2.2 ? "AQUÍ" : objectiveDistance < 5 ? "INTENSA" : objectiveDistance < 9 ? "FUERTE" : objectiveDistance < 14 ? "MEDIA" : "DÉBIL";
-    if (elements.mazeObjective) elements.mazeObjective.textContent = `${state.secretPokemonSaved ? "MERCADO" : "POKÉMON"} · ${signal}`;
+    if (elements.mazeObjective) elements.mazeObjective.textContent = `${state.secretPokemonSaved ? "MERCADO" : "MONSTRUO"} · ${signal}`;
     if (elements.noiseLabel) elements.noiseLabel.textContent = microphoneFallbackMode ? "MOVIMIENTO" : "MICRÓFONO";
     document.documentElement.dataset.prismNoiseMode = microphoneFallbackMode ? "movement" : "microphone";
     document.documentElement.dataset.prismMarketCheckpoint = String(Boolean(maze.marketReached));
@@ -4318,6 +4607,44 @@
     context.restore();
   }
 
+  function drawDoctorPotato(context) {
+    if (!doctorPotatoScene) return;
+    const scene = doctorPotatoScene;
+    const doctorPotatoSprite = npcRosterSheets.get("doctor-potato");
+    const doctorPotatoSheet = doctorPotatoSprite?.ready ? doctorPotatoSprite.image : null;
+    const rows = { down: 0, left: 1, right: 2, up: 3 };
+    const moving = scene.phase === "entering" || scene.phase === "exiting";
+    const frameDuration = scene.phase === "exiting" ? 520 : 155;
+    const frame = moving ? Math.floor(scene.animationElapsed / frameDuration) % 4 : 0;
+    const row = rows[scene.direction] || 0;
+    const drawSprite = (x, alpha = 1) => {
+      context.save();
+      context.globalAlpha = alpha;
+      if (doctorPotatoSheet) {
+        context.drawImage(doctorPotatoSheet, frame * SPRITE_CELL_SIZE, row * SPRITE_CELL_SIZE,
+          SPRITE_CELL_SIZE, SPRITE_CELL_SIZE, Math.round(x) - 34, Math.round(scene.y) - 64, 68, 68);
+      } else {
+        context.fillStyle = "#f1f4ed";
+        context.fillRect(x - 18, scene.y - 36, 36, 34);
+        context.fillStyle = "#9b633c";
+        context.beginPath(); context.arc(x, scene.y - 44, 21, 0, Math.PI * 2); context.fill();
+        context.fillStyle = "#2f5135";
+        context.beginPath(); context.moveTo(x, scene.y - 66); context.lineTo(x - 12, scene.y - 73);
+        context.lineTo(x - 4, scene.y - 60); context.lineTo(x + 12, scene.y - 73); context.closePath(); context.fill();
+      }
+      context.restore();
+    };
+    context.save();
+    context.fillStyle = "rgba(22,43,34,.25)";
+    context.beginPath(); context.ellipse(Math.round(scene.x), Math.round(scene.y + 1), 19, 6, 0, 0, Math.PI * 2); context.fill();
+    if (scene.phase === "exiting") {
+      drawSprite(scene.x - 13, .08);
+      drawSprite(scene.x - 7, .14);
+    }
+    drawSprite(scene.x);
+    context.restore();
+  }
+
   function worldAssetInView(asset, bounds, margin = 48) {
     if (Number(asset.rotation)) {
       const radius = Math.max(Number(asset.w), Number(asset.h)) / 2;
@@ -4481,6 +4808,13 @@
       priority: 1,
       draw: () => drawWorldNpc(context, npc),
     }));
+    if (doctorPotatoScene) {
+      entities.push({
+        y: doctorPotatoScene.y,
+        priority: 1,
+        draw: () => drawDoctorPotato(context),
+      });
+    }
     worldObjects
       .filter((object) => object.dimension === state.dimension
         && !state.collectedObjects.includes(object.id)
@@ -4679,8 +5013,8 @@
     if (object.crystal) {
       const shards = state.inventory.prismShards;
       const messages = [`Has encontrado un Fragmento Prisma (${shards} / 3).`];
-      if (shards >= 3) messages.push("Los tres fragmentos vibran a la vez. El portal del campo de fútbol ya puede abrirse.");
-      showDialog(messages, "◇");
+      if (shards >= 3) messages.push("Los tres fragmentos vibran a la vez. Una visión atraviesa el umbral…");
+      showDialog(messages, "◇", shards >= 3 ? startFragmentCinematic : null);
     } else showAreaToast(`HAS ENCONTRADO: ${object.name.toUpperCase()}`);
     return true;
   }
@@ -5147,6 +5481,7 @@
     const deltaSeconds = lastFrameTime ? clamp((timestamp - lastFrameTime) / 1000, 0, .05) : 0;
     lastFrameTime = timestamp;
     if (!elements.worldScreen.classList.contains("hidden")) {
+      updateDoctorPotatoCutscene(deltaSeconds);
       updateMovement(deltaSeconds);
       updateCamera(deltaSeconds);
       drawWorld();
@@ -5209,7 +5544,7 @@
       elements.titleScreen.classList.add("hidden");
       elements.battleScreen.classList.remove("hidden");
       elements.battleScreen.classList.add("prism-battle");
-      elements.battleLabel.textContent = "RESCATE · POKÉMON SECRETO";
+      elements.battleLabel.textContent = "RESCATE · MONSTRUO SECRETO";
       elements.flashOverlay.classList.remove("encounter");
       inputLocked = false;
       renderBattle();
@@ -5524,7 +5859,7 @@
 
     setBattleMessage(joinedTeam
       ? `¡${speciesOf(rescued).name} invertido está a salvo y ha decidido acompañarte!`
-      : `¡${speciesOf(rescued).name} invertido está a salvo! Queda registrado en tu Pokédex.`);
+      : `¡${speciesOf(rescued).name} invertido está a salvo! Queda registrado en tu Sanpledex.`);
     await wait(1250);
 
     stopMicrophone();
@@ -5542,7 +5877,7 @@
     finishBattle();
     showDialog([
       "El laberinto se deshace y el portal te devuelve a San Pablo.",
-      `Has salvado a ${speciesOf(rescued).name}, el Pokémon secreto de colores invertidos.`,
+      `Has salvado a ${speciesOf(rescued).name}, el monstruo secreto de colores invertidos.`,
     ], "◇", () => showAreaToast(`${speciesOf(rescued).name.toUpperCase()} RESCATADO`));
   }
 
@@ -5745,14 +6080,18 @@
   function toggleSound() {
     state.sound = !state.sound;
     elements.starterIntroVideo.muted = !state.sound;
+    elements.fragmentCinematicVideo.muted = !state.sound;
     if (!state.sound) {
       stopHorrorAudio();
       stopBackgroundMusic();
+      stopDialogMusic(false);
+      if (dialogPresentation?.music) document.documentElement.dataset.dialogMusic = "muted";
     }
     renderHud();
     if (state.sound) {
       playJingle("success");
-      if (!elements.worldScreen.classList.contains("hidden") && state.started) startBackgroundMusic();
+      if (dialogPresentation?.music) playDialogMusic(dialogPresentation.music);
+      else if (!elements.worldScreen.classList.contains("hidden") && state.started) startBackgroundMusic();
     }
     saveGame();
   }
@@ -5881,6 +6220,16 @@
       }
       return;
     }
+    if (fragmentCinematicActive) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finishFragmentCinematic();
+      } else if ((event.key === " " || event.key === "Enter") && elements.fragmentCinematicVideo.paused) {
+        event.preventDefault();
+        resumeFragmentCinematic();
+      }
+      return;
+    }
     if (elements.sanpledexModal && !elements.sanpledexModal.classList.contains("hidden")) {
       if (event.key === "Escape") closeSanpledex();
       else if (event.key === "Tab") {
@@ -5951,6 +6300,10 @@
     elements.starterIntroVideo.addEventListener("error", finishStarterIntro);
     elements.playStarterIntro.addEventListener("click", resumeStarterIntro);
     elements.skipStarterIntro.addEventListener("click", finishStarterIntro);
+    elements.fragmentCinematicVideo.addEventListener("ended", finishFragmentCinematic);
+    elements.fragmentCinematicVideo.addEventListener("error", finishFragmentCinematic);
+    elements.playFragmentCinematic.addEventListener("click", resumeFragmentCinematic);
+    elements.skipFragmentCinematic.addEventListener("click", finishFragmentCinematic);
     elements.teamButton.addEventListener("click", openTeam); elements.closeTeamButton.addEventListener("click", closeTeam); elements.drawerScrim.addEventListener("click", closeTeam);
     elements.sanpledexButton.addEventListener("click", openSanpledex);
     elements.closeSanpledex.addEventListener("click", () => closeSanpledex());
@@ -6007,12 +6360,22 @@
     $$('[data-control]').forEach(bindTouchControl); $$('[data-action]').forEach((button) => button.addEventListener("click", primaryAction));
   }
 
+  function startFragmentCinematicDebugSession() {
+    if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return false;
+    state = defaultState();
+    state.started = true; state.starterChosen = true;
+    state.team = [createPokemon(PETRILLO_ID, 8)]; state.caught = [PETRILLO_ID]; state.seen = [PETRILLO_ID];
+    state.inventory.prismShards = 3;
+    showWorld();
+    return startFragmentCinematic();
+  }
+
   function startPrismDebugSession(money = 2500, target = "start") {
     if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return false;
     closeShop(); stopMicrophone();
     state = defaultState();
     state.started = true; state.starterChosen = true;
-    state.team = [createPokemon(1, 12)]; state.caught = [1]; state.seen = [1];
+    state.team = [createPokemon(PETRILLO_ID, 12)]; state.caught = [PETRILLO_ID]; state.seen = [PETRILLO_ID];
     state.money = Math.max(0, Math.floor(Number(money) || 0));
     state.inventory.prismShards = 3;
     state.returnPosition = { x: PORTAL_POSITION.x, y: PORTAL_POSITION.y + field.h / 2 + 70 };
@@ -6038,10 +6401,14 @@
   function initialize() {
     mazeDefinition = generateMaze();
     initializeMapTiles(); renderStarters(); bindEvents(); loadAssets();
+    document.documentElement.dataset.doctorPotatoScene = "idle";
+    document.documentElement.dataset.fragmentCinematic = "idle";
     document.documentElement.dataset.cityMapReady = "loading";
     const hasSave = loadGame(); elements.continueButton.classList.toggle("hidden", !hasSave);
     updateFullscreenButton(); renderHud(); updateAreaLabel(); updateInteractPrompt(); window.requestAnimationFrame(gameLoop);
-    if (LOCAL_DEBUG_PRISM) {
+    if (LOCAL_DEBUG_FRAGMENT_CINEMATIC) {
+      startFragmentCinematicDebugSession();
+    } else if (LOCAL_DEBUG_PRISM) {
       startPrismDebugSession(LOCAL_DEBUG_PRISM.money, LOCAL_DEBUG_PRISM.target);
     } else if (LOCAL_DEBUG_BATTLE?.teamId && POKEMON[LOCAL_DEBUG_BATTLE.teamId]) {
       state = defaultState();
@@ -6090,9 +6457,41 @@
         dimension: state.dimension,
         money: state.money,
         inventory: { ...state.inventory },
+        fragmentCinematicSeen: Boolean(state.fragmentCinematicSeen),
         blackMarket: { ...state.blackMarket, purchases: { ...state.blackMarket.purchases } },
         maze: state.maze ? { ...state.maze } : null,
         shop: activeShopType,
+      }),
+      monsterRoster: () => ({
+        ids: Object.keys(POKEMON).map(Number),
+        starters: STARTERS.map((monster) => monster.id),
+        cityWild: WILD_TABLE.map((entry) => entry.id),
+        routeWild: ROUTE_WILD_TABLE.map((entry) => entry.id),
+        prismWild: PRISM_WILD_TABLE.map((entry) => entry.id),
+        prismSecrets: [...SECRET_MONSTER_IDS],
+      }),
+      fragmentCinematic: () => ({
+        active: fragmentCinematicActive,
+        seen: Boolean(state.fragmentCinematicSeen),
+        shards: state.inventory.prismShards,
+        playback: document.documentElement.dataset.fragmentCinematic,
+        currentTime: elements.fragmentCinematicVideo.currentTime,
+        duration: elements.fragmentCinematicVideo.duration,
+      }),
+      startFragmentCinematicDebug: () => {
+        return startFragmentCinematicDebugSession();
+      },
+      doctorPotato: () => ({
+        pending: Boolean(state.doctorPotatoIntroPending),
+        seen: Boolean(state.doctorPotatoIntroSeen),
+        spriteReady: Boolean(npcRosterSheets.get("doctor-potato")?.ready),
+        portraitReady: document.documentElement.dataset.dialogPortraitReady || null,
+        scene: doctorPotatoScene ? {
+          phase: doctorPotatoScene.phase,
+          x: doctorPotatoScene.x,
+          y: doctorPotatoScene.y,
+          direction: doctorPotatoScene.direction,
+        } : null,
       }),
       prismLayout: () => {
         const { start, goal, monster, market } = mazeDefinition;

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Una aventura Pokémon web sobre un mapa de estilo HeartGold y SoulSilver." />
     <title>Pokémon · Ciudad Pokémon</title>
-    <link rel="stylesheet" href="styles.css?v=17" />
+    <link rel="stylesheet" href="styles.css?v=19" />
   </head>
   <body>
     <main class="app-shell">
@@ -47,8 +47,8 @@
           </div>
           <div class="title-visual" aria-hidden="true">
             <span class="sun"></span>
-            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png" class="title-pokemon pikachu" alt="" />
-            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png" class="title-pokemon eevee" alt="" />
+            <img src="assets/pokemon/petrillo-line/petrillo-front.png" class="title-pokemon petrillo" alt="" />
+            <img src="assets/pokemon/luminai-line/luminio-front.png" class="title-pokemon luminio" alt="" />
             <span class="city-silhouette"></span>
           </div>
         </section>
@@ -71,6 +71,20 @@
           <button id="skipStarterIntro" class="starter-intro-skip" type="button">Saltar vídeo <span>→</span></button>
         </section>
 
+        <section id="fragmentCinematicScreen" class="fragment-cinematic-screen hidden" role="dialog" aria-modal="true" aria-label="Visión de los Fragmentos Prisma">
+          <video id="fragmentCinematicVideo" preload="auto" playsinline>
+            <source src="assets/video/fragmentos-prisma.mp4" type="video/mp4" />
+          </video>
+          <div class="fragment-cinematic-shade" aria-hidden="true"></div>
+          <div class="fragment-cinematic-copy">
+            <span>VISIÓN PRISMA</span>
+            <strong>LOS TRES FRAGMENTOS RESPONDEN</strong>
+            <p id="fragmentCinematicStatus">Una presencia desconocida despierta al otro lado del portal.</p>
+          </div>
+          <button id="playFragmentCinematic" class="fragment-cinematic-play hidden" type="button">▶ Reproducir visión</button>
+          <button id="skipFragmentCinematic" class="fragment-cinematic-skip" type="button">Continuar <span>→</span></button>
+        </section>
+
         <section id="worldScreen" class="world-screen screen hidden">
           <div class="world-overlay">
             <div class="location-card"><small>UBICACIÓN</small><strong id="areaName">Ciudad Pokémon</strong></div>
@@ -84,7 +98,7 @@
             <div id="mazeHud" class="maze-hud hidden">
               <div><span>LUZ</span><div id="lightCharges" class="light-charges"><i></i><i></i><i></i></div></div>
               <div><span>LA SOMBRA</span><strong id="shadowStatus">LEJOS</strong></div>
-              <div><span>PULSO PRISMA</span><strong id="mazeObjective">POKÉMON · DÉBIL</strong></div>
+              <div><span>PULSO PRISMA</span><strong id="mazeObjective">MONSTRUO · DÉBIL</strong></div>
               <div class="noise-row"><span id="noiseLabel">MICRÓFONO</span><div class="noise-track"><i id="noiseMeter"></i></div></div>
               <small>W/S avanzar · A/D desplazarse · ←/→ girar · F luz</small>
             </div>
@@ -129,7 +143,11 @@
 
           <div id="dialogBox" class="dialog-box hidden" role="dialog" aria-live="polite">
             <span id="dialogAvatar" class="dialog-avatar">!</span>
-            <p id="dialogText"></p>
+            <div class="dialog-copy">
+              <strong id="dialogSpeaker" class="dialog-speaker hidden"></strong>
+              <p id="dialogText"></p>
+            </div>
+            <img id="dialogPortrait" class="dialog-portrait hidden" alt="" draggable="false" />
             <button id="dialogNext" type="button" aria-label="Continuar">▼</button>
           </div>
         </section>
@@ -139,28 +157,28 @@
             <span class="battle-label">ENCUENTRO SALVAJE · SAN PABLO</span>
             <div class="enemy-zone">
               <div class="status-card enemy-status">
-                <div><strong id="enemyName">PIDGEY</strong><span id="enemyLevel">Nv. 3</span></div>
+                <div><strong id="enemyName">ALÚA</strong><span id="enemyLevel">Nv. 3</span></div>
                 <div class="hp-row"><b>PS</b><span><i id="enemyHpBar"></i></span></div>
                 <small id="enemyHpText">18 / 18</small>
               </div>
               <span class="battle-platform"></span>
-              <img id="enemySprite" class="battle-pokemon enemy-pokemon" alt="Pokémon salvaje" />
+              <img id="enemySprite" class="battle-pokemon enemy-pokemon" alt="Monstruo salvaje" />
             </div>
             <div class="player-zone">
               <span class="battle-platform"></span>
-              <img id="activeSprite" class="battle-pokemon player-pokemon" alt="Tu Pokémon" />
+              <img id="activeSprite" class="battle-pokemon player-pokemon" alt="Tu monstruo" />
               <div class="status-card player-status">
-                <div><strong id="activeName">BULBASAUR</strong><span id="activeLevel">Nv. 5</span></div>
+                <div><strong id="activeName">PETRILLO</strong><span id="activeLevel">Nv. 5</span></div>
                 <div class="hp-row"><b>PS</b><span><i id="activeHpBar"></i></span></div>
                 <small id="activeHpText">24 / 24</small>
                 <div class="exp-row"><i id="activeExpBar"></i></div>
               </div>
             </div>
-            <div id="battleMessage" class="battle-message">¡Un Pokémon salvaje apareció!</div>
+            <div id="battleMessage" class="battle-message">¡Un monstruo salvaje apareció!</div>
           </div>
 
           <div id="battleMenu" class="battle-menu">
-            <div class="battle-question">¿Qué debería hacer <strong id="battleActiveName">BULBASAUR</strong>?</div>
+            <div class="battle-question">¿Qué debería hacer <strong id="battleActiveName">PETRILLO</strong>?</div>
             <div class="battle-actions">
               <button id="fightButton" type="button"><span class="red">⚔</span>LUCHAR</button>
               <button id="bagButton" type="button"><span class="orange">▣</span>MOCHILA <small id="battleBallCount">× 6</small></button>
@@ -268,11 +286,11 @@
       </section>
 
       <footer class="legal-note">
-        Proyecto fan, gratuito y de uso personal. Pokémon pertenece a Nintendo, Game Freak y Creatures. Mapa reconstruido desde la referencia aportada; protagonista y NPC adaptados desde las imágenes facilitadas; criaturas servidas por PokéAPI.
+        Proyecto fan, gratuito y de uso personal. Pokémon pertenece a Nintendo, Game Freak y Creatures. Mapa reconstruido desde la referencia aportada; protagonista y NPC adaptados desde las imágenes facilitadas; todos los monstruos jugables son diseños originales con recursos locales.
       </footer>
     </main>
     <script src="map-layout.js?v=3"></script>
     <script src="map-data.js?v=23"></script>
-    <script src="script.js?v=61"></script>
+    <script src="script.js?v=63"></script>
   </body>
 </html>

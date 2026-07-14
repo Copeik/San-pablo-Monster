@@ -1,7 +1,7 @@
 # NPC directional sprite roster
 
-This folder contains 30 original NPC walking sheets built to the same runtime
-contract as `../protagonist-walk.png`:
+This folder contains 30 original NPC walking sheets plus Doctor Potato, all
+built to the same runtime contract as `../protagonist-walk.png`:
 
 - sheet: `256x256` RGBA PNG;
 - cell: `64x64` pixels;
@@ -41,12 +41,14 @@ contract as `../protagonist-walk.png`:
 28. `npc-28-tourist`
 29. `npc-29-dancer`
 30. `npc-30-ranger`
+31. `doctor-potato`
 
 Use an ID as the `sprite` value of an exterior NPC in `map-data.js`. All 30
 models are deployed in the current game: 11 distinct sprites serve the active
 interior doors, while the other 19 appear around San Pablo as exterior NPCs
 with two-line Spanish dialogue. The legacy HGSS idle atlas remains the loading
-fallback for interiors.
+fallback for interiors. `doctor-potato` is the separately supplied NPC used by
+the opening cinematic and is loaded through the same directional roster.
 
 ## Generation and verification
 
