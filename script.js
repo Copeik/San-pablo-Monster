@@ -488,6 +488,7 @@
   let quietStillTime = 0;
   let activeShopType = "mart";
   let lastShopFocus = null;
+  let starterIntroActive = false;
   const mazeMotion = { forward: 0, strafe: 0, turn: 0 };
   const input = {
     up: false, down: false, left: false, right: false,
@@ -560,6 +561,9 @@
   const elements = {
     titleScreen: $("#titleScreen"), worldScreen: $("#worldScreen"), battleScreen: $("#battleScreen"),
     starterModal: $("#starterModal"), starterGrid: $("#starterGrid"), newGameButton: $("#newGameButton"),
+    starterIntroScreen: $("#starterIntroScreen"), starterIntroVideo: $("#starterIntroVideo"),
+    starterIntroStatus: $("#starterIntroStatus"), playStarterIntro: $("#playStarterIntro"),
+    skipStarterIntro: $("#skipStarterIntro"),
     continueButton: $("#continueButton"), closeStarter: $("#closeStarter"), canvas: $("#worldCanvas"),
     assetNotice: $("#assetNotice"), runBadge: $("#runBadge"), interactPrompt: $("#interactPrompt"),
     areaToast: $("#areaToast"), flashOverlay: $("#flashOverlay"), areaName: $("#areaName"),
@@ -2341,7 +2345,7 @@
   }
 
   function chooseStarter(id) {
-    state.started = true;
+    state.started = false;
     state.starterChosen = true;
     state.team = [createPokemon(id, 5)];
     state.caught = [id];
@@ -2352,11 +2356,48 @@
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, currentWorldWidth() - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, currentWorldHeight() - VIEW_HEIGHT);
     elements.starterModal.classList.add("hidden");
+    showStarterIntro(id);
+  }
+
+  function showStarterIntro(id) {
+    starterIntroActive = true;
+    elements.titleScreen.classList.add("hidden");
+    elements.worldScreen.classList.add("hidden");
+    elements.battleScreen.classList.add("hidden");
+    elements.starterIntroScreen.classList.remove("hidden");
+    elements.playStarterIntro.classList.add("hidden");
+    elements.starterIntroStatus.textContent = `${POKEMON[id].name} te acompañará por las calles de San Pablo.`;
+    elements.starterIntroVideo.muted = !state.sound;
+    try { elements.starterIntroVideo.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
+    const playback = elements.starterIntroVideo.play();
+    if (playback?.catch) {
+      playback.catch(() => {
+        if (!starterIntroActive) return;
+        elements.playStarterIntro.classList.remove("hidden");
+        elements.starterIntroStatus.textContent = "Pulsa reproducir para ver la introducción antes de entrar al juego.";
+      });
+    }
+  }
+
+  function resumeStarterIntro() {
+    if (!starterIntroActive) return;
+    elements.starterIntroVideo.muted = !state.sound;
+    const playback = elements.starterIntroVideo.play();
+    if (playback?.then) playback.then(() => elements.playStarterIntro.classList.add("hidden")).catch(() => {});
+  }
+
+  function finishStarterIntro() {
+    if (!starterIntroActive) return;
+    const starterName = speciesOf(state.team[0])?.name || "Tu Pokémon";
+    starterIntroActive = false;
+    elements.starterIntroVideo.pause();
+    elements.starterIntroScreen.classList.add("hidden");
+    state.started = true;
     showWorld();
     saveGame();
     playJingle("success");
     showDialog([
-      `¡${POKEMON[id].name} será tu compañero por la ciudad!`,
+      `¡${starterName} será tu compañero por la ciudad!`,
       "Mantén SHIFT para correr. Ethan usa animaciones distintas para caminar y correr en las cuatro direcciones.",
       "El botón # abre la cuadrícula: pulsa una casilla para marcarla como transitable, bloqueada, puerta, hierba o evento.",
       "Cuando quieras indicarme cambios puedes copiar una coordenada, por ejemplo: C18, F21 = puerta.",
@@ -2372,6 +2413,7 @@
 
   function showWorld() {
     elements.titleScreen.classList.add("hidden");
+    elements.starterIntroScreen.classList.add("hidden");
     elements.battleScreen.classList.add("hidden");
     elements.worldScreen.classList.remove("hidden");
     elements.buildingEditorButton.disabled = state.dimension === "prism" || Boolean(state.interior);
@@ -5702,6 +5744,7 @@
 
   function toggleSound() {
     state.sound = !state.sound;
+    elements.starterIntroVideo.muted = !state.sound;
     if (!state.sound) {
       stopHorrorAudio();
       stopBackgroundMusic();
@@ -5831,6 +5874,13 @@
   }
 
   function handleKeyDown(event) {
+    if (starterIntroActive) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finishStarterIntro();
+      }
+      return;
+    }
     if (elements.sanpledexModal && !elements.sanpledexModal.classList.contains("hidden")) {
       if (event.key === "Escape") closeSanpledex();
       else if (event.key === "Tab") {
@@ -5897,6 +5947,10 @@
   function bindEvents() {
     elements.newGameButton.addEventListener("click", startNewGame); elements.continueButton.addEventListener("click", continueGame);
     elements.closeStarter.addEventListener("click", () => elements.starterModal.classList.add("hidden")); elements.dialogNext.addEventListener("click", advanceDialog);
+    elements.starterIntroVideo.addEventListener("ended", finishStarterIntro);
+    elements.starterIntroVideo.addEventListener("error", finishStarterIntro);
+    elements.playStarterIntro.addEventListener("click", resumeStarterIntro);
+    elements.skipStarterIntro.addEventListener("click", finishStarterIntro);
     elements.teamButton.addEventListener("click", openTeam); elements.closeTeamButton.addEventListener("click", closeTeam); elements.drawerScrim.addEventListener("click", closeTeam);
     elements.sanpledexButton.addEventListener("click", openSanpledex);
     elements.closeSanpledex.addEventListener("click", () => closeSanpledex());
