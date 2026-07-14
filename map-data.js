@@ -221,6 +221,19 @@ window.CITY_MAP_CONFIG = Object.freeze({
       ],
     },
     {
+      id: "skater-verde",
+      col: 37,
+      row: 25,
+      direction: "up",
+      name: "Niño del polo",
+      sprite: "nino-polo",
+      patrol: { to: [37, 18], tilesPerSecond: 0.75 },
+      lines: [
+        "Voy de C37,F25 a C37,F18 sin perder el ritmo.",
+        "Si nos cruzamos, freno. Cuando te apartes, sigo corriendo.",
+      ],
+    },
+    {
       id: "jardinera-sol",
       col: 66,
       row: 11,

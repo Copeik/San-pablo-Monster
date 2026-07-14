@@ -1,0 +1,9 @@
+Braspín, Ascuero y Volcazote
+
+Concepto visual: imagen de referencia proporcionada por el usuario.
+Sprites HD frontal y de espalda: reimaginados para el proyecto con OpenAI ImageGen a partir de la referencia y del estilo de los Pokémon ya integrados en el repositorio. Fondo verde eliminado y transparencia aplicada.
+
+Archivos:
+- braspy-front.png / braspy-back.png
+- ascuero-front.png / ascuero-back.png
+- volcazote-front.png / volcazote-back.png

@@ -10,6 +10,8 @@
   const MAX_RENDER_HEIGHT = 2160;
   const SPRITE_CELL_SIZE = 64;
   const PLAYER_HEAD_LOCK_HEIGHT = 36;
+  const NPC_COLLISION_RADIUS = 25;
+  const npcPatrolStates = new Map();
   const PLAYER_LEG_MASKS = {
     down: [{ x: 20, y: 50, width: 24, height: 10 }],
     left: [{ x: 18, y: 51, width: 28, height: 9 }],
@@ -138,18 +140,39 @@
   const GUIDE_NPC_SHEET_URL = "assets/sprites/npc-guide-walk.png";
   const DOCTOR_POTATO_PORTRAIT_URL = "assets/portraits/doctor-potato.png";
   const DOCTOR_POTATO_THEME_URL = "assets/audio/patata-de-barrio.mp3";
+  const NPC_IMPORTED_SPRITE_URLS = Object.freeze({
+    "nino-sol": "assets/sprites/npcs/nino-sol-walk.png",
+    "chica-lazo": "assets/sprites/npcs/chica-lazo-walk.png",
+    "skater-verde": "assets/sprites/npcs/skater-verde-walk.png",
+    mochilera: "assets/sprites/npcs/mochilera-walk.png",
+    campesino: "assets/sprites/npcs/campesino-walk.png",
+    "nino-polo": "assets/sprites/npcs/nino-polo-walk.png",
+    "nina-turquesa": "assets/sprites/npcs/nina-turquesa-walk.png",
+    "skater-capucha": "assets/sprites/npcs/skater-capucha-walk.png",
+    "chica-mochila": "assets/sprites/npcs/chica-mochila-walk.png",
+    hortelano: "assets/sprites/npcs/hortelano-walk.png",
+    "camarera-azul": "assets/sprites/npcs/camarera-azul-walk.png",
+    "camarero-bandeja": "assets/sprites/npcs/camarero-bandeja-walk.png",
+    bailaora: "assets/sprites/npcs/bailaora-walk.png",
+    "abuelo-cana": "assets/sprites/npcs/abuelo-cana-walk.png",
+    "abuela-morada": "assets/sprites/npcs/abuela-morada-walk.png",
+  });
   const NPC_ROSTER_SHEET_URLS = Object.freeze({
     ...Object.fromEntries([
-      "nurse", "shopkeeper", "professor", "grandmother", "child", "fisher", "grandfather", "student", "merchant", "artist",
-      "athlete", "caretaker", "gardener", "officer", "chef", "mechanic", "musician", "cyclist", "hiker", "office-worker",
-      "teen-girl", "teen-boy", "baker", "builder", "doctor", "vendor", "librarian", "tourist", "dancer", "ranger",
-    ].map((role, index) => {
-      const id = `npc-${String(index + 1).padStart(2, "0")}-${role}`;
-      return [id, `assets/sprites/npcs/${id}-walk.png`];
+    "nurse", "shopkeeper", "professor", "grandmother", "child", "fisher", "grandfather", "student", "merchant", "artist",
+    "athlete", "caretaker", "gardener", "officer", "chef", "mechanic", "musician", "cyclist", "hiker", "office-worker",
+    "teen-girl", "teen-boy", "baker", "builder", "doctor", "vendor", "librarian", "tourist", "dancer", "ranger",
+  ].map((role, index) => {
+    const id = `npc-${String(index + 1).padStart(2, "0")}-${role}`;
+    return [id, `assets/sprites/npcs/${id}-walk.png`];
     })),
+    ...NPC_IMPORTED_SPRITE_URLS,
     "doctor-potato": "assets/sprites/npcs/doctor-potato-walk.png",
   });
   const CUSTOM_POKEMON_ASSETS = Object.freeze({
+    4: { front: "assets/pokemon/braspy-line/braspy-front.png", back: "assets/pokemon/braspy-line/braspy-back.png" },
+    5: { front: "assets/pokemon/braspy-line/ascuero-front.png", back: "assets/pokemon/braspy-line/ascuero-back.png" },
+    6: { front: "assets/pokemon/braspy-line/volcazote-front.png", back: "assets/pokemon/braspy-line/volcazote-back.png" },
     9001: { front: "assets/pokemon/petrillo-line/petrillo-front.png", back: "assets/pokemon/petrillo-line/petrillo-back.png" },
     9002: { front: "assets/pokemon/petrillo-line/musgolem-front.png", back: "assets/pokemon/petrillo-line/musgolem-back.png" },
     9003: { front: "assets/pokemon/petrillo-line/terravordeo-front.png", back: "assets/pokemon/petrillo-line/terravordeo-back.png" },
@@ -252,6 +275,32 @@
   };
 
   const POKEMON = {
+    1: { id: 1, name: "Bulbasaur", type: "Planta", secondaryType: "Veneno", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Paciente y resistente. Una elección muy equilibrada." },
+    4: { id: 4, name: "Braspín", type: "Fuego", baseHp: 23, catchRate: .34, moves: [MOVES.scratch, MOVES.ember], description: "Pokémon Púas Brasa. Sus púas se encienden cuando protege a quienes considera su manada.", evolvesTo: 5, evolveLevel: 16 },
+    5: { id: 5, name: "Ascuero", type: "Fuego", secondaryType: "Tierra", baseHp: 33, catchRate: .17, moves: [MOVES.scratch, MOVES.ember], description: "Pokémon Coraza Ascua. Endurece el barro de su lomo al calor de sus llamas para resistir los golpes más duros.", evolvesTo: 6, evolveLevel: 37 },
+    6: { id: 6, name: "Volcazote", type: "Fuego", secondaryType: "Tierra", baseHp: 44, catchRate: .07, moves: [MOVES.scratch, MOVES.ember], description: "Pokémon Volcán Férreo. Su caparazón guarda un calor profundo que hace temblar el suelo al avanzar." },
+    7: { id: 7, name: "Squirtle", type: "Agua", baseHp: 27, catchRate: .34, moves: [MOVES.tackle, MOVES.waterGun], description: "Sereno y tenaz. Aguanta muy bien los combates." },
+    10: { id: 10, name: "Caterpie", type: "Bicho", baseHp: 20, catchRate: .68, moves: [MOVES.tackle, MOVES.bugBite] },
+    13: { id: 13, name: "Weedle", type: "Bicho", secondaryType: "Veneno", baseHp: 20, catchRate: .66, moves: [MOVES.tackle, MOVES.poisonSting] },
+    16: { id: 16, name: "Pidgey", type: "Volador", baseHp: 22, catchRate: .58, moves: [MOVES.tackle, MOVES.gust] },
+    19: { id: 19, name: "Rattata", type: "Normal", baseHp: 21, catchRate: .60, moves: [MOVES.tackle, MOVES.quickAttack] },
+    25: { id: 25, name: "Pikachu", type: "Eléctrico", baseHp: 23, catchRate: .32, moves: [MOVES.quickAttack, MOVES.thunderShock] },
+    43: { id: 43, name: "Oddish", type: "Planta", secondaryType: "Veneno", baseHp: 24, catchRate: .53, moves: [MOVES.tackle, MOVES.absorb] },
+    63: { id: 63, name: "Abra", type: "Psíquico", baseHp: 20, catchRate: .36, moves: [MOVES.confusion, MOVES.quickAttack] },
+    81: { id: 81, name: "Magnemite", type: "Eléctrico", secondaryType: "Acero", baseHp: 25, catchRate: .42, moves: [MOVES.thunderShock, MOVES.metalSound] },
+    92: { id: 92, name: "Gastly", type: "Fantasma", secondaryType: "Veneno", baseHp: 21, catchRate: .38, moves: [MOVES.lick, MOVES.confusion] },
+    96: { id: 96, name: "Drowzee", type: "Psíquico", baseHp: 27, catchRate: .46, moves: [MOVES.confusion, MOVES.headbutt] },
+    104: { id: 104, name: "Cubone", type: "Tierra", baseHp: 28, catchRate: .43, moves: [MOVES.headbutt, MOVES.tackle] },
+    133: { id: 133, name: "Eevee", type: "Normal", baseHp: 25, catchRate: .28, moves: [MOVES.quickAttack, MOVES.headbutt] },
+    147: { id: 147, name: "Dratini", type: "Dragón", baseHp: 29, catchRate: .22, moves: [MOVES.dragonRage, MOVES.tackle] },
+    151: { id: 151, name: "Mew Espejo", type: "Psíquico", baseHp: 36, catchRate: 0, moves: [MOVES.confusion, MOVES.lick] },
+    149: { id: 149, name: "Dragonite", type: "Dragón", secondaryType: "Volador", baseHp: 42, catchRate: 0, moves: [MOVES.dragonRage, MOVES.gust] },
+    248: { id: 248, name: "Tyranitar", type: "Tierra", baseHp: 44, catchRate: 0, moves: [MOVES.headbutt, MOVES.lick] },
+    373: { id: 373, name: "Salamence", type: "Dragón", secondaryType: "Volador", baseHp: 40, catchRate: 0, moves: [MOVES.dragonRage, MOVES.gust] },
+    376: { id: 376, name: "Metagross", type: "Acero", secondaryType: "Psíquico", baseHp: 43, catchRate: 0, moves: [MOVES.metalSound, MOVES.confusion] },
+    399: { id: 399, name: "Bidoof", type: "Normal", baseHp: 25, catchRate: 0, moves: [MOVES.tackle, MOVES.headbutt] },
+    445: { id: 445, name: "Garchomp", type: "Dragón", secondaryType: "Tierra", baseHp: 41, catchRate: 0, moves: [MOVES.dragonRage, MOVES.headbutt] },
+    635: { id: 635, name: "Hydreigon", type: "Dragón", baseHp: 40, catchRate: 0, moves: [MOVES.dragonRage, MOVES.lick] },
     9001: { id: 9001, name: "Petrillo", type: "Roca", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Monstruo Semilla. Robusto y capaz de absorber minerales del suelo.", evolvesTo: 9002, evolveLevel: 16 },
     9002: { id: 9002, name: "Musgólem", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Monstruo Coloso Musgo. Sus brazos de roca se afianzan al suelo mientras las enredaderas absorben humedad.", evolvesTo: 9003, evolveLevel: 32 },
     9003: { id: 9003, name: "Terravórdeo", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Monstruo Montaña Viviente. Cada paso mezcla minerales y semillas; allí donde descansa, vuelve a brotar la vida." },
@@ -277,6 +326,7 @@
   };
 
   const SANPLEDEX_FAMILIES = Object.freeze([
+    { name: "Linaje de la Brasa", ids: [4, 5, 6] },
     { name: "Linaje del Brote", ids: [9001, 9002, 9003] },
     { name: "Linaje del Adobe", ids: [9101, 9102] },
     { name: "Linaje de las Escamas", ids: [9201, 9202, 9203] },
@@ -1084,10 +1134,10 @@
   function deployedNpcRosterSprites() {
     const exterior = (CITY_MAP.npcs || [])
       .map((npc) => npc.sprite)
-      .filter((sprite) => typeof sprite === "string" && sprite.startsWith("npc-"));
+      .filter((sprite) => typeof sprite === "string" && NPC_ROSTER_SHEET_URLS[sprite]);
     const interior = (CITY_MAP.doors || [])
       .map((door) => NPC_DEFS[door.npc]?.sprite)
-      .filter((sprite) => typeof sprite === "string" && sprite.startsWith("npc-"));
+      .filter((sprite) => typeof sprite === "string" && NPC_ROSTER_SHEET_URLS[sprite]);
     return new Set([...interior, ...exterior, "doctor-potato"]);
   }
 
@@ -1095,8 +1145,7 @@
     const deployed = deployedNpcRosterSprites();
     document.documentElement.dataset.npcDeployedCount = String(deployed.size);
     document.documentElement.dataset.npcDeploymentReady = String(
-      deployed.size === Object.keys(NPC_ROSTER_SHEET_URLS).length
-      && [...deployed].every((sprite) => npcRosterSheets.get(sprite)?.ready),
+      [...deployed].every((sprite) => npcRosterSheets.get(sprite)?.ready),
     );
   }
 
@@ -1648,10 +1697,84 @@
   }
 
   function mapNpcPosition(npc) {
+    const patrol = npcPatrolState(npc);
+    if (patrol) return { x: patrol.x, y: patrol.y };
     return {
       x: (Number(npc.col) + .5) * CITY_MAP.tileSize,
       y: (Number(npc.row) + .5) * CITY_MAP.tileSize,
     };
+  }
+
+  function npcPatrolState(npc) {
+    const destination = npc?.patrol?.to;
+    const speed = Number(npc?.patrol?.tilesPerSecond);
+    if (!Array.isArray(destination) || destination.length !== 2 || !Number.isFinite(speed) || speed <= 0) return null;
+    const start = {
+      x: (Number(npc.col) + .5) * CITY_MAP.tileSize,
+      y: (Number(npc.row) + .5) * CITY_MAP.tileSize,
+    };
+    const end = {
+      x: (Number(destination[0]) + .5) * CITY_MAP.tileSize,
+      y: (Number(destination[1]) + .5) * CITY_MAP.tileSize,
+    };
+    if (![start.x, start.y, end.x, end.y].every(Number.isFinite)) return null;
+    if (!npcPatrolStates.has(npc.id)) {
+      npcPatrolStates.set(npc.id, {
+        start, end, speed: speed * CITY_MAP.tileSize,
+        x: start.x, y: start.y, forward: true, direction: npc.direction || "down", moving: false,
+      });
+    }
+    return npcPatrolStates.get(npc.id);
+  }
+
+  function directionFromDelta(dx, dy, fallback = "down") {
+    if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? "left" : "right";
+    if (Math.abs(dy) > 0) return dy < 0 ? "up" : "down";
+    return fallback;
+  }
+
+  function segmentHitsPlayer(startX, startY, endX, endY) {
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const lengthSquared = dx * dx + dy * dy;
+    const progress = lengthSquared
+      ? clamp(((state.worldX - startX) * dx + (state.worldY - startY) * dy) / lengthSquared, 0, 1)
+      : 0;
+    const nearestX = startX + dx * progress;
+    const nearestY = startY + dy * progress;
+    return Math.hypot(state.worldX - nearestX, state.worldY - nearestY) < NPC_COLLISION_RADIUS;
+  }
+
+  function updateNpcPatrols(deltaSeconds) {
+    if (!state.started || state.dimension !== "san_pablo" || state.interior || deltaSeconds <= 0) return;
+    (CITY_MAP.npcs || []).forEach((npc) => {
+      const patrol = npcPatrolState(npc);
+      if (!patrol) return;
+      patrol.moving = false;
+      if (Math.hypot(state.worldX - patrol.x, state.worldY - patrol.y) < NPC_COLLISION_RADIUS) return;
+
+      let distanceLeft = patrol.speed * deltaSeconds;
+      while (distanceLeft > .0001) {
+        const target = patrol.forward ? patrol.end : patrol.start;
+        const dx = target.x - patrol.x;
+        const dy = target.y - patrol.y;
+        const distanceToTarget = Math.hypot(dx, dy);
+        if (distanceToTarget < .0001) {
+          patrol.forward = !patrol.forward;
+          continue;
+        }
+        const travelled = Math.min(distanceLeft, distanceToTarget);
+        const nextX = patrol.x + dx / distanceToTarget * travelled;
+        const nextY = patrol.y + dy / distanceToTarget * travelled;
+        if (segmentHitsPlayer(patrol.x, patrol.y, nextX, nextY)) return;
+        patrol.direction = directionFromDelta(dx, dy, patrol.direction);
+        patrol.x = nextX;
+        patrol.y = nextY;
+        patrol.moving = true;
+        distanceLeft -= travelled;
+        if (travelled >= distanceToTarget) patrol.forward = !patrol.forward;
+      }
+    });
   }
 
   function nearbyWorldNpc(maxDistance = 58) {
@@ -1687,7 +1810,7 @@
   function worldNpcBlocksPosition(x, y) {
     return (CITY_MAP.npcs || []).some((npc) => {
       const position = mapNpcPosition(npc);
-      return Math.hypot(x - position.x, y - position.y) < 25;
+      return Math.hypot(x - position.x, y - position.y) < NPC_COLLISION_RADIUS;
     });
   }
 
@@ -2380,6 +2503,7 @@
 
   function showStarterIntro(id) {
     starterIntroActive = true;
+    stopBackgroundMusic();
     elements.titleScreen.classList.add("hidden");
     elements.worldScreen.classList.add("hidden");
     elements.battleScreen.classList.add("hidden");
@@ -4585,9 +4709,10 @@
 
   function drawWorldNpc(context, npc) {
     const position = mapNpcPosition(npc);
-    const direction = directionFromNpcToPlayer(position, npc.direction || "down");
+    const patrol = npcPatrolState(npc);
+    const direction = patrol?.direction || directionFromNpcToPlayer(position, npc.direction || "down");
     const rows = { down: 0, left: 1, right: 2, up: 3 };
-    const frame = npc.walking ? Math.floor(performance.now() / 170) % 4 : 0;
+    const frame = (patrol?.moving || npc.walking) ? Math.floor(performance.now() / 170) % 4 : 0;
     context.save();
     context.fillStyle = "rgba(22,43,34,.23)";
     context.beginPath(); context.ellipse(Math.round(position.x), Math.round(position.y + 1), 16, 5, 0, 0, Math.PI * 2); context.fill();
@@ -5483,6 +5608,7 @@
     if (!elements.worldScreen.classList.contains("hidden")) {
       updateDoctorPotatoCutscene(deltaSeconds);
       updateMovement(deltaSeconds);
+      updateNpcPatrols(deltaSeconds);
       updateCamera(deltaSeconds);
       drawWorld();
       drawMiniMap();
@@ -6111,90 +6237,22 @@
     (jingles[kind] || jingles.success).forEach((frequency, index) => playTone(frequency, .1, "square", .025, index * .09));
   }
 
-  const MUSIC_FREQUENCIES = {
-    C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00, A3: 220.00, B3: 246.94,
-    C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, B4: 493.88,
-    C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00, B5: 987.77,
-    C6: 1046.50, D6: 1174.66, E6: 1318.51,
-  };
-
-  const POKEMON_MELODY_PATTERN = [
-    ["E5", 0.25], ["G5", 0.25], ["C6", 0.5], ["B5", 0.25], ["A5", 0.25], ["G5", 0.5],
-    ["E5", 0.25], ["G5", 0.25], ["C6", 0.5], ["B5", 0.25], ["A5", 0.25], ["B5", 0.25], ["C6", 0.25],
-    ["D5", 0.25], ["G5", 0.25], ["B5", 0.5], ["A5", 0.25], ["G5", 0.25], ["F5", 0.5],
-    ["E5", 0.25], ["G5", 0.25], ["C6", 0.5], ["B5", 0.25], ["A5", 0.25], ["G5", 0.25], ["A5", 0.25], ["B5", 0.25],
-    ["C5", 0.25], ["E5", 0.25], ["G5", 0.5], ["E5", 0.25], ["G5", 0.25], ["C6", 0.5],
-    ["B4", 0.25], ["D5", 0.25], ["G5", 0.5], ["D5", 0.25], ["G5", 0.25], ["B5", 0.5],
-    ["A4", 0.25], ["C5", 0.25], ["E5", 0.5], ["C5", 0.25], ["E5", 0.25], ["A5", 0.5],
-    ["G4", 0.25], ["A4", 0.25], ["C5", 0.5], ["F5", 0.25], ["E5", 0.25], ["D5", 0.5],
-  ];
-
-  const POKEMON_BASS_PATTERN = [
-    ["C3", 3.0],
-    ["G3", 3.0],
-    ["A3", 3.0],
-    ["F3", 3.0],
-  ];
-
-  const backgroundMusic = { enabled: false, masterGain: null, schedulerId: null, loopDuration: 12 };
-
-  function scheduleBackgroundMusic() {
-    if (!backgroundMusic.enabled || !state.sound || !audioContext) return;
-    const startTime = audioContext.currentTime + 0.05;
-    let t = startTime;
-    POKEMON_MELODY_PATTERN.forEach(([note, duration]) => {
-      const freq = MUSIC_FREQUENCIES[note];
-      if (freq) playMusicTone(freq, t, duration * 0.95, "square", 0.038);
-      t += duration;
-    });
-    t = startTime;
-    POKEMON_BASS_PATTERN.forEach(([note, duration]) => {
-      const freq = MUSIC_FREQUENCIES[note];
-      if (freq) playMusicTone(freq * 0.5, t, duration * 0.95, "triangle", 0.055);
-      t += duration;
-    });
-    backgroundMusic.loopDuration = POKEMON_MELODY_PATTERN.reduce((sum, [, d]) => sum + d, 0);
-    backgroundMusic.schedulerId = window.setTimeout(scheduleBackgroundMusic, (backgroundMusic.loopDuration - 0.15) * 1000);
-  }
-
-  function playMusicTone(frequency, startTime, duration, waveType, volume) {
-    if (!audioContext || !backgroundMusic.masterGain) return;
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    oscillator.type = waveType;
-    oscillator.frequency.setValueAtTime(frequency, startTime);
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(volume, startTime + 0.015);
-    gain.gain.linearRampToValueAtTime(volume * 0.65, startTime + duration * 0.6);
-    gain.gain.linearRampToValueAtTime(0, startTime + duration);
-    oscillator.connect(gain);
-    gain.connect(backgroundMusic.masterGain);
-    oscillator.start(startTime);
-    oscillator.stop(startTime + duration + 0.05);
-  }
+  const backgroundMusic = new Audio("assets/audio/Nylon_and_Cartridge.mp3");
+  backgroundMusic.loop = true;
+  backgroundMusic.preload = "auto";
+  backgroundMusic.volume = 0.05;
 
   function startBackgroundMusic() {
-    if (backgroundMusic.enabled || !state.sound) return;
-    const context = ensureAudio();
-    if (!context) return;
-    audioContext = context;
-    backgroundMusic.masterGain = context.createGain();
-    backgroundMusic.masterGain.gain.value = 0.085;
-    backgroundMusic.masterGain.connect(context.destination);
-    backgroundMusic.enabled = true;
-    scheduleBackgroundMusic();
+    if (!state.sound || starterIntroActive) return;
+    backgroundMusic.loop = true;
+    backgroundMusic.volume = 0.05;
+    const playRequest = backgroundMusic.play();
+    if (playRequest?.catch) playRequest.catch(() => {});
   }
 
   function stopBackgroundMusic() {
-    backgroundMusic.enabled = false;
-    if (backgroundMusic.schedulerId) {
-      window.clearTimeout(backgroundMusic.schedulerId);
-      backgroundMusic.schedulerId = null;
-    }
-    if (backgroundMusic.masterGain) {
-      try { backgroundMusic.masterGain.disconnect(); } catch (error) { /* already disconnected */ }
-      backgroundMusic.masterGain = null;
-    }
+    backgroundMusic.pause();
+    try { backgroundMusic.currentTime = 0; } catch (error) { /* Metadata may not be ready yet. */ }
   }
 
   function keyToControl(key) {
@@ -6336,7 +6394,7 @@
     });
     elements.copyNpcButton.addEventListener("click", async () => {
       if (!selectedMapTile) return;
-      const text = `{ id: "nuevo-npc", col: ${selectedMapTile.col}, row: ${selectedMapTile.row}, direction: "down", name: "Nombre", sprite: "guide", lines: ["Diálogo"] }`;
+      const text = `{ id: "nuevo-npc", col: ${selectedMapTile.col}, row: ${selectedMapTile.row}, direction: "down", name: "Nombre", sprite: "nino-sol", lines: ["Diálogo"] }`;
       try { await navigator.clipboard.writeText(text); elements.tileEditorHint.textContent = `NPC copiado para C${selectedMapTile.col}, F${selectedMapTile.row}`; }
       catch (error) { elements.tileEditorHint.textContent = text; }
     });

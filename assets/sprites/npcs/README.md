@@ -50,6 +50,34 @@ with two-line Spanish dialogue. The legacy HGSS idle atlas remains the loading
 fallback for interiors. `doctor-potato` is the separately supplied NPC used by
 the opening cinematic and is loaded through the same directional roster.
 
+## Imported NPC aliases
+
+The user-provided character sheets are normalized to the same 256x256 walking
+contract. Use the following short aliases directly as the `sprite` value when
+adding an NPC; no numeric `npc-` prefix is required:
+
+- `nino-sol` — niño con camiseta amarilla.
+- `chica-lazo` — chica con vestido turquesa y lazo.
+- `skater-verde` — skater con sudadera verde.
+- `mochilera` — chica de morado con mochila.
+- `campesino` — agricultor con sombrero.
+- `nino-polo` — niño con polo amarillo.
+- `nina-turquesa` — niña con vestido turquesa.
+- `skater-capucha` — skater con capucha verde.
+- `chica-mochila` — chica de morado con mochila marrón.
+- `hortelano` — hortelano con planta y cesta.
+- `camarera-azul` — camarera con delantal azul.
+- `camarero-bandeja` — camarero con bandeja.
+- `bailaora` — bailaora con vestido negro y rojo.
+- `abuelo-cana` — abuelo con bastón.
+- `abuela-morada` — abuela con mantón morado.
+
+Example: `{ id: "vecino", col: 12, row: 20, direction: "down", name: "Pepe", sprite: "bailaora", lines: ["Hola", "Adiós"] }`.
+
+The unedited magenta source sheets are retained in `source/`; rerun
+`powershell -ExecutionPolicy Bypass -File tools/import-npc-sprites.ps1` from
+the project root to rebuild the normalized PNG files.
+
 ## Generation and verification
 
 The roster was created with OpenAI image generation using the protagonist as a
