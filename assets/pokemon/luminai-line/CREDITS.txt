@@ -7,3 +7,10 @@ Archivos:
 - luminio-front.png / luminio-back.png
 - lunaria-front.png / lunaria-back.png
 - lusdria-front.png / lusdria-back.png
+
+Poses frontales de ataque: editadas en julio de 2026 con OpenAI ImageGen a partir de cada sprite frontal del proyecto, recortadas a transparencia y optimizadas a 512 × 512.
+- luminio-attack-front.png
+- lunaria-attack-front.png
+- lusdria-attack-front.png
+
+Ajuste de combate (julio de 2026): lusdria-back.png se volteó horizontalmente para que la vista del compañero mire a la derecha. No se regeneró el dibujo.

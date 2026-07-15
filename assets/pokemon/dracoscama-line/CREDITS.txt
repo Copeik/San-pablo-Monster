@@ -8,3 +8,10 @@ Archivos:
 - criascama-front.png / criascama-back.png
 - aliscama-front.png / aliscama-back.png
 - dracoscama-front.png / dracoscama-back.png
+
+Poses frontales de ataque: editadas en julio de 2026 con OpenAI ImageGen a partir de cada sprite frontal del proyecto, recortadas a transparencia y optimizadas a 512 × 512.
+- criascama-attack-front.png
+- aliscama-attack-front.png
+- dracoscama-attack-front.png
+
+Ajuste de combate (julio de 2026): dracoscama-back.png se volteó horizontalmente para que la vista del compañero mire a la derecha. No se regeneró el dibujo.

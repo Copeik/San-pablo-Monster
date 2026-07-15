@@ -1,0 +1,8 @@
+Origen: ficha conceptual aportada por el usuario (codex-clipboard-d660d89c-3cdf-4bd0-aa9e-29d8ee361fa6.png).
+Proceso: recorte de las vistas dibujadas y eliminación del fondo de pergamino; no se generaron perspectivas nuevas.
+
+Archivos extraídos:
+- rubrisma-front.png
+- rubrisma-back.png
+- azuranima-front.png
+- azuranima-back.png

@@ -1,0 +1,231 @@
+{
+  "area": {
+    "bbox_wgs84": [
+      -5.9663,
+      37.3904,
+      -5.9573,
+      37.4001
+    ],
+    "boundary": "boundary.geojson (Hosted/BarriosIDE fid=45)",
+    "coordinate_order": "longitude,latitude",
+    "crs": "EPSG:4326",
+    "name": "San Pablo C, Sevilla, Espana"
+  },
+  "files": {
+    "README.md": {
+      "bytes": 3270,
+      "format": "Markdown",
+      "retrieved_at_utc": "2026-07-14T22:31:16Z",
+      "sha256": "a16db2bc5189efa222321c033757ebd8ededf389517e6d2b027f16356e6fdf58",
+      "source_url": "tools/fetch-san-pablo-source-data.py (documentacion generada)"
+    },
+    "boundary.geojson": {
+      "bytes": 6660,
+      "crs": "EPSG:4326",
+      "feature_count": 1,
+      "format": "GeoJSON",
+      "query": {
+        "f": "geojson",
+        "geometryPrecision": "7",
+        "outFields": "*",
+        "outSR": "4326",
+        "returnGeometry": "true",
+        "where": "fid=45"
+      },
+      "retrieved_at_utc": "2026-07-14T22:31:02Z",
+      "sha256": "30a25e1d3455fbf01e10b3e75bda6f03b69794f2f2960ccd974c21532a2af8e0",
+      "source_url": "https://cdu.urbanismosevilla.org/arcgis/rest/services/Hosted/BarriosIDE/FeatureServer/0/query?where=fid%3D45&outFields=%2A&returnGeometry=true&outSR=4326&geometryPrecision=7&f=geojson"
+    },
+    "buildings.geojson": {
+      "bytes": 567291,
+      "crs": "EPSG:4326",
+      "feature_count": 347,
+      "format": "GeoJSON",
+      "query": {
+        "geometry": "boundary.geojson",
+        "geometryPrecision": 7,
+        "geometryType": "esriGeometryPolygon",
+        "inSR": "4326",
+        "outFields": "fid,constru,refcat,area,fechaalta,fechabaja,masa,parcela",
+        "outSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "where": "1=1"
+      },
+      "retrieved_at_utc": "2026-07-14T22:31:05Z",
+      "sha256": "4055c056ce6cef387e02ce7124fb5e13710091ec5d9da6dc5b7cb0a95982a25f",
+      "source_url": "https://cdu.urbanismosevilla.org/arcgis/rest/services/Hosted/Catastro_PARCELA_CONSTRU/FeatureServer/1/query"
+    },
+    "greens.geojson": {
+      "bytes": 51798,
+      "crs": "EPSG:4326",
+      "feature_count": 9,
+      "format": "GeoJSON",
+      "query": {
+        "geometry": "boundary.geojson",
+        "geometryPrecision": 7,
+        "geometryType": "esriGeometryPolygon",
+        "inSR": "4326",
+        "outFields": "objectid_12,vision,revision,layer,Shape__Area,Shape__Length",
+        "outSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "where": "1=1"
+      },
+      "retrieved_at_utc": "2026-07-14T22:31:04Z",
+      "sha256": "66c7ba484cc2a4cb7fce85e62ba106893262bded870c83e24fd8d3c77873041a",
+      "source_url": "https://cdu.urbanismosevilla.org/arcgis/rest/services/MapaBase/Guia_Urbana_2026/FeatureServer/53/query"
+    },
+    "obstacles.geojson": {
+      "bytes": 475944,
+      "crs": "EPSG:4326",
+      "feature_count": 739,
+      "format": "GeoJSON",
+      "query": {
+        "batch_size": 500,
+        "geometry": "boundary.geojson",
+        "geometryPrecision": 7,
+        "geometryType": "esriGeometryPolygon",
+        "id_discovery": "returnIdsOnly=true",
+        "inSR": "4326",
+        "outFields": "objectid,layer,id,Shape__Length",
+        "outSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "where": "(layer LIKE '%MURO%' OR layer LIKE '%VALLA%' OR layer LIKE '%ALAMBRADA%' OR layer LIKE '%VERJA%')"
+      },
+      "retrieved_at_utc": "2026-07-14T22:31:06Z",
+      "sha256": "1b98a7707c01e988091d002cbd8bfea2198a56514014027f0b70cf754a22333b",
+      "source_url": "https://cdu.urbanismosevilla.org/arcgis/rest/services/MapaBase/Guia_Urbana_2026/FeatureServer/55/query"
+    },
+    "openstreetmap.osm": {
+      "bbox_wgs84": [
+        -5.9663,
+        37.3904,
+        -5.9573,
+        37.4001
+      ],
+      "bytes": 1824757,
+      "format": "OSM XML 0.6",
+      "nodes": 6106,
+      "relations": 87,
+      "retrieved_at_utc": "2026-07-14T22:31:16Z",
+      "sha256": "06915ece8ab3417749875897ca90d1ab002b1d20c55070cf73355e027bb839d6",
+      "source_url": "https://api.openstreetmap.org/api/0.6/map?bbox=-5.9663%2C37.3904%2C-5.9573%2C37.4001",
+      "ways": 819
+    },
+    "pnoa.jpg": {
+      "axis_order": "longitude,latitude (WMS 1.1.1)",
+      "bbox_wgs84": [
+        -5.9663,
+        37.3904,
+        -5.9573,
+        37.4001
+      ],
+      "bytes": 528597,
+      "crs": "EPSG:4326",
+      "format": "image/jpeg",
+      "height": 1800,
+      "retrieved_at_utc": "2026-07-14T22:31:16Z",
+      "sha256": "748fdd07452bd85789b94c691ee87effd2195a14856c20ec4f1f21a5e635d6e1",
+      "source_url": "https://www.ign.es/wms-inspire/pnoa-ma?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=OI.OrthoimageCoverage&STYLES=&SRS=EPSG%3A4326&BBOX=-5.9663%2C37.3904%2C-5.9573%2C37.4001&WIDTH=1400&HEIGHT=1800&FORMAT=image%2Fjpeg&TRANSPARENT=false",
+      "width": 1400
+    },
+    "sidewalks.geojson": {
+      "bytes": 754524,
+      "crs": "EPSG:4326",
+      "feature_count": 112,
+      "format": "GeoJSON",
+      "query": {
+        "geometry": "boundary.geojson",
+        "geometryPrecision": 7,
+        "geometryType": "esriGeometryPolygon",
+        "inSR": "4326",
+        "outFields": "objectid,layer",
+        "outSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "where": "1=1"
+      },
+      "retrieved_at_utc": "2026-07-14T22:31:03Z",
+      "sha256": "9b33d930c04b366b5e0e52a1fe02130ffb211ed0a4e27bf667a98a323e7cfb1d",
+      "source_url": "https://cdu.urbanismosevilla.org/arcgis/rest/services/MapaBase/Guia_Urbana_2026/FeatureServer/50/query"
+    },
+    "streets.geojson": {
+      "bytes": 285296,
+      "crs": "EPSG:4326",
+      "feature_count": 26,
+      "format": "GeoJSON",
+      "query": {
+        "geometry": "boundary.geojson",
+        "geometryPrecision": 7,
+        "geometryType": "esriGeometryPolygon",
+        "inSR": "4326",
+        "outFields": "objectid_12,cvia_num,nombre,jerarquia,sup_total,long_calle,sup_tramo,modificada",
+        "outSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "where": "1=1"
+      },
+      "retrieved_at_utc": "2026-07-14T22:31:04Z",
+      "sha256": "ab80f5b51da4b24fdc2e20e66ab85fa9d2dc463a7c6fa82661fff54ad81c8d9c",
+      "source_url": "https://cdu.urbanismosevilla.org/arcgis/rest/services/MapaBase/Guia_Urbana_2026/FeatureServer/51/query"
+    },
+    "surfaces.geojson": {
+      "bytes": 389411,
+      "crs": "EPSG:4326",
+      "feature_count": 120,
+      "format": "GeoJSON",
+      "query": {
+        "geometry": "boundary.geojson",
+        "geometryPrecision": 7,
+        "geometryType": "esriGeometryPolygon",
+        "inSR": "4326",
+        "outFields": "objectid,layer,Shape__Area,Shape__Length",
+        "outSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "where": "1=1"
+      },
+      "retrieved_at_utc": "2026-07-14T22:31:02Z",
+      "sha256": "63dfc31d0e8d1ceffcd6c30f4ffefdb6adaedbeec6870a109d0cf708dbb9bc4b",
+      "source_url": "https://cdu.urbanismosevilla.org/arcgis/rest/services/MapaBase/Guia_Urbana_2026/FeatureServer/27/query"
+    },
+    "trees.geojson": {
+      "bytes": 25531930,
+      "crs": "EPSG:4326",
+      "feature_count": 799,
+      "format": "GeoJSON",
+      "query": {
+        "batch_size": 500,
+        "geometry": "boundary.geojson",
+        "geometryPrecision": 7,
+        "geometryType": "esriGeometryPolygon",
+        "id_discovery": "returnIdsOnly=true",
+        "inSR": "4326",
+        "outFields": "objectid,layer,id,Shape__Length",
+        "outSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "where": "layer IN ('168153 - ARBOL','198177 - PALMERA')"
+      },
+      "retrieved_at_utc": "2026-07-14T22:31:15Z",
+      "sha256": "3c7df387c40a17bb1375b724296280704420703c16756bbed4786d544959299a",
+      "source_url": "https://cdu.urbanismosevilla.org/arcgis/rest/services/MapaBase/Guia_Urbana_2026/FeatureServer/55/query"
+    }
+  },
+  "fine_layer_batch_size": 500,
+  "generated_at_utc": "2026-07-14T22:31:16Z",
+  "generator": "tools/fetch-san-pablo-source-data.py",
+  "geometry_precision_decimals": 7,
+  "hash_algorithm": "SHA-256",
+  "pnoa": {
+    "axis_order": "longitude,latitude",
+    "bbox_wgs84": [
+      -5.9663,
+      37.3904,
+      -5.9573,
+      37.4001
+    ],
+    "crs": "EPSG:4326",
+    "file": "pnoa.jpg",
+    "format": "image/jpeg",
+    "height": 1800,
+    "width": 1400,
+    "wms_version": "1.1.1"
+  },
+  "schema_version": 1
+}

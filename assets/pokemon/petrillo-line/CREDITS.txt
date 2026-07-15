@@ -7,3 +7,8 @@ Archivos:
 - petrillo-front.png / petrillo-back.png
 - musgolem-front.png / musgolem-back.png
 - terravordeo-front.png / terravordeo-back.png
+
+Poses frontales de ataque: editadas en julio de 2026 con OpenAI ImageGen a partir de cada sprite frontal del proyecto, recortadas a transparencia y optimizadas a 512 × 512.
+- petrillo-attack-front.png
+- musgolem-attack-front.png
+- terravordeo-attack-front.png

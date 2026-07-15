@@ -7,3 +7,5 @@ Archivos:
 - alua-front.png / alua-back.png
 - capulua-front.png / capulua-back.png
 - maripulua-front.png / maripulua-back.png
+
+Ajuste de combate (julio de 2026): alua-back.png y capulua-back.png se voltearon horizontalmente para que la vista del compañero mire a la derecha. No se regeneraron los dibujos.

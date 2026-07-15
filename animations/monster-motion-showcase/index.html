@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Cuatro propuestas de animación de 3 segundos para los monstruos de Pokémon Adventure." />
+    <title>Laboratorio de animación · Pokémon Adventure</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-rounded, "Trebuchet MS", system-ui, sans-serif;
+        --cycle: 3s;
+        --ink: #f7f3dc;
+        --muted: #a6b5ad;
+        --panel: rgba(12, 24, 21, .84);
+        --line: rgba(225, 244, 221, .14);
+        --play-state: running;
+      }
+
+      * { box-sizing: border-box; }
+
+      html,
+      body {
+        min-width: 320px;
+        min-height: 100%;
+        margin: 0;
+        background: #07110e;
+      }
+
+      body {
+        min-height: 100vh;
+        overflow-x: hidden;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 16% 4%, rgba(94, 155, 101, .23), transparent 32rem),
+          radial-gradient(circle at 88% 0%, rgba(205, 159, 65, .16), transparent 30rem),
+          linear-gradient(145deg, #0b1b16, #07110e 58%, #10180f);
+      }
+
+      button { font: inherit; }
+
+      .shell {
+        width: min(1440px, 100%);
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: clamp(18px, 3vw, 38px);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 22px;
+        gap: 22px;
+      }
+
+      .eyebrow {
+        margin: 0 0 7px;
+        color: #a8d18b;
+        font-size: .72rem;
+        font-weight: 900;
+        letter-spacing: .19em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 850px;
+        font-size: clamp(1.65rem, 3.6vw, 3.4rem);
+        line-height: .98;
+        letter-spacing: -.045em;
+      }
+
+      .lede {
+        max-width: 700px;
+        margin: 11px 0 0;
+        color: var(--muted);
+        font-size: clamp(.8rem, 1.4vw, 1rem);
+        line-height: 1.5;
+      }
+
+      .controls {
+        display: flex;
+        flex: 0 0 auto;
+        padding: 5px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(4, 12, 10, .58);
+        box-shadow: 0 14px 34px rgba(0, 0, 0, .22);
+        gap: 5px;
+      }
+
+      .control {
+        min-height: 38px;
+        padding: 0 14px;
+        cursor: pointer;
+        border: 0;
+        border-radius: 999px;
+        color: var(--ink);
+        background: transparent;
+        font-size: .76rem;
+        font-weight: 850;
+      }
+
+      .control:hover,
+      .control:focus-visible { background: rgba(255, 255, 255, .09); outline: none; }
+      .control.primary { color: #132114; background: #b8da79; }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(13px, 2vw, 22px);
+      }
+
+      .card {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--panel);
+        box-shadow: 0 22px 60px rgba(0, 0, 0, .24);
+        isolation: isolate;
+      }
+
+      .card::before {
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        content: "";
+        background:
+          radial-gradient(circle at 76% 16%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 38%),
+          linear-gradient(135deg, rgba(255, 255, 255, .035), transparent 55%);
+      }
+
+      .card-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        padding: 17px 18px 0;
+        gap: 12px;
+      }
+
+      .number {
+        display: inline-grid;
+        width: 29px;
+        height: 29px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+        border-radius: 50%;
+        color: var(--accent);
+        font-size: .68rem;
+        font-weight: 950;
+      }
+
+      .title-wrap { flex: 1; }
+      .card h2 { margin: 0; font-size: clamp(.96rem, 1.55vw, 1.22rem); letter-spacing: -.015em; }
+      .card p { margin: 4px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.35; }
+
+      .tag {
+        padding: 6px 8px;
+        border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+        border-radius: 999px;
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+        font-size: .58rem;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .stage {
+        position: relative;
+        height: clamp(205px, 25vw, 300px);
+        overflow: hidden;
+        margin: 9px 12px 0;
+        border-radius: 17px;
+        background:
+          linear-gradient(rgba(5, 12, 10, .08), rgba(5, 12, 10, .42)),
+          radial-gradient(ellipse at 50% 110%, color-mix(in srgb, var(--accent) 18%, #173c2c), #10251c 48%, #0b1915 75%);
+        perspective: 700px;
+      }
+
+      .stage::after {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 34%;
+        content: "";
+        background:
+          repeating-linear-gradient(155deg, transparent 0 24px, rgba(255, 255, 255, .018) 25px 27px),
+          linear-gradient(transparent, rgba(2, 9, 7, .32));
+        clip-path: polygon(0 43%, 100% 0, 100% 100%, 0 100%);
+      }
+
+      .cycle-label {
+        position: absolute;
+        z-index: 9;
+        top: 11px;
+        left: 13px;
+        padding: 5px 8px;
+        border: 1px solid rgba(255, 255, 255, .1);
+        border-radius: 999px;
+        color: rgba(246, 247, 226, .78);
+        background: rgba(3, 10, 8, .42);
+        font-size: .58rem;
+        font-weight: 850;
+        letter-spacing: .06em;
+        backdrop-filter: blur(6px);
+      }
+
+      .shadow {
+        position: absolute;
+        z-index: 2;
+        bottom: 8%;
+        left: 50%;
+        width: 40%;
+        height: 9%;
+        border-radius: 50%;
+        opacity: .56;
+        background: #020706;
+        filter: blur(6px);
+        transform: translateX(-50%);
+        animation: shadow-breathe var(--cycle) linear infinite;
+        animation-play-state: var(--play-state);
+      }
+
+      .rig {
+        position: absolute;
+        z-index: 5;
+        bottom: 3%;
+        left: 50%;
+        width: min(67%, 285px);
+        aspect-ratio: 1;
+        transform: translateX(-50%);
+        transform-origin: 50% 87%;
+        will-change: transform, filter;
+        animation-duration: var(--cycle);
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+        animation-play-state: var(--play-state);
+      }
+
+      .monster {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+        filter: drop-shadow(0 12px 7px rgba(0, 0, 0, .26));
+        user-select: none;
+      }
+
+      /* The source is a flat PNG. These two color-matched masks create a real-looking closed-eye frame. */
+      .lid {
+        position: absolute;
+        z-index: 2;
+        top: 53.5%;
+        width: 7.6%;
+        height: 12.4%;
+        border-radius: 48%;
+        opacity: 0;
+        background: radial-gradient(ellipse at 50% 58%, #151718 0 68%, #30302a 75%, transparent 78%);
+        animation: blink var(--cycle) linear infinite;
+        animation-play-state: var(--play-state);
+      }
+
+      .lid::after {
+        position: absolute;
+        right: 17%;
+        bottom: 23%;
+        left: 17%;
+        height: 17%;
+        content: "";
+        border-bottom: 2px solid rgba(218, 158, 33, .72);
+        border-radius: 50%;
+      }
+
+      .lid.left { left: 31%; width: 7.2%; transform: rotate(1deg); }
+      .lid.right { left: 46.4%; width: 8.2%; transform: rotate(-1deg); }
+
+      .speed-lines,
+      .aura,
+      .impact,
+      .dust,
+      .spark {
+        position: absolute;
+        pointer-events: none;
+        animation-duration: var(--cycle);
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+        animation-play-state: var(--play-state);
+      }
+
+      .speed-lines {
+        z-index: 3;
+        top: 28%;
+        left: 4%;
+        width: 55%;
+        height: 44%;
+        opacity: 0;
+        background: repeating-linear-gradient(0deg, transparent 0 14px, color-mix(in srgb, var(--accent) 68%, white) 15px 17px, transparent 18px 27px);
+        filter: blur(.5px);
+        clip-path: polygon(0 18%, 100% 0, 82% 100%, 7% 85%);
+      }
+
+      .aura {
+        z-index: 4;
+        bottom: 13%;
+        left: 50%;
+        width: 42%;
+        aspect-ratio: 1;
+        border: 3px solid var(--accent);
+        border-radius: 50%;
+        opacity: 0;
+        box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 62%, transparent), inset 0 0 25px color-mix(in srgb, var(--accent) 42%, transparent);
+      }
+
+      .impact {
+        z-index: 8;
+        top: 41%;
+        right: 9%;
+        width: 72px;
+        aspect-ratio: 1;
+        opacity: 0;
+        background: color-mix(in srgb, var(--accent) 82%, white);
+        clip-path: polygon(50% 0, 60% 35%, 88% 15%, 73% 43%, 100% 50%, 72% 59%, 88% 88%, 60% 70%, 50% 100%, 40% 69%, 12% 87%, 27% 58%, 0 50%, 29% 42%, 12% 14%, 40% 34%);
+        filter: drop-shadow(0 0 13px var(--accent));
+      }
+
+      .dust {
+        z-index: 4;
+        right: 22%;
+        bottom: 10%;
+        width: 16px;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        opacity: 0;
+        color: #c5ae7b;
+        background: currentColor;
+        box-shadow: 19px -5px 0 -3px currentColor, -17px -8px 0 -5px currentColor, 28px 2px 0 -6px currentColor;
+      }
+
+      .spark {
+        z-index: 7;
+        top: 37%;
+        right: 14%;
+        width: 32px;
+        height: 70px;
+        opacity: 0;
+        border: solid var(--accent);
+        border-width: 0 7px 0 0;
+        filter: drop-shadow(0 0 7px var(--accent));
+        transform: skew(-25deg);
+      }
+
+      .spark::before,
+      .spark::after {
+        position: absolute;
+        width: 7px;
+        height: 34px;
+        content: "";
+        background: var(--accent);
+        transform: rotate(54deg);
+      }
+
+      .spark::before { top: 3px; right: -17px; }
+      .spark::after { right: 7px; bottom: 1px; }
+
+      .motion-natural { --accent: #9ed47f; }
+      .motion-classic { --accent: #eac764; }
+      .motion-elastic { --accent: #76c7d4; }
+      .motion-cinematic { --accent: #ef836e; }
+
+      .motion-natural .rig { animation-name: natural-motion; }
+      .motion-classic .rig { animation-name: classic-motion; animation-timing-function: steps(2, end); }
+      .motion-elastic .rig { animation-name: elastic-motion; }
+      .motion-cinematic .rig { animation-name: cinematic-motion; }
+
+      .motion-natural .speed-lines { animation-name: natural-lines; }
+      .motion-classic .speed-lines { animation-name: classic-lines; }
+      .motion-elastic .speed-lines { animation-name: elastic-lines; }
+      .motion-cinematic .speed-lines { animation-name: cinematic-lines; }
+      .motion-classic .impact { animation-name: classic-impact; }
+      .motion-elastic .dust { animation-name: dust-pop; }
+      .motion-elastic .impact { animation-name: elastic-impact; }
+      .motion-cinematic .aura { animation-name: aura-charge; }
+      .motion-cinematic .impact { animation-name: cinematic-impact; }
+      .motion-cinematic .spark { animation-name: spark-strike; }
+
+      .timeline { padding: 13px 17px 16px; }
+
+      .track {
+        display: grid;
+        grid-template-columns: 23fr 23fr 22fr 32fr;
+        height: 5px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, .06);
+        gap: 2px;
+      }
+
+      .track span { background: color-mix(in srgb, var(--accent) 58%, #738078); }
+      .track span:nth-child(2) { opacity: .55; }
+      .track span:nth-child(3) { background: var(--accent); }
+      .track span:nth-child(4) { opacity: .34; }
+
+      .track::after {
+        position: absolute;
+        content: "";
+      }
+
+      .timeline-labels {
+        display: grid;
+        grid-template-columns: 23fr 23fr 22fr 32fr;
+        margin-top: 7px;
+        color: #798b82;
+        font-size: .52rem;
+        font-weight: 850;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+
+      .timeline-labels span:nth-child(2),
+      .timeline-labels span:nth-child(3) { text-align: center; }
+      .timeline-labels span:last-child { text-align: right; }
+
+      .playhead {
+        height: 2px;
+        margin-top: -5px;
+        border-radius: 99px;
+        background: var(--accent);
+        transform: scaleX(0);
+        transform-origin: left;
+        animation: playhead var(--cycle) linear infinite;
+        animation-play-state: var(--play-state);
+      }
+
+      .hint {
+        margin: 16px 2px 0;
+        color: #829189;
+        font-size: .7rem;
+        line-height: 1.45;
+        text-align: center;
+      }
+
+      .card.replay .rig,
+      .card.replay .lid,
+      .card.replay .speed-lines,
+      .card.replay .aura,
+      .card.replay .impact,
+      .card.replay .dust,
+      .card.replay .spark,
+      .card.replay .shadow,
+      .card.replay .playhead { animation: none !important; }
+
+      @keyframes blink {
+        0%, 14%, 17%, 19.8%, 100% { opacity: 0; }
+        15%, 16.2%, 18.2%, 19% { opacity: 1; }
+      }
+
+      @keyframes playhead { to { transform: scaleX(1); } }
+
+      @keyframes shadow-breathe {
+        0%, 25%, 100% { transform: translateX(-50%) scale(1); opacity: .5; }
+        38% { transform: translateX(-50%) scale(1.08, .9); opacity: .6; }
+        50% { transform: translateX(-32%) scale(.72, .78); opacity: .34; }
+        65% { transform: translateX(-50%) scale(1.04, .94); opacity: .57; }
+      }
+
+      @keyframes natural-motion {
+        0%, 10%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+        21% { transform: translateX(-50%) translateY(2px) scale(1.012, .988); }
+        34% { transform: translateX(-52%) translateY(4px) rotate(-1deg) scale(1.025, .977); }
+        43% { transform: translateX(-50%) translateY(-3px) rotate(.7deg) scale(.994, 1.012); }
+        51% { transform: translateX(-42%) translateY(-8px) rotate(1.6deg) scale(1.01, .995); }
+        58% { transform: translateX(-49%) translateY(2px) rotate(-.6deg) scale(1.018, .982); }
+        72% { transform: translateX(-50%) translateY(-2px) rotate(.2deg) scale(.998, 1.006); }
+      }
+
+      @keyframes classic-motion {
+        0%, 22%, 68%, 100% { transform: translateX(-50%) translateY(0); }
+        30% { transform: translateX(-53%) translateY(5px) rotate(-2deg) scale(1.04, .96); }
+        38% { transform: translateX(-55%) translateY(1px) rotate(-3deg); }
+        46% { transform: translateX(-27%) translateY(-11px) rotate(4deg) scale(1.035, .97); }
+        52% { transform: translateX(-24%) translateY(-8px) rotate(4deg) scale(1.035, .97); }
+        59% { transform: translateX(-54%) translateY(4px) rotate(-2deg) scale(1.035, .965); }
+      }
+
+      @keyframes elastic-motion {
+        0%, 22%, 73%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+        30% { transform: translateX(-50%) translateY(10px) scale(1.09, .86); }
+        38% { transform: translateX(-56%) translateY(1px) rotate(-4deg) scale(.93, 1.08); }
+        46% { transform: translateX(-24%) translateY(-23px) rotate(6deg) scale(1.13, .88); }
+        52% { transform: translateX(-21%) translateY(-13px) rotate(4deg) scale(.98, 1.05); }
+        59% { transform: translateX(-52%) translateY(9px) rotate(-2deg) scale(1.1, .84); }
+        66% { transform: translateX(-50%) translateY(-7px) rotate(1deg) scale(.96, 1.06); }
+      }
+
+      @keyframes cinematic-motion {
+        0%, 18%, 74%, 100% { transform: translateX(-50%) translateY(0); filter: none; }
+        28% { transform: translateX(-50%) translateY(5px) scale(1.045, .96); filter: saturate(1.15); }
+        38% { transform: translateX(-57%) translateY(2px) rotate(-2deg) scale(1.07, .94); filter: saturate(1.35) brightness(1.08); }
+        46% { transform: translateX(-19%) translateY(-15px) rotate(5deg) scale(1.05, .97); filter: saturate(1.45) brightness(1.13); }
+        51% { transform: translateX(-16%) translateY(-9px) rotate(5deg) scale(1.05, .97); filter: saturate(1.45) brightness(1.13); }
+        58% { transform: translateX(-55%) translateY(5px) rotate(-2deg) scale(1.05, .95); filter: saturate(1.1); }
+        66% { transform: translateX(-49%) translateY(-3px) rotate(.5deg); filter: none; }
+      }
+
+      @keyframes natural-lines { 0%, 43%, 56%, 100% { opacity: 0; } 48%, 52% { opacity: .16; transform: translateX(7%); } }
+      @keyframes classic-lines { 0%, 39%, 57%, 100% { opacity: 0; } 44%, 53% { opacity: .5; transform: translateX(18%); } }
+      @keyframes elastic-lines { 0%, 38%, 59%, 100% { opacity: 0; } 44%, 54% { opacity: .58; transform: translateX(20%) scaleX(1.12); } }
+      @keyframes cinematic-lines { 0%, 37%, 59%, 100% { opacity: 0; } 43%, 54% { opacity: .82; transform: translateX(25%) scaleX(1.25); } }
+
+      @keyframes classic-impact {
+        0%, 44%, 55%, 100% { opacity: 0; transform: scale(.15) rotate(0); }
+        48% { opacity: .94; transform: scale(.82) rotate(16deg); }
+        52% { opacity: .15; transform: scale(1.35) rotate(32deg); }
+      }
+
+      @keyframes dust-pop {
+        0%, 48%, 63%, 100% { opacity: 0; transform: translate(0, 0) scale(.2); }
+        53% { opacity: .72; transform: translate(9px, -8px) scale(1); }
+        60% { opacity: 0; transform: translate(20px, -20px) scale(1.45); }
+      }
+
+      @keyframes elastic-impact {
+        0%, 43%, 58%, 100% { opacity: 0; transform: scale(.1) rotate(-12deg); }
+        48% { opacity: .95; transform: scale(1) rotate(10deg); }
+        54% { opacity: 0; transform: scale(1.55) rotate(28deg); }
+      }
+
+      @keyframes aura-charge {
+        0%, 24%, 56%, 100% { opacity: 0; transform: translateX(-50%) scale(.55); }
+        32% { opacity: .38; transform: translateX(-50%) scale(.78); }
+        42% { opacity: .74; transform: translateX(-50%) scale(1.08); }
+        50% { opacity: .12; transform: translateX(-5%) scale(1.48); }
+      }
+
+      @keyframes cinematic-impact {
+        0%, 43%, 59%, 100% { opacity: 0; transform: scale(.1) rotate(0); }
+        47% { opacity: 1; transform: scale(1.15) rotate(18deg); }
+        52% { opacity: .72; transform: scale(1.5) rotate(34deg); }
+        57% { opacity: 0; transform: scale(2) rotate(48deg); }
+      }
+
+      @keyframes spark-strike {
+        0%, 42%, 59%, 100% { opacity: 0; transform: scale(.3) skew(-25deg); }
+        47%, 52% { opacity: 1; transform: scale(1.08) skew(-25deg); }
+        56% { opacity: .25; transform: scale(1.35) skew(-25deg); }
+      }
+
+      @media (max-width: 760px) {
+        .topbar { align-items: stretch; flex-direction: column; }
+        .controls { align-self: flex-start; }
+        .grid { grid-template-columns: 1fr; }
+        .stage { height: min(70vw, 310px); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        :root { --play-state: paused; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell" id="showcase">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Laboratorio de movimiento</p>
+          <h1>¿Cómo debería cobrar vida Petrillo?</h1>
+          <p class="lede">Cuatro direcciones visuales sobre el mismo sprite. Todas incluyen respiración, doble pestañeo, anticipación, ataque y recuperación en un ciclo exacto de 3 segundos.</p>
+        </div>
+        <div class="controls" aria-label="Controles de la muestra">
+          <button class="control primary" id="toggleButton" type="button">Pausar</button>
+          <button class="control" id="replayButton" type="button">Repetir</button>
+        </div>
+      </header>
+
+      <section class="grid" aria-label="Comparativa de animaciones">
+        <article class="card motion-natural" data-motion="natural">
+          <div class="card-head">
+            <span class="number">01</span>
+            <div class="title-wrap">
+              <h2>Natural y sutil</h2>
+              <p>Respira, pestañea y embiste sin perder peso.</p>
+            </div>
+            <span class="tag">Mi favorito</span>
+          </div>
+          <div class="stage">
+            <span class="cycle-label">3,0 s · suave</span>
+            <span class="speed-lines"></span>
+            <span class="shadow"></span>
+            <div class="rig">
+              <img class="monster" src="../../assets/pokemon/petrillo-line/petrillo-front.png" alt="Petrillo con animación natural" draggable="false" />
+              <span class="lid left"></span><span class="lid right"></span>
+            </div>
+          </div>
+          <div class="timeline">
+            <div class="track"><span></span><span></span><span></span><span></span></div>
+            <div class="playhead"></div>
+            <div class="timeline-labels"><span>Respira</span><span>Pestañea</span><span>Ataca</span><span>Recupera</span></div>
+          </div>
+        </article>
+
+        <article class="card motion-classic" data-motion="classic">
+          <div class="card-head">
+            <span class="number">02</span>
+            <div class="title-wrap">
+              <h2>GIF clásico</h2>
+              <p>Poses marcadas y pocos fotogramas, estilo RPG.</p>
+            </div>
+            <span class="tag">Retro</span>
+          </div>
+          <div class="stage">
+            <span class="cycle-label">3,0 s · por pasos</span>
+            <span class="speed-lines"></span>
+            <span class="impact"></span>
+            <span class="shadow"></span>
+            <div class="rig">
+              <img class="monster" src="../../assets/pokemon/petrillo-line/petrillo-front.png" alt="Petrillo con animación clásica" draggable="false" />
+              <span class="lid left"></span><span class="lid right"></span>
+            </div>
+          </div>
+          <div class="timeline">
+            <div class="track"><span></span><span></span><span></span><span></span></div>
+            <div class="playhead"></div>
+            <div class="timeline-labels"><span>Respira</span><span>Pestañea</span><span>Ataca</span><span>Recupera</span></div>
+          </div>
+        </article>
+
+        <article class="card motion-elastic" data-motion="elastic">
+          <div class="card-head">
+            <span class="number">03</span>
+            <div class="title-wrap">
+              <h2>Elástico y expresivo</h2>
+              <p>Squash &amp; stretch, salto y aterrizaje con polvo.</p>
+            </div>
+            <span class="tag">Cartoon</span>
+          </div>
+          <div class="stage">
+            <span class="cycle-label">3,0 s · enérgico</span>
+            <span class="speed-lines"></span>
+            <span class="impact"></span>
+            <span class="dust"></span>
+            <span class="shadow"></span>
+            <div class="rig">
+              <img class="monster" src="../../assets/pokemon/petrillo-line/petrillo-front.png" alt="Petrillo con animación elástica" draggable="false" />
+              <span class="lid left"></span><span class="lid right"></span>
+            </div>
+          </div>
+          <div class="timeline">
+            <div class="track"><span></span><span></span><span></span><span></span></div>
+            <div class="playhead"></div>
+            <div class="timeline-labels"><span>Respira</span><span>Pestañea</span><span>Ataca</span><span>Recupera</span></div>
+          </div>
+        </article>
+
+        <article class="card motion-cinematic" data-motion="cinematic">
+          <div class="card-head">
+            <span class="number">04</span>
+            <div class="title-wrap">
+              <h2>Cinemático con impacto</h2>
+              <p>Carga de energía, embestida, destello y rayo.</p>
+            </div>
+            <span class="tag">Potente</span>
+          </div>
+          <div class="stage">
+            <span class="cycle-label">3,0 s · efectos</span>
+            <span class="speed-lines"></span>
+            <span class="aura"></span>
+            <span class="impact"></span>
+            <span class="spark"></span>
+            <span class="shadow"></span>
+            <div class="rig">
+              <img class="monster" src="../../assets/pokemon/petrillo-line/petrillo-front.png" alt="Petrillo con animación cinematográfica" draggable="false" />
+              <span class="lid left"></span><span class="lid right"></span>
+            </div>
+          </div>
+          <div class="timeline">
+            <div class="track"><span></span><span></span><span></span><span></span></div>
+            <div class="playhead"></div>
+            <div class="timeline-labels"><span>Respira</span><span>Pestañea</span><span>Ataca</span><span>Recupera</span></div>
+          </div>
+        </article>
+      </section>
+
+      <p class="hint">Puedes pausar para comparar poses. Pulsa una tarjeta para repetir solo esa propuesta desde el inicio.</p>
+    </main>
+
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const toggleButton = document.querySelector("#toggleButton");
+        const replayButton = document.querySelector("#replayButton");
+        const cards = [...document.querySelectorAll(".card")];
+        let paused = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        function setPaused(next) {
+          paused = next;
+          root.style.setProperty("--play-state", paused ? "paused" : "running");
+          toggleButton.textContent = paused ? "Reanudar" : "Pausar";
+          toggleButton.setAttribute("aria-pressed", String(paused));
+        }
+
+        function replay(elements = cards) {
+          elements.forEach((card) => card.classList.add("replay"));
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            elements.forEach((card) => card.classList.remove("replay"));
+          }));
+        }
+
+        toggleButton.addEventListener("click", () => setPaused(!paused));
+        replayButton.addEventListener("click", () => replay());
+        cards.forEach((card) => card.addEventListener("click", (event) => {
+          if (event.target.closest("button")) return;
+          replay([card]);
+        }));
+
+        setPaused(paused);
+        document.documentElement.dataset.showcaseReady = "true";
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+Origen: ficha conceptual aportada por el usuario (codex-clipboard-074c60d2-9d52-4ae6-801d-3c1ccae51f7d.png).
+Proceso: recorte de las vistas dibujadas y eliminación del fondo de pergamino; no se generaron perspectivas nuevas.
+
+Archivos extraídos:
+- cajhumo-front.png
+- cajhumo-back.png

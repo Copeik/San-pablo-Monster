@@ -6,3 +6,5 @@ Sprites de frente y espalda: extraídos directamente de la ficha original, sin r
 Archivos:
 - chispin-front.png / chispin-back.png
 - chisporc-front.png / chisporc-back.png
+
+Ajuste de sprites (julio de 2026): se eliminaron restos de fondo/sombra de Chispin. En chispin-back.png se recolocaron los píxeles de la cola original para unirla al centro de la espalda; no se regeneró el personaje.

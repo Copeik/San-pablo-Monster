@@ -33,6 +33,18 @@ API esperada de ``map-layout.js`` (coordenadas en pixeles logicos):
       blockedRects: [{id: "gate", x: 100, y: 100, w: 40, h: 12}],
       blockedPolygons: [{id: "pond", points: [[...], ...]}],
       blockers: [{id: "thorns", x: 0, y: 0, w: 64, h: 32}],
+      openExceptSolids: false,       // true abre todo antes de restar solidos
+      buildingFootprints: [
+        {id: "block-a", points: [[...], ...], solid: true,
+         levels: 4, kind: "apartments", refcat: "...", name: "..."},
+      ],
+      barrierSegments: [
+        {id: "wall-a", points: [[...], ...], width: 4, kind: "wall"},
+      ],
+      waterAreas: [{id: "pond", points: [[...], ...]}],
+      sportsAreas: [{id: "pitch", points: [[...], ...], kind: "soccer"}],
+      streetCenterlines: [{id: "ada", points: [[...], ...], width: 40}],
+      crossings: [{id: "crossing-a", points: [[x1, y1], [x2, y2]]}],
       sections: [{id: "north", name: "Distrito Norte", x: 0, y: 0,
                   w: 2508, h: 1254}],
       includeMapDataWalkability: false,
@@ -49,8 +61,9 @@ como casillas, igual que en el runtime actual.
 
 El layout es la fuente principal. La transitabilidad antigua de map-data solo
 se usa si el layout no declara ninguna superficie transitable o si
-``includeMapDataWalkability`` vale ``true``. Colliders de worldAssets y bloqueos
-declarados siempre se restan de la mascara final.
+``includeMapDataWalkability`` vale ``true``. ``openExceptSolids`` inicia la
+mascara completamente abierta. Bloqueos, edificios y barreras solidos siempre
+se restan; los colliders de ``worldAssets`` con ``solid:false`` se ignoran.
 """
 
 import argparse
@@ -74,13 +87,21 @@ DEFAULT_CELL_INSET = 12
 
 LAYOUT_CONTRACT = """map-layout.js debe exportar window.CITY_MAP_LAYOUT (o module.exports).
 Campos principales:
-  roads[]: {id, points:[[x,y],...], width, surface:'road', sidewalkWidth?, curbWidth?, walkable?}
-  paths[]: {id, points:[[x,y],...], width, surface:'dirt'|'sidewalk'|'road', walkable?}
+  roads[]: {id, points:[[x,y],...], width, surface:'road', sidewalkWidth?, curbWidth?, walkable?,render?}
+  paths[]: {id, points:[[x,y],...], width, surface:'dirt'|'sidewalk'|'road', walkable?,render?}
   surfaceRects[]: {id,x,y,w,h,surface,walkable?}
   surfacePolygons[]: {id,points:[[x,y],...],surface,walkable?}
   blockedRects[] / blockedPolygons[] / blockers[]: geometria que se resta.
+  openExceptSolids: true para abrir todo el mapa antes de restar solidos.
+  buildingFootprints[]: {id,points,solid?,levels?,kind?,refcat?,name?}.
+  barrierSegments[]: {id,points,width,kind:'wall'|'fence'|'gate',solid?}.
+  waterAreas[] / sportsAreas[]: poligonos visuales estaticos opcionales.
+  streetSurfaces[] / sidewalks[] / greens[] / municipalSurfaces[]: terreno GIS.
+  streetCenterlines[] / crossings[]: marcas y detalles viales opcionales.
+  doors[]: {col,row,approach?,label,action}; se hornean como umbrales visuales.
   sections[]: {id,name,x,y,w,h}; worldAssets[] es opcional.
-Todas las coordenadas estan en pixeles logicos salvo units:'tiles'.
+Los poligonos aceptan holes:[[[x,y],...],...]. Todas las coordenadas estan en
+pixeles logicos salvo units:'tiles'. map-geography.js se precarga si existe.
 """
 
 SURFACE_ALIASES = {
@@ -120,6 +141,12 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--layout", type=Path, default=Path("map-layout.js"))
+    parser.add_argument(
+        "--geography",
+        type=Path,
+        default=Path("map-geography.js"),
+        help="Datos GIS que se precargan antes del layout cuando el fichero existe.",
+    )
     parser.add_argument("--map-data", type=Path, default=Path("map-data.js"))
     parser.add_argument(
         "--road-sheet",
@@ -149,6 +176,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-report", type=Path, default=Path("assets/maps/san-pablo-rebuilt-report-v2.json"),
+    )
+    parser.add_argument(
+        "--reference",
+        type=Path,
+        default=Path("assets/maps/san-pablo-reference-rectified.png"),
+        help="Referencia rectificada; si existe se alinea al render para la hoja comparativa.",
+    )
+    parser.add_argument(
+        "--output-comparison",
+        type=Path,
+        default=Path("assets/maps/san-pablo-rebuilt-comparison-v6.png"),
+        help="Hoja referencia / render / mezcla al 50 por ciento.",
     )
     parser.add_argument(
         "--chunks", type=Path, default=Path("assets/maps/san-pablo-rebuilt-chunks-2x"),
@@ -194,7 +233,11 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_javascript_object(path: Path, global_names: Sequence[str]) -> dict[str, Any]:
+def load_javascript_object(
+    path: Path,
+    global_names: Sequence[str],
+    preload_paths: Sequence[Path] = (),
+) -> dict[str, Any]:
     """Carga un objeto serializable sin analizar JavaScript con expresiones regulares."""
     script = r"""
 const path = require("path");
@@ -202,6 +245,8 @@ global.window = {};
 console.log = (...args) => process.stderr.write(`${args.join(" ")}\n`);
 const target = path.resolve(process.argv[1]);
 const names = process.argv[2].split(",");
+const preloads = JSON.parse(process.argv[3] || "[]");
+for (const preload of preloads) require(path.resolve(preload));
 const loaded = require(target);
 let value = null;
 for (const name of names) {
@@ -219,7 +264,14 @@ process.stdout.write(JSON.stringify(value));
 """
     try:
         result = subprocess.run(
-            ["node", "-e", script, str(path.resolve()), ",".join(global_names)],
+            [
+                "node",
+                "-e",
+                script,
+                str(path.resolve()),
+                ",".join(global_names),
+                json.dumps([str(preload.resolve()) for preload in preload_paths]),
+            ],
             cwd=ROOT,
             check=True,
             capture_output=True,
@@ -343,7 +395,11 @@ def normalize_item(raw: Any, *, kind: str, index: int) -> dict[str, Any]:
         return {"x": values[0], "y": values[1], "w": values[2], "h": values[3]}
     if (kind.endswith("Segments") or kind in {"roads", "paths"}) and len(values) >= 5:
         return {"segment": values[:4], "width": values[4]}
-    if kind.endswith("Polygons") and len(values) >= 3:
+    if (
+        kind.endswith("Polygons")
+        or kind.endswith("Areas")
+        or kind in {"buildingFootprints", "streetSurfaces", "sidewalks", "greens"}
+    ) and len(values) >= 3:
         return {"points": values}
     raise ValueError(f"Formato no reconocido para {kind}[{index}]: {values!r}")
 
@@ -370,6 +426,31 @@ def extract_points(item: Mapping[str, Any], factor: float, density: int, label: 
             )
         )
     return points
+
+
+def extract_holes(
+    item: Mapping[str, Any], factor: float, density: int, label: str,
+) -> list[list[tuple[int, int]]]:
+    raw_holes = item.get("holes", [])
+    if raw_holes is None:
+        return []
+    if not isinstance(raw_holes, Sequence) or isinstance(raw_holes, (str, bytes)):
+        raise TypeError(f"{label}.holes debe ser un array de anillos.")
+    holes: list[list[tuple[int, int]]] = []
+    for ring_index, ring in enumerate(raw_holes):
+        if not isinstance(ring, Sequence) or isinstance(ring, (str, bytes)):
+            raise TypeError(f"{label}.holes[{ring_index}] debe ser un array de puntos.")
+        if len(ring) < 3:
+            continue
+        holes.append(
+            extract_points(
+                {"points": ring},
+                factor,
+                density,
+                f"{label}.holes[{ring_index}]",
+            )
+        )
+    return holes
 
 
 def draw_polyline(mask: Image.Image, points: Sequence[tuple[int, int]], width: int, round_caps: bool) -> None:
@@ -415,6 +496,8 @@ def shape_mask(
         if len(points) < 3:
             raise ValueError(f"{label} necesita tres puntos para ser poligono.")
         draw.polygon(points, fill=255)
+        for hole in extract_holes(item, factor, density, label):
+            draw.polygon(hole, fill=0)
     elif kind == "segment":
         points = extract_points(item, factor, density, label)
         width = scaled(item.get("width", 32) * factor, density, f"{label}.width")
@@ -422,6 +505,44 @@ def shape_mask(
     else:
         raise ValueError(f"Tipo de geometria desconocido: {kind}")
     return mask
+
+
+def local_shape_mask(
+    item: Mapping[str, Any],
+    kind: str,
+    density: int,
+    tile_size: int,
+    label: str,
+    *,
+    default_units: str = "world",
+) -> tuple[Image.Image, tuple[int, int, int, int]]:
+    """Version acotada de shape_mask para no reservar un lienzo por feature GIS."""
+    factor = unit_factor(item, tile_size, default_units)
+    if kind == "rect":
+        missing = [key for key in ("x", "y", "w", "h") if key not in item]
+        if missing:
+            raise ValueError(f"{label} carece de {', '.join(missing)}.")
+        x = scaled(logical_number(item["x"], f"{label}.x") * factor, density, f"{label}.x")
+        y = scaled(logical_number(item["y"], f"{label}.y") * factor, density, f"{label}.y")
+        width = scaled(logical_number(item["w"], f"{label}.w") * factor, density, f"{label}.w")
+        height = scaled(logical_number(item["h"], f"{label}.h") * factor, density, f"{label}.h")
+        if width <= 0 or height <= 0:
+            raise ValueError(f"{label} debe tener w/h positivos.")
+        return Image.new("L", (width, height), 255), (x, y, x + width, y + height)
+    if kind == "polygon":
+        exterior = extract_points(item, factor, density, label)
+        if len(exterior) < 3:
+            raise ValueError(f"{label} necesita tres puntos para ser poligono.")
+        mask, box, _, _ = local_polygon_mask(
+            exterior,
+            extract_holes(item, factor, density, label),
+        )
+        return mask, box
+    if kind == "segment":
+        points = extract_points(item, factor, density, label)
+        width = scaled(item.get("width", 32) * factor, density, f"{label}.width")
+        return local_polyline_mask(points, width, bool(item.get("roundCaps", True)))
+    raise ValueError(f"Tipo de geometria desconocido: {kind}")
 
 
 def iter_collection(layout: Mapping[str, Any], key: str) -> Iterable[tuple[int, dict[str, Any]]]:
@@ -440,6 +561,17 @@ def is_walkable(item: Mapping[str, Any], surface: str) -> bool:
     return surface in DEFAULT_WALKABLE_SURFACES
 
 
+def feature_value(item: Mapping[str, Any], *keys: str, default: Any = None) -> Any:
+    """Lee metadatos tanto a nivel superior como dentro de properties."""
+    properties = item.get("properties", {})
+    for key in keys:
+        if key in item and item[key] not in (None, ""):
+            return item[key]
+        if isinstance(properties, Mapping) and key in properties and properties[key] not in (None, ""):
+            return properties[key]
+    return default
+
+
 def build_geometry(
     layout: Mapping[str, Any],
     map_config: Mapping[str, Any],
@@ -450,10 +582,27 @@ def build_geometry(
     surface_masks = {name: Image.new("L", canvas_size, 0) for name in ("grass", "dirt", "sidewalk", "road")}
     road_sidewalk = Image.new("L", canvas_size, 0)
     road_curb = Image.new("L", canvas_size, 0)
-    walk_mask = Image.new("L", canvas_size, 0)
+    open_except_solids = bool(layout.get("openExceptSolids", False))
+    walk_mask = Image.new("L", canvas_size, 255 if open_except_solids else 0)
     blocked_mask = Image.new("L", canvas_size, 0)
     counts: Counter[str] = Counter()
-    ids: dict[str, list[str]] = {key: [] for key in ("roads", "paths", "surfaceRects", "surfacePolygons", "blockers")}
+    blocked_pixels: Counter[str] = Counter()
+    ids: dict[str, list[str]] = {
+        key: []
+        for key in (
+            "roads",
+            "paths",
+            "surfaceRects",
+            "surfacePolygons",
+            "streetSurfaces",
+            "sidewalks",
+            "greens",
+            "municipalSurfaces",
+            "buildingFootprints",
+            "barrierSegments",
+            "blockers",
+        )
+    }
     features: list[dict[str, Any]] = []
     semantic_walkables = 0
 
@@ -461,14 +610,21 @@ def build_geometry(
         ("surfaceRects", "rect", "grass"),
         ("surfacePolygons", "polygon", "grass"),
         ("paths", "segment", "dirt"),
+        ("streetSurfaces", "polygon", "road"),
+        ("sidewalks", "polygon", "sidewalk"),
+        ("greens", "polygon", "grass"),
     ):
         for index, item in iter_collection(layout, collection):
             label = f"{collection}[{index}]"
             surface = canonical_surface(item.get("surface"), default_surface)
             if surface not in surface_masks:
                 raise ValueError(f"{label}.surface={surface!r} no esta soportada.")
-            mask = shape_mask(item, kind, canvas_size, density, tile_size, label)
-            merge_mask(surface_masks[surface], mask)
+            mask, box = local_shape_mask(item, kind, density, tile_size, label)
+            render_feature = bool(item.get("render", True))
+            if render_feature:
+                merge_local_mask(surface_masks[surface], mask, box)
+            else:
+                counts[f"renderSuppressed:{collection}"] += 1
             counts[f"surface:{surface}"] += 1
             ids[collection].append(str(item.get("id", f"{collection}-{index}")))
             feature_walkable = is_walkable(item, surface)
@@ -478,11 +634,38 @@ def build_geometry(
                     "collection": collection,
                     "surface": surface,
                     "walkable": feature_walkable,
+                    "render": render_feature,
                 }
             )
             if feature_walkable:
-                merge_mask(walk_mask, mask)
+                merge_local_mask(walk_mask, mask, box)
                 semantic_walkables += 1
+
+    # Patios y suelos libres municipales forman terreno; edificios, agua y
+    # deporte tienen capas especializadas para evitar pintarlos dos veces.
+    for index, item in iter_collection(layout, "municipalSurfaces"):
+        label = f"municipalSurfaces[{index}]"
+        layer = str(feature_value(item, "layer", default="")).lower()
+        if any(token in layer for token in ("edificio", "deportivo", "estanque", "piscina", "fuente")):
+            counts["municipalSurfacesSpecialized"] += 1
+            continue
+        mask, box = local_shape_mask(item, "polygon", density, tile_size, label)
+        merge_local_mask(surface_masks["sidewalk"], mask, box)
+        municipal_id = str(item.get("id", f"municipal-{index}"))
+        ids["municipalSurfaces"].append(municipal_id)
+        counts["surface:sidewalk"] += 1
+        feature_walkable = is_walkable(item, "sidewalk")
+        features.append(
+            {
+                "id": municipal_id,
+                "collection": "municipalSurfaces",
+                "surface": "sidewalk",
+                "walkable": feature_walkable,
+            }
+        )
+        if feature_walkable:
+            merge_local_mask(walk_mask, mask, box)
+            semantic_walkables += 1
 
     for index, item in iter_collection(layout, "roads"):
         label = f"roads[{index}]"
@@ -492,6 +675,26 @@ def build_geometry(
         width = scaled(item.get("width", 64) * factor, density, f"{label}.width")
         if width <= 0:
             raise ValueError(f"{label}.width debe ser positivo.")
+        render_feature = bool(item.get("render", True))
+        feature_walkable = is_walkable(item, surface)
+        if surface != "road" and surface not in surface_masks:
+            raise ValueError(f"{label}.surface={surface!r} no esta soportada.")
+        if not render_feature and open_except_solids:
+            counts[f"surface:{surface}"] += 1
+            counts["renderSuppressed:roads"] += 1
+            ids["roads"].append(str(item.get("id", f"road-{index}")))
+            features.append(
+                {
+                    "id": str(item.get("id", f"road-{index}")),
+                    "collection": "roads",
+                    "surface": surface,
+                    "walkable": feature_walkable,
+                    "render": False,
+                }
+            )
+            if feature_walkable:
+                semantic_walkables += 1
+            continue
         center = Image.new("L", canvas_size, 0)
         draw_polyline(center, points, width, bool(item.get("roundCaps", True)))
         if surface == "road":
@@ -508,24 +711,26 @@ def build_geometry(
                 width + (curb_width + sidewalk_width) * 2,
                 bool(item.get("roundCaps", True)),
             )
-            merge_mask(road_curb, curb)
-            merge_mask(road_sidewalk, sidewalk)
-            merge_mask(surface_masks["road"], center)
+            if render_feature:
+                merge_mask(road_curb, curb)
+                merge_mask(road_sidewalk, sidewalk)
+                merge_mask(surface_masks["road"], center)
             visual_walk = sidewalk
         else:
-            if surface not in surface_masks:
-                raise ValueError(f"{label}.surface={surface!r} no esta soportada.")
-            merge_mask(surface_masks[surface], center)
+            if render_feature:
+                merge_mask(surface_masks[surface], center)
             visual_walk = center
+        if not render_feature:
+            counts["renderSuppressed:roads"] += 1
         counts[f"surface:{surface}"] += 1
         ids["roads"].append(str(item.get("id", f"road-{index}")))
-        feature_walkable = is_walkable(item, surface)
         features.append(
             {
                 "id": str(item.get("id", f"road-{index}")),
                 "collection": "roads",
                 "surface": surface,
                 "walkable": feature_walkable,
+                "render": render_feature,
             }
         )
         if feature_walkable:
@@ -539,12 +744,20 @@ def build_geometry(
         ("walkablePolygons", "polygon"),
     ):
         for index, item in iter_collection(layout, collection):
-            mask = shape_mask(item, kind, canvas_size, density, tile_size, f"{collection}[{index}]")
-            merge_mask(walk_mask, mask)
+            mask, box = local_shape_mask(
+                item,
+                kind,
+                density,
+                tile_size,
+                f"{collection}[{index}]",
+            )
+            merge_local_mask(walk_mask, mask, box)
             semantic_walkables += 1
             counts[collection] += 1
 
-    include_legacy = bool(layout.get("includeMapDataWalkability", False)) or semantic_walkables == 0
+    include_legacy = bool(layout.get("includeMapDataWalkability", False)) or (
+        semantic_walkables == 0 and not open_except_solids
+    )
     if include_legacy:
         for collection, kind in (("walkableRects", "rect"), ("walkableSegments", "segment")):
             for index, item in iter_collection(map_config, collection):
@@ -559,16 +772,15 @@ def build_geometry(
                         "h": raw[3] - raw[1] + 1,
                         "units": "tiles",
                     }
-                mask = shape_mask(
+                mask, box = local_shape_mask(
                     item,
                     kind,
-                    canvas_size,
                     density,
                     tile_size,
                     f"map-data.{collection}[{index}]",
                     default_units=default_units,
                 )
-                merge_mask(walk_mask, mask)
+                merge_local_mask(walk_mask, mask, box)
                 counts[f"legacy:{collection}"] += 1
 
     for collection, kind in (
@@ -577,8 +789,14 @@ def build_geometry(
         ("blockedPolygons", "polygon"),
     ):
         for index, item in iter_collection(layout, collection):
-            mask = shape_mask(item, kind, canvas_size, density, tile_size, f"{collection}[{index}]")
-            merge_mask(blocked_mask, mask)
+            mask, box = local_shape_mask(
+                item,
+                kind,
+                density,
+                tile_size,
+                f"{collection}[{index}]",
+            )
+            merge_local_mask(blocked_mask, mask, box)
             counts[collection] += 1
             ids["blockers"].append(str(item.get("id", f"{collection}-{index}")))
 
@@ -588,10 +806,74 @@ def build_geometry(
             kind = "segment" if len(item.get("points", [])) < 3 else "polygon"
         else:
             kind = "rect"
-        mask = shape_mask(item, kind, canvas_size, density, tile_size, label)
-        merge_mask(blocked_mask, mask)
+        mask, box = local_shape_mask(item, kind, density, tile_size, label)
+        merge_local_mask(blocked_mask, mask, box)
         counts["blockers"] += 1
         ids["blockers"].append(str(item.get("id", f"blocker-{index}")))
+
+    # Las huellas GIS son el bloqueo semantico principal del layout abierto.
+    for index, item in iter_collection(layout, "buildingFootprints"):
+        label = f"buildingFootprints[{index}]"
+        building_id = str(item.get("id", f"building-{index}"))
+        ids["buildingFootprints"].append(building_id)
+        solid = bool(item.get("solid", True))
+        if solid:
+            exterior, holes = feature_rings(item, density, tile_size, label)
+            local_mask, box, _, _ = local_polygon_mask(exterior, holes)
+            merge_local_mask(blocked_mask, local_mask, box)
+            blocked_pixels["building"] += local_mask.histogram()[255]
+            counts["solidBuildingFootprints"] += 1
+        else:
+            counts["nonSolidBuildingFootprints"] += 1
+        features.append(
+            {
+                "id": building_id,
+                "collection": "buildingFootprints",
+                "surface": "building",
+                "walkable": not solid,
+                "solid": solid,
+                "levels": building_levels(item),
+                "kind": str(feature_value(item, "kind", "building", "construction", default="building")),
+                "refcat": str(feature_value(item, "refcat", "ref:catastro", default="")),
+                "name": str(feature_value(item, "name", default="")),
+            }
+        )
+
+    for index, item in iter_collection(layout, "barrierSegments"):
+        label = f"barrierSegments[{index}]"
+        barrier_id = str(item.get("id", f"barrier-{index}"))
+        ids["barrierSegments"].append(barrier_id)
+        kind = str(feature_value(item, "kind", "barrier", default="fence"))
+        solid = bool(item.get("solid", True))
+        if solid:
+            default_width = 4 if kind.lower() in {"wall", "muro", "retaining_wall"} else 2
+            semantic_item = dict(item)
+            semantic_item.setdefault("width", default_width)
+            factor = unit_factor(semantic_item, tile_size)
+            points = extract_points(semantic_item, factor, density, label)
+            width = scaled(semantic_item["width"] * factor, density, f"{label}.width")
+            local_mask, box = local_polyline_mask(
+                points,
+                width,
+                bool(semantic_item.get("roundCaps", True)),
+            )
+            merge_local_mask(blocked_mask, local_mask, box)
+            blocked_pixels["barrier"] += local_mask.histogram()[255]
+            counts["solidBarrierSegments"] += 1
+            if kind.lower() in {"gate", "verja", "entrance"}:
+                counts["solidGateBarrierSegments"] += 1
+        else:
+            counts["nonSolidBarrierSegments"] += 1
+        features.append(
+            {
+                "id": barrier_id,
+                "collection": "barrierSegments",
+                "surface": "barrier",
+                "walkable": not solid,
+                "solid": solid,
+                "kind": kind,
+            }
+        )
 
     # Resta las huellas solidas de los sprites dinamicos del layout o de map-data.
     assets = layout.get("worldAssets")
@@ -601,9 +883,13 @@ def build_geometry(
         raise TypeError("worldAssets debe ser un array.")
     draw_blocked = ImageDraw.Draw(blocked_mask)
     collider_count = 0
+    ignored_collider_count = 0
     for asset_index, asset in enumerate(assets):
         if not isinstance(asset, Mapping):
             raise TypeError(f"worldAssets[{asset_index}] debe ser un objeto.")
+        if asset.get("solid", True) is False:
+            ignored_collider_count += len(asset.get("colliders", []))
+            continue
         anchor_x = logical_number(asset.get("x", 0), f"worldAssets[{asset_index}].x")
         anchor_y = logical_number(asset.get("y", 0), f"worldAssets[{asset_index}].y")
         for collider_index, collider in enumerate(asset.get("colliders", [])):
@@ -617,6 +903,7 @@ def build_geometry(
                 draw_blocked.rectangle((x, y, x + w - 1, y + h - 1), fill=255)
                 collider_count += 1
     counts["assetColliders"] = collider_count
+    counts["ignoredNonSolidAssetColliders"] = ignored_collider_count
 
     # Diferencia binaria: ningun collider puede quedar verde en el informe.
     walk_mask = ImageChops.subtract(walk_mask, blocked_mask)
@@ -634,6 +921,12 @@ def build_geometry(
         ],
         "semanticWalkableShapes": semantic_walkables,
         "legacyWalkabilityIncluded": include_legacy,
+        "openExceptSolids": open_except_solids,
+        "blockedPixelsByClassApprox": {
+            key: round(value / (density * density))
+            for key, value in sorted(blocked_pixels.items())
+        },
+        "barrierGatePolicy": "solid",
     }
     return surface_masks, walk_mask, blocked_mask, audit
 
@@ -646,6 +939,7 @@ def render_base(
 ) -> Image.Image:
     base = Image.new("RGB", canvas_size)
     tile_pattern(base, patterns["grass"], key="background:grass", seed=seed)
+    tile_pattern(base, patterns["grass"], mask=masks["grass"], key="surface:grass", seed=seed)
     for surface in ("dirt", "sidewalk"):
         tile_pattern(base, patterns[surface], mask=masks[surface], key=f"surface:{surface}", seed=seed)
     tile_pattern(
@@ -658,6 +952,744 @@ def render_base(
     tile_pattern(base, patterns["curb"], mask=masks["roadCurb"], key="roads:curb", seed=seed)
     tile_pattern(base, patterns["road"], mask=masks["road"], key="surface:road", seed=seed)
     return base
+
+
+def stable_number(key: str, seed: int = 0) -> int:
+    return int.from_bytes(hashlib.sha256(f"{seed}:{key}".encode("utf-8")).digest()[:8], "big")
+
+
+def shade_color(color: tuple[int, int, int], delta: int) -> tuple[int, int, int]:
+    return tuple(max(0, min(255, channel + delta)) for channel in color)
+
+
+def feature_rings(
+    item: Mapping[str, Any], density: int, tile_size: int, label: str,
+) -> tuple[list[tuple[int, int]], list[list[tuple[int, int]]]]:
+    factor = unit_factor(item, tile_size)
+    exterior = extract_points(item, factor, density, label)
+    if len(exterior) < 3:
+        raise ValueError(f"{label} necesita tres puntos para ser poligono.")
+    return exterior, extract_holes(item, factor, density, label)
+
+
+def local_polygon_mask(
+    exterior: Sequence[tuple[int, int]],
+    holes: Sequence[Sequence[tuple[int, int]]],
+) -> tuple[Image.Image, tuple[int, int, int, int], list[tuple[int, int]], list[list[tuple[int, int]]]]:
+    all_points = list(exterior) + [point for ring in holes for point in ring]
+    left = min(point[0] for point in all_points)
+    top = min(point[1] for point in all_points)
+    right = max(point[0] for point in all_points) + 1
+    bottom = max(point[1] for point in all_points) + 1
+    shifted_exterior = [(x - left, y - top) for x, y in exterior]
+    shifted_holes = [[(x - left, y - top) for x, y in ring] for ring in holes]
+    mask = Image.new("L", (max(1, right - left), max(1, bottom - top)), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.polygon(shifted_exterior, fill=255)
+    for ring in shifted_holes:
+        draw.polygon(ring, fill=0)
+    return mask, (left, top, right, bottom), shifted_exterior, shifted_holes
+
+
+def local_polyline_mask(
+    points: Sequence[tuple[int, int]], width: int, round_caps: bool,
+) -> tuple[Image.Image, tuple[int, int, int, int]]:
+    margin = max(2, math.ceil(max(1, width) / 2) + 1)
+    left = min(x for x, _ in points) - margin
+    top = min(y for _, y in points) - margin
+    right = max(x for x, _ in points) + margin + 1
+    bottom = max(y for _, y in points) + margin + 1
+    mask = Image.new("L", (max(1, right - left), max(1, bottom - top)), 0)
+    draw_polyline(mask, [(x - left, y - top) for x, y in points], width, round_caps)
+    return mask, (left, top, right, bottom)
+
+
+def merge_local_mask(
+    target: Image.Image,
+    addition: Image.Image,
+    box: tuple[int, int, int, int],
+) -> None:
+    left, top, right, bottom = box
+    clipped = (
+        max(0, left),
+        max(0, top),
+        min(target.width, right),
+        min(target.height, bottom),
+    )
+    if clipped[0] >= clipped[2] or clipped[1] >= clipped[3]:
+        return
+    source_box = (
+        clipped[0] - left,
+        clipped[1] - top,
+        clipped[2] - left,
+        clipped[3] - top,
+    )
+    target_crop = target.crop(clipped)
+    addition_crop = addition.crop(source_box)
+    target.paste(ImageChops.lighter(target_crop, addition_crop), clipped[:2])
+
+
+def draw_polygon_areas(
+    base: Image.Image,
+    layout: Mapping[str, Any],
+    density: int,
+    tile_size: int,
+    seed: int,
+) -> Image.Image:
+    """Pinta agua y pistas municipales sin depender de sprites externos."""
+    result = base.copy()
+    for collection, default_kind in (("waterAreas", "water"), ("sportsAreas", "sports")):
+        for index, item in iter_collection(layout, collection):
+            label = f"{collection}[{index}]"
+            exterior, holes = feature_rings(item, density, tile_size, label)
+            mask, box, local_exterior, local_holes = local_polygon_mask(exterior, holes)
+            kind = str(feature_value(item, "kind", "sport", "leisure", default=default_kind)).lower()
+            is_track = any(token in kind for token in ("track", "athletic", "running"))
+            if collection == "waterAreas":
+                base_color = (49, 132, 174)
+                edge_color = (24, 83, 123)
+                detail_color = (111, 194, 212)
+            elif any(token in kind for token in ("tennis", "basket", "padel", "court")):
+                base_color = (164, 101, 63)
+                edge_color = (90, 65, 52)
+                detail_color = (236, 224, 194)
+            elif is_track:
+                # En San Pablo la pista principal se lee gris clara en PNOA.
+                # La convertimos en un ovalo limpio, muy de mapa Pokemon DS.
+                base_color = (174, 181, 178)
+                edge_color = (91, 105, 104)
+                detail_color = (239, 240, 220)
+            else:
+                base_color = (48, 127, 62)
+                edge_color = (29, 75, 43)
+                detail_color = (220, 235, 201)
+
+            patch = result.crop(box)
+            color_layer = Image.new("RGB", patch.size, base_color)
+            patch.paste(color_layer, (0, 0), mask)
+            details = Image.new("RGB", patch.size, (0, 0, 0))
+            detail_mask = Image.new("L", patch.size, 0)
+            detail_draw = ImageDraw.Draw(details)
+            alpha_draw = ImageDraw.Draw(detail_mask)
+            width = max(1, 2 * density)
+            if collection == "waterAreas":
+                spacing = max(8, 14 * density)
+                phase = stable_number(str(item.get("id", index)), seed) % spacing
+                for y in range(-phase, patch.height + spacing, spacing):
+                    for x in range(0, patch.width, 28 * density):
+                        end_x = min(patch.width - 1, x + 12 * density)
+                        detail_draw.line((x, y, end_x, y), fill=detail_color, width=width)
+                        alpha_draw.line((x, y, end_x, y), fill=112, width=width)
+            elif is_track:
+                center_x = sum(x for x, _ in local_exterior) / len(local_exterior)
+                center_y = sum(y for _, y in local_exterior) / len(local_exterior)
+                for scale in (0.96, 0.91, 0.86, 0.81):
+                    lane = [
+                        (
+                            round(center_x + (x - center_x) * scale),
+                            round(center_y + (y - center_y) * scale),
+                        )
+                        for x, y in local_exterior
+                    ]
+                    detail_draw.line(lane + [lane[0]], fill=detail_color, width=width, joint="curve")
+                    alpha_draw.line(lane + [lane[0]], fill=235, width=width, joint="curve")
+            else:
+                inset = max(4, 8 * density)
+                field_box = (inset, inset, max(inset, patch.width - inset - 1), max(inset, patch.height - inset - 1))
+                detail_draw.rectangle(field_box, outline=detail_color, width=width)
+                alpha_draw.rectangle(field_box, outline=255, width=width)
+                center_x = patch.width // 2
+                center_y = patch.height // 2
+                if patch.width >= patch.height:
+                    detail_draw.line((center_x, inset, center_x, patch.height - inset), fill=detail_color, width=width)
+                    alpha_draw.line((center_x, inset, center_x, patch.height - inset), fill=255, width=width)
+                else:
+                    detail_draw.line((inset, center_y, patch.width - inset, center_y), fill=detail_color, width=width)
+                    alpha_draw.line((inset, center_y, patch.width - inset, center_y), fill=255, width=width)
+                radius = max(3 * density, min(patch.width, patch.height) // 9)
+                circle = (center_x - radius, center_y - radius, center_x + radius, center_y + radius)
+                detail_draw.ellipse(circle, outline=detail_color, width=width)
+                alpha_draw.ellipse(circle, outline=255, width=width)
+            clipped_details = ImageChops.multiply(mask, detail_mask)
+            patch.paste(details, (0, 0), clipped_details)
+            result.paste(patch, box[:2])
+            outline = ImageDraw.Draw(result)
+            outline.line(list(exterior) + [exterior[0]], fill=edge_color, width=max(1, 2 * density), joint="curve")
+            for ring in holes:
+                outline.line(list(ring) + [ring[0]], fill=edge_color, width=max(1, density), joint="curve")
+    return result
+
+
+def draw_dashed_polyline(
+    draw: ImageDraw.ImageDraw,
+    points: Sequence[tuple[int, int]],
+    *,
+    fill: tuple[int, int, int],
+    width: int,
+    dash: int,
+    gap: int,
+    phase: int = 0,
+) -> None:
+    if len(points) < 2:
+        return
+    period = max(1, dash + gap)
+    travelled = 0.0
+    for start, end in zip(points, points[1:]):
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length = math.hypot(dx, dy)
+        if length <= 0:
+            continue
+        cursor = 0.0
+        while cursor < length:
+            pattern_pos = (travelled + cursor + phase) % period
+            if pattern_pos < dash:
+                run = min(length - cursor, dash - pattern_pos)
+                from_x = round(start[0] + dx * cursor / length)
+                from_y = round(start[1] + dy * cursor / length)
+                to_x = round(start[0] + dx * (cursor + run) / length)
+                to_y = round(start[1] + dy * (cursor + run) / length)
+                draw.line((from_x, from_y, to_x, to_y), fill=fill, width=max(1, width))
+            else:
+                run = min(length - cursor, period - pattern_pos)
+            cursor += max(run, 0.5)
+        travelled += length
+
+
+def polyline_samples(
+    points: Sequence[tuple[int, int]], spacing: float,
+) -> Iterable[tuple[float, float, float, float]]:
+    if len(points) < 2 or spacing <= 0:
+        return
+    remaining = 0.0
+    for start, end in zip(points, points[1:]):
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length = math.hypot(dx, dy)
+        if length <= 0:
+            continue
+        ux, uy = dx / length, dy / length
+        cursor = remaining
+        while cursor <= length:
+            yield start[0] + ux * cursor, start[1] + uy * cursor, ux, uy
+            cursor += spacing
+        remaining = cursor - length
+
+
+def road_nominal_width(centerline: Mapping[str, Any]) -> float:
+    explicit = feature_value(centerline, "width", "est_width")
+    if explicit not in (None, ""):
+        try:
+            return max(8.0, float(explicit))
+        except (TypeError, ValueError):
+            pass
+    highway = str(feature_value(centerline, "highway", default="residential")).lower()
+    if highway in {"primary", "trunk"}:
+        return 36.0
+    if highway in {"secondary", "tertiary"}:
+        return 30.0
+    if highway in {"service", "living_street"}:
+        return 16.0
+    return 22.0
+
+
+def nearest_centerline_direction(
+    x: float,
+    y: float,
+    centerlines: Sequence[Mapping[str, Any]],
+) -> tuple[float, float, float]:
+    best: tuple[float, float, float, float] | None = None
+    for centerline in centerlines:
+        raw_points = centerline.get("points", [])
+        if not isinstance(raw_points, Sequence):
+            continue
+        for start, end in zip(raw_points, raw_points[1:]):
+            if not isinstance(start, Sequence) or not isinstance(end, Sequence) or len(start) < 2 or len(end) < 2:
+                continue
+            x1, y1 = float(start[0]), float(start[1])
+            x2, y2 = float(end[0]), float(end[1])
+            dx, dy = x2 - x1, y2 - y1
+            length_sq = dx * dx + dy * dy
+            if length_sq <= 0:
+                continue
+            projection = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / length_sq))
+            near_x, near_y = x1 + projection * dx, y1 + projection * dy
+            distance_sq = (x - near_x) ** 2 + (y - near_y) ** 2
+            if best is None or distance_sq < best[0]:
+                length = math.sqrt(length_sq)
+                best = (distance_sq, dx / length, dy / length, road_nominal_width(centerline))
+    return (best[1], best[2], best[3]) if best is not None else (1.0, 0.0, 22.0)
+
+
+def draw_street_details(
+    base: Image.Image,
+    layout: Mapping[str, Any],
+    density: int,
+    tile_size: int,
+    seed: int,
+) -> Image.Image:
+    result = base.copy()
+    draw = ImageDraw.Draw(result)
+    centerlines = [item for _, item in iter_collection(layout, "streetCenterlines")]
+    for index, centerline in enumerate(centerlines):
+        label = f"streetCenterlines[{index}]"
+        factor = unit_factor(centerline, tile_size)
+        points = extract_points(centerline, factor, density, label)
+        highway = str(feature_value(centerline, "highway", default="residential")).lower()
+        if highway in {"footway", "pedestrian", "path", "cycleway", "steps"}:
+            continue
+        key = str(centerline.get("id", index))
+        marking_width = max(1, density)
+        draw.line(points, fill=(78, 79, 75), width=max(1, 2 * density), joint="curve")
+        if highway in {"service", "living_street", "residential", "unclassified"}:
+            color = (206, 207, 194)
+            dash, gap = 7 * density, 10 * density
+        else:
+            color = (231, 230, 211)
+            dash, gap = 12 * density, 8 * density
+            marking_width = max(2, density)
+        draw_dashed_polyline(
+            draw,
+            points,
+            fill=color,
+            width=marking_width,
+            dash=dash,
+            gap=gap,
+            phase=stable_number(key, seed) % max(1, dash + gap),
+        )
+
+    for index, crossing in iter_collection(layout, "crossings"):
+        label = f"crossings[{index}]"
+        raw_points = crossing.get("points")
+        if isinstance(raw_points, Sequence) and len(raw_points) >= 2:
+            factor = unit_factor(crossing, tile_size)
+            crossing_points = extract_points(crossing, factor, density, label)
+            start, end = crossing_points[0], crossing_points[-1]
+            axis_x, axis_y = end[0] - start[0], end[1] - start[1]
+            span = math.hypot(axis_x, axis_y)
+            if span <= 0:
+                continue
+            axis_x, axis_y = axis_x / span, axis_y / span
+            center_x, center_y = (start[0] + end[0]) / 2, (start[1] + end[1]) / 2
+            road_x, road_y = -axis_y, axis_x
+        else:
+            logical_x = logical_number(crossing.get("x"), f"{label}.x")
+            logical_y = logical_number(crossing.get("y"), f"{label}.y")
+            road_x, road_y, nominal_width = nearest_centerline_direction(logical_x, logical_y, centerlines)
+            axis_x, axis_y = -road_y, road_x
+            span = float(feature_value(crossing, "width", "length", default=nominal_width)) * density
+            center_x, center_y = logical_x * density, logical_y * density
+        stripe_step = max(4, 4 * density)
+        stripe_width = max(2, 2 * density)
+        stripe_length = max(5, 7 * density)
+        count = max(3, int(span // stripe_step))
+        for stripe in range(count):
+            offset = (stripe - (count - 1) / 2) * stripe_step
+            stripe_x = center_x + axis_x * offset
+            stripe_y = center_y + axis_y * offset
+            half_axis = stripe_width / 2
+            half_road = stripe_length / 2
+            polygon = [
+                (round(stripe_x - axis_x * half_axis - road_x * half_road), round(stripe_y - axis_y * half_axis - road_y * half_road)),
+                (round(stripe_x + axis_x * half_axis - road_x * half_road), round(stripe_y + axis_y * half_axis - road_y * half_road)),
+                (round(stripe_x + axis_x * half_axis + road_x * half_road), round(stripe_y + axis_y * half_axis + road_y * half_road)),
+                (round(stripe_x - axis_x * half_axis + road_x * half_road), round(stripe_y - axis_y * half_axis + road_y * half_road)),
+            ]
+            draw.polygon(polygon, fill=(238, 237, 218))
+    return result
+
+
+def roman_number(value: str) -> int | None:
+    numerals = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    token = value.strip().upper()
+    if not token or any(character not in numerals for character in token):
+        return None
+    total = 0
+    previous = 0
+    for character in reversed(token):
+        current = numerals[character]
+        total += -current if current < previous else current
+        previous = max(previous, current)
+    return total if total > 0 else None
+
+
+def building_levels(item: Mapping[str, Any]) -> int:
+    raw = feature_value(item, "levels", "building:levels", default=None)
+    if raw not in (None, ""):
+        try:
+            return max(1, min(12, round(float(str(raw).replace(",", ".")))))
+        except (TypeError, ValueError):
+            pass
+    construction = str(feature_value(item, "construction", "constru", default=""))
+    above_ground = [
+        level
+        for part in construction.replace(" ", "").split("+")
+        if part and not part.startswith("-")
+        for level in [roman_number(part)]
+        if level is not None
+    ]
+    return max(1, min(12, max(above_ground, default=1)))
+
+
+def building_descriptor(item: Mapping[str, Any]) -> str:
+    return " ".join(
+        str(feature_value(item, name, default=""))
+        for name in ("name", "kind", "building", "construction", "amenity", "landuse")
+    ).lower()
+
+
+def building_palette(
+    item: Mapping[str, Any], levels: int, key: str, seed: int,
+) -> tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]:
+    descriptor = building_descriptor(item)
+    if any(token in descriptor for token in ("construction_site", "construction site", "skeleton", "obra de calle", "solar")):
+        roof, wall = (151, 145, 129), (181, 164, 132)
+    elif any(token in descriptor for token in ("stadium", "arena", "palacio de deportes")):
+        roof, wall = (207, 211, 202), (174, 184, 178)
+    elif any(token in descriptor for token in ("industrial", "warehouse", "hangar")):
+        roof, wall = (128, 137, 137), (151, 154, 145)
+    elif any(token in descriptor for token in ("school", "college", "kindergarten", "civic")):
+        roof, wall = (170, 112, 69), (207, 176, 123)
+    elif any(token in descriptor for token in ("church", "religious", "chapel")):
+        roof, wall = (127, 91, 73), (207, 190, 157)
+    elif any(token in descriptor for token in ("commercial", "retail", "supermarket", "office")):
+        roof, wall = (91, 125, 127), (164, 174, 160)
+    elif any(token in descriptor for token in ("garage", "shed", "roof")):
+        roof, wall = (116, 112, 103), (153, 146, 128)
+    else:
+        roof, wall = (154, 91, 72), (193, 151, 111)
+    variant = (stable_number(key, seed) % 17) - 8
+    height_tone = min(12, (levels - 1) * 2)
+    roof = shade_color(roof, variant - height_tone // 2)
+    wall = shade_color(wall, variant // 2 - height_tone)
+    return roof, wall, shade_color(wall, -28)
+
+
+def draw_building_footprints(
+    base: Image.Image,
+    layout: Mapping[str, Any],
+    density: int,
+    tile_size: int,
+    seed: int,
+) -> Image.Image:
+    result = base.copy()
+    prepared: list[tuple[int, int, dict[str, Any], list[tuple[int, int]], list[list[tuple[int, int]]]]] = []
+    for index, item in iter_collection(layout, "buildingFootprints"):
+        exterior, holes = feature_rings(item, density, tile_size, f"buildingFootprints[{index}]")
+        descriptor = building_descriptor(item)
+        is_construction_shell = holes and any(
+            token in descriptor
+            for token in ("construction_site", "construction site", "skeleton", "obra de calle", "solar")
+        )
+        # En la obra de Jerusalén dibujamos primero el anillo exterior y luego
+        # el volumen interior; así el hueco no borra la trama de estructura.
+        depth = min(y for _, y in exterior) if is_construction_shell else max(y for _, y in exterior)
+        prepared.append((depth, index, item, exterior, holes))
+
+    for _, index, item, exterior, holes in sorted(prepared, key=lambda entry: (entry[0], entry[1])):
+        draw = ImageDraw.Draw(result)
+        key = str(item.get("id", f"building-{index}"))
+        levels = building_levels(item)
+        solid = bool(item.get("solid", True))
+        descriptor = building_descriptor(item)
+        is_construction = any(
+            token in descriptor
+            for token in ("construction_site", "construction site", "skeleton", "obra de calle", "solar")
+        )
+        is_major_sports = any(token in descriptor for token in ("stadium", "arena", "palacio de deportes"))
+        height = (
+            max(5 * density, min(24 * density, round((4 + levels * 2.5) * density)))
+            if solid
+            else max(2, 3 * density)
+        )
+        if is_construction:
+            height = max(2 * density, 4 * density)
+        elif is_major_sports:
+            height = max(height, 10 * density)
+        roof, wall, dark_wall = building_palette(item, levels, key, seed)
+        if not solid:
+            roof = shade_color(roof, 24)
+            wall = shade_color(wall, 18)
+            dark_wall = shade_color(dark_wall, 18)
+        outline = shade_color(dark_wall, -30)
+        ground = [(x, y + height) for x, y in exterior]
+        shadow_offset = max(3 * density, height // 3)
+        shadow = [(x + shadow_offset, y + height + shadow_offset // 2) for x, y in exterior]
+        draw.polygon(shadow, fill=(58, 65, 58))
+
+        for edge_index, (start, end) in enumerate(zip(exterior, exterior[1:] + exterior[:1])):
+            face = [start, end, (end[0], end[1] + height), (start[0], start[1] + height)]
+            edge_tone = 10 if end[0] < start[0] else -5
+            face_color = shade_color(wall if edge_index % 2 == 0 else dark_wall, edge_tone)
+            draw.polygon(face, fill=face_color, outline=outline)
+            if levels > 1 and math.hypot(end[0] - start[0], end[1] - start[1]) >= 10 * density:
+                for floor in range(1, levels):
+                    offset = round(height * floor / levels)
+                    draw.line(
+                        (start[0], start[1] + offset, end[0], end[1] + offset),
+                        fill=shade_color(face_color, -13),
+                        width=max(1, density),
+                    )
+
+        for ring in holes:
+            for start, end in zip(ring, ring[1:] + ring[:1]):
+                draw.polygon(
+                    [start, end, (end[0], end[1] + height), (start[0], start[1] + height)],
+                    fill=dark_wall,
+                    outline=outline,
+                )
+
+        draw.polygon(exterior, fill=roof, outline=outline)
+        for ring in holes:
+            draw.polygon(ring, fill=(67, 78, 69), outline=outline)
+
+        left = min(x for x, _ in exterior)
+        right = max(x for x, _ in exterior)
+        top = min(y for _, y in exterior)
+        bottom = max(y for _, y in exterior)
+        span_x, span_y = right - left, bottom - top
+        ridge_color = shade_color(roof, 26)
+        ridge_shadow = shade_color(roof, -25)
+        if is_major_sports and min(span_x, span_y) >= 8 * density:
+            center_x = sum(x for x, _ in exterior) / len(exterior)
+            center_y = sum(y for _, y in exterior) / len(exterior)
+            for scale, color in ((0.94, ridge_shadow), (0.88, ridge_color)):
+                inset_ring = [
+                    (
+                        round(center_x + (x - center_x) * scale),
+                        round(center_y + (y - center_y) * scale),
+                    )
+                    for x, y in exterior
+                ]
+                draw.line(inset_ring + [inset_ring[0]], fill=color, width=max(1, density), joint="curve")
+        elif not is_construction and min(span_x, span_y) >= 8 * density:
+            if span_x >= span_y:
+                ridge_y = (top + bottom) // 2
+                ridge = (left + span_x // 6, ridge_y, right - span_x // 6, ridge_y)
+            else:
+                ridge_x = (left + right) // 2
+                ridge = (ridge_x, top + span_y // 6, ridge_x, bottom - span_y // 6)
+            draw.line(ridge, fill=ridge_shadow, width=max(2, 2 * density))
+            draw.line(ridge, fill=ridge_color, width=max(1, density))
+
+        if is_construction:
+            local_mask, box, _, _ = local_polygon_mask(exterior, holes)
+            patch = result.crop(box)
+            hatch = Image.new("RGB", patch.size, roof)
+            hatch_alpha = Image.new("L", patch.size, 0)
+            hatch_draw = ImageDraw.Draw(hatch)
+            hatch_alpha_draw = ImageDraw.Draw(hatch_alpha)
+            step = max(8, 12 * density)
+            for offset in range(-patch.height, patch.width + patch.height, step):
+                line = (offset, 0, offset - patch.height, patch.height)
+                hatch_draw.line(line, fill=shade_color(roof, -36), width=max(1, density))
+                hatch_alpha_draw.line(line, fill=185, width=max(1, density))
+            clipped_hatch = ImageChops.multiply(local_mask, hatch_alpha)
+            patch.paste(hatch, (0, 0), clipped_hatch)
+            result.paste(patch, box[:2])
+            ImageDraw.Draw(result).line(exterior + [exterior[0]], fill=outline, width=max(1, density), joint="curve")
+
+        area = max(1, span_x * span_y)
+        detail_count = min(6, max(1, area // max(1, (150 * density) ** 2)))
+        digest = stable_number(f"{key}:roof-details", seed)
+        for detail_index in range(0 if is_construction or is_major_sports else detail_count):
+            fraction_x = 0.2 + (((digest >> (detail_index * 7)) & 63) / 105)
+            fraction_y = 0.2 + (((digest >> (detail_index * 7 + 3)) & 63) / 105)
+            vent_x = round(left + span_x * min(0.8, fraction_x))
+            vent_y = round(top + span_y * min(0.8, fraction_y))
+            logical_exterior = [(x / density, y / density) for x, y in exterior]
+            logical_holes = [[(x / density, y / density) for x, y in ring] for ring in holes]
+            if not point_in_polygon(vent_x / density, vent_y / density, logical_exterior):
+                continue
+            if any(point_in_polygon(vent_x / density, vent_y / density, ring) for ring in logical_holes):
+                continue
+            size = max(2, 2 * density)
+            draw.rectangle(
+                (vent_x - size, vent_y - size, vent_x + size, vent_y + size),
+                fill=shade_color(roof, -35),
+                outline=ridge_color,
+                width=max(1, density),
+            )
+    return result
+
+
+def draw_barrier_segments(
+    base: Image.Image,
+    layout: Mapping[str, Any],
+    density: int,
+    tile_size: int,
+    seed: int,
+) -> Image.Image:
+    result = base.copy()
+    draw = ImageDraw.Draw(result)
+    for index, barrier in iter_collection(layout, "barrierSegments"):
+        label = f"barrierSegments[{index}]"
+        factor = unit_factor(barrier, tile_size)
+        points = extract_points(barrier, factor, density, label)
+        kind = str(feature_value(barrier, "kind", "barrier", default="fence")).lower().replace("_", "")
+        key = str(barrier.get("id", index))
+        requested_width = feature_value(barrier, "width", default=None)
+        if requested_width is None:
+            logical_width = 4 if kind in {"wall", "muro", "retainingwall"} else 2
+        else:
+            logical_width = float(requested_width) * factor
+        width = max(1, round(logical_width * density))
+        if kind in {"wall", "muro", "retainingwall"}:
+            draw.line(points, fill=(59, 59, 55), width=max(width + 2 * density, 3), joint="curve")
+            draw.line(points, fill=(139, 132, 111), width=max(width, 2), joint="curve")
+            for x, y, ux, uy in polyline_samples(points, 12 * density):
+                nx, ny = -uy * density * 2, ux * density * 2
+                draw.line((round(x - nx), round(y - ny), round(x + nx), round(y + ny)), fill=(86, 82, 71), width=max(1, density))
+        elif kind in {"gate", "verja", "entrance"}:
+            draw.line(points, fill=(38, 47, 45), width=max(3, width + density), joint="curve")
+            draw_dashed_polyline(
+                draw,
+                points,
+                fill=(172, 159, 105),
+                width=max(1, density),
+                dash=5 * density,
+                gap=3 * density,
+                phase=stable_number(key, seed) % max(1, 8 * density),
+            )
+            for x, y, _, _ in polyline_samples(points, 10 * density):
+                radius = max(1, 2 * density)
+                draw.rectangle((round(x - radius), round(y - radius), round(x + radius), round(y + radius)), fill=(47, 53, 48))
+        else:
+            wire = kind in {"wirefence", "chainlink", "metal", "mesh"}
+            draw.line(points, fill=(42, 57, 51), width=max(2, width), joint="curve")
+            draw_dashed_polyline(
+                draw,
+                points,
+                fill=(124, 143, 128) if wire else (99, 122, 86),
+                width=max(1, density),
+                dash=3 * density,
+                gap=3 * density,
+                phase=stable_number(key, seed) % max(1, 6 * density),
+            )
+            spacing = 9 * density if wire else 12 * density
+            for x, y, _, _ in polyline_samples(points, spacing):
+                radius = max(1, density)
+                draw.rectangle((round(x - radius), round(y - radius), round(x + radius), round(y + radius)), fill=(28, 45, 38))
+    return result
+
+
+def render_static_gis_features(
+    base: Image.Image,
+    layout: Mapping[str, Any],
+    density: int,
+    tile_size: int,
+    seed: int,
+) -> Image.Image:
+    result = draw_polygon_areas(base, layout, density, tile_size, seed)
+    result = draw_street_details(result, layout, density, tile_size, seed)
+    result = draw_building_footprints(result, layout, density, tile_size, seed)
+    return draw_barrier_segments(result, layout, density, tile_size, seed)
+
+
+def draw_door_markers(
+    base: Image.Image,
+    layout: Mapping[str, Any],
+    map_config: Mapping[str, Any],
+    density: int,
+    tile_size: int,
+) -> tuple[Image.Image, dict[str, int]]:
+    """Hornea umbrales GIS; son señal visual, nunca una nueva colisión."""
+    config_doors = map_config.get("doors")
+    dimensions_match = (
+        map_config.get("width") in (None, layout.get("width"))
+        and map_config.get("height") in (None, layout.get("height"))
+    )
+    raw_doors = config_doors if config_doors and dimensions_match else layout.get("doors", [])
+    if not isinstance(raw_doors, Sequence) or isinstance(raw_doors, (str, bytes)):
+        raise TypeError("doors debe ser un array.")
+    if not raw_doors:
+        return base, {"total": 0, "usable": 0, "closed": 0, "prism": 0, "outOfBounds": 0}
+    result = base.copy()
+    draw = ImageDraw.Draw(result)
+    counts: Counter[str] = Counter(total=len(raw_doors))
+    for index, door in enumerate(raw_doors):
+        if not isinstance(door, Mapping):
+            raise TypeError(f"doors[{index}] debe ser un objeto.")
+        col = logical_number(door.get("col"), f"doors[{index}].col")
+        row = logical_number(door.get("row"), f"doors[{index}].row")
+        center_x = round((col + 0.5) * tile_size * density)
+        center_y = round((row + 0.5) * tile_size * density)
+        if not (0 <= center_x < result.width and 0 <= center_y < result.height):
+            counts["outOfBounds"] += 1
+            continue
+        approach = door.get("approach", [])
+        direction = (
+            str(approach[2]).lower()
+            if isinstance(approach, Sequence) and not isinstance(approach, (str, bytes)) and len(approach) >= 3
+            else str(door.get("direction", "up")).lower()
+        )
+        horizontal = direction in {"up", "down"}
+        action = str(door.get("action", "closed")).lower()
+        if action == "prism":
+            counts["prism"] += 1
+            radius_x = max(5, 8 * density)
+            radius_y = max(4, 6 * density)
+            diamond = [
+                (center_x, center_y - radius_y),
+                (center_x + radius_x, center_y),
+                (center_x, center_y + radius_y),
+                (center_x - radius_x, center_y),
+            ]
+            draw.polygon(diamond, fill=(55, 31, 83), outline=(25, 18, 42))
+            inner = [
+                (center_x, center_y - radius_y // 2),
+                (center_x + radius_x // 2, center_y),
+                (center_x, center_y + radius_y // 2),
+                (center_x - radius_x // 2, center_y),
+            ]
+            draw.polygon(inner, fill=(125, 76, 181), outline=(89, 205, 214))
+            draw.point((center_x, center_y), fill=(222, 252, 241))
+            continue
+
+        closed = action == "closed"
+        counts["closed" if closed else "usable"] += 1
+        long_radius = max(6, 9 * density)
+        short_radius = max(2, 3 * density)
+        if horizontal:
+            box = (
+                center_x - long_radius,
+                center_y - short_radius,
+                center_x + long_radius,
+                center_y + short_radius,
+            )
+        else:
+            box = (
+                center_x - short_radius,
+                center_y - long_radius,
+                center_x + short_radius,
+                center_y + long_radius,
+            )
+        fill = (92, 62, 52) if closed else (169, 132, 65)
+        edge = (48, 39, 36) if closed else (72, 71, 45)
+        status = (171, 64, 55) if closed else (91, 157, 86)
+        draw.rectangle(box, fill=edge)
+        inset = max(1, density)
+        inner_box = (box[0] + inset, box[1] + inset, box[2] - inset, box[3] - inset)
+        draw.rectangle(inner_box, fill=fill)
+        marker = max(1, 2 * density)
+        draw.rectangle(
+            (center_x - marker, center_y - marker, center_x + marker, center_y + marker),
+            fill=status,
+            outline=shade_color(status, -45),
+        )
+        if closed:
+            draw.line(
+                (center_x - marker, center_y - marker, center_x + marker, center_y + marker),
+                fill=(231, 183, 145),
+                width=max(1, density),
+            )
+    return result, {
+        "total": int(counts["total"]),
+        "usable": int(counts["usable"]),
+        "closed": int(counts["closed"]),
+        "prism": int(counts["prism"]),
+        "outOfBounds": int(counts["outOfBounds"]),
+    }
 
 
 def draw_sports_fields(base: Image.Image, layout: Mapping[str, Any], density: int) -> Image.Image:
@@ -1007,6 +2039,33 @@ def build_sector_sheet(
     return sheet
 
 
+def build_comparison_sheet(
+    reference_path: Path, render: Image.Image,
+) -> tuple[Image.Image, dict[str, Any]]:
+    """Alinea la referencia y crea referencia / render / mezcla exacta 50:50."""
+    with Image.open(reference_path) as source:
+        original_size = source.size
+        reference = source.convert("RGB")
+    render_rgb = render.convert("RGB")
+    resized = reference.size != render_rgb.size
+    if resized:
+        reference = reference.resize(render_rgb.size, Image.Resampling.LANCZOS)
+    blended = Image.blend(reference, render_rgb, 0.5)
+    sheet = Image.new("RGB", (render_rgb.width * 3, render_rgb.height), (18, 20, 22))
+    sheet.paste(reference, (0, 0))
+    sheet.paste(render_rgb, (render_rgb.width, 0))
+    sheet.paste(blended, (render_rgb.width * 2, 0))
+    return sheet, {
+        "panels": ["reference", "render", "overlay50"],
+        "panelWidth": render_rgb.width,
+        "panelHeight": render_rgb.height,
+        "referenceOriginalWidth": original_size[0],
+        "referenceOriginalHeight": original_size[1],
+        "referenceResized": resized,
+        "blend": 0.5,
+    }
+
+
 def generate_chunks(
     source: Image.Image,
     output: Path,
@@ -1092,16 +2151,28 @@ def main() -> None:
             f"Usa --describe-layout para consultar el contrato esperado."
         )
     map_data_path = resolve(args.map_data)
+    geography_path = resolve(args.geography)
     road_sheet_path = resolve(args.road_sheet)
     terrain_sheet_path = resolve(args.terrain_sheet)
     for required in (road_sheet_path, terrain_sheet_path):
         if not required.exists():
             raise FileNotFoundError(f"Falta el tileset requerido: {relative_name(required)}")
 
-    layout = load_javascript_object(layout_path, ("CITY_MAP_LAYOUT", "MAP_LAYOUT"))
+    geography_preloads = [geography_path] if geography_path.exists() else []
+    editor_data_path = layout_path.with_name("map-editor-data.js")
+    layout_preloads = [*geography_preloads, *([editor_data_path] if editor_data_path.exists() else [])]
+    layout = load_javascript_object(
+        layout_path,
+        ("CITY_MAP_LAYOUT", "MAP_LAYOUT"),
+        layout_preloads,
+    )
     map_config: dict[str, Any] = {}
     if map_data_path.exists():
-        map_config = load_javascript_object(map_data_path, ("CITY_MAP_CONFIG", "MAP_CONFIG"))
+        map_config = load_javascript_object(
+            map_data_path,
+            ("CITY_MAP_CONFIG", "MAP_CONFIG"),
+            [*layout_preloads, layout_path],
+        )
 
     width = int(args.world_size or layout.get("width") or map_config.get("width") or DEFAULT_WORLD_SIZE)
     height = int(args.world_size or layout.get("height") or map_config.get("height") or DEFAULT_WORLD_SIZE)
@@ -1128,6 +2199,16 @@ def main() -> None:
         grass_swatch = extract_swatch(sheet.convert("RGB"), cells["grass"], args.sheet_grid, args.cell_inset)
         dirt_swatch = extract_swatch(sheet.convert("RGB"), cells["dirt"], args.sheet_grid, args.cell_inset)
 
+    # La textura original era demasiado neon a escala de barrio. La mantenemos
+    # reconocible, pero mas calmada y cercana a la paleta exterior de HG/SS.
+    grass_swatch = ImageEnhance.Color(grass_swatch).enhance(0.72)
+    grass_swatch = ImageEnhance.Brightness(grass_swatch).enhance(0.90)
+    grass_swatch = Image.blend(
+        grass_swatch,
+        Image.new("RGB", grass_swatch.size, (108, 139, 86)),
+        0.16,
+    )
+
     # La cenefa se deriva de la propia acera: misma textura, mas luminosa y calida.
     curb_swatch = ImageEnhance.Brightness(sidewalk_swatch).enhance(1.12)
     warm = Image.new("RGB", curb_swatch.size, (226, 210, 177))
@@ -1143,7 +2224,10 @@ def main() -> None:
     masks, walk_mask, blocked_mask, geometry_audit = build_geometry(
         layout, map_config, canvas_size, density, tile_size,
     )
-    base = draw_sports_fields(render_base(canvas_size, masks, patterns, args.seed), layout, density)
+    base = render_base(canvas_size, masks, patterns, args.seed)
+    base = draw_sports_fields(base, layout, density)
+    base = render_static_gis_features(base, layout, density, tile_size, args.seed)
+    base, door_marker_audit = draw_door_markers(base, layout, map_config, density, tile_size)
     terrain_preview = base.resize((width, height), Image.Resampling.LANCZOS)
     terrain_with_grass, encounter_grass_tiles = composite_encounter_grass(
         terrain_preview, layout, map_config, tile_size,
@@ -1162,6 +2246,8 @@ def main() -> None:
     output_navigation = resolve(args.output_navigation)
     output_sectors = resolve(args.output_sectors)
     output_report = resolve(args.output_report)
+    reference_path = resolve(args.reference)
+    output_comparison = resolve(args.output_comparison)
     chunks_path = resolve(args.chunks)
     save_image_atomic(base, output_base, quality=args.quality, lossless=args.lossless)
     save_image_atomic(preview, output_preview, quality=args.quality, lossless=args.lossless)
@@ -1171,6 +2257,17 @@ def main() -> None:
     if not args.no_sectors:
         sector_sheet = build_sector_sheet(preview, overlay, sections)
         save_image_atomic(sector_sheet, output_sectors, quality=args.quality, lossless=args.lossless)
+
+    comparison_info: dict[str, Any] | None = None
+    if reference_path.exists():
+        comparison_sheet, comparison_info = build_comparison_sheet(reference_path, preview)
+        save_image_atomic(
+            comparison_sheet,
+            output_comparison,
+            quality=args.quality,
+            lossless=args.lossless,
+        )
+        del comparison_sheet
 
     chunks: list[dict[str, Any]] = []
     if not args.no_chunks:
@@ -1248,8 +2345,12 @@ def main() -> None:
             )
 
     inputs = [layout_path, road_sheet_path, terrain_sheet_path]
+    if geography_path.exists():
+        inputs.append(geography_path)
     if map_data_path.exists():
         inputs.append(map_data_path)
+    if reference_path.exists():
+        inputs.append(reference_path)
     encounter_grass_source = map_config.get("encounterGrass", {}).get("image")
     if encounter_grass_source:
         encounter_grass_path = resolve(Path(str(encounter_grass_source)))
@@ -1286,6 +2387,7 @@ def main() -> None:
                 if isinstance(area, Mapping)
             ],
         },
+        "doorMarkers": door_marker_audit,
         "walkability": {
             "walkablePixelsApprox": round(walkable_pixels),
             "totalPixels": total_pixels,
@@ -1303,6 +2405,12 @@ def main() -> None:
             },
         },
         "sections": section_report,
+        "comparison": {
+            "reference": relative_name(reference_path),
+            "referenceExists": reference_path.exists(),
+            "generated": comparison_info is not None,
+            **(comparison_info or {}),
+        },
         "chunks": {
             "enabled": not args.no_chunks,
             "count": len(chunks),
@@ -1318,6 +2426,7 @@ def main() -> None:
             "walkabilityOverlay": relative_name(output_overlay),
             "navigationMask": relative_name(output_navigation),
             "sectorSheet": None if args.no_sectors else relative_name(output_sectors),
+            "comparisonSheet": relative_name(output_comparison) if comparison_info is not None else None,
             "chunks": None if args.no_chunks else relative_name(chunks_path),
             "report": relative_name(output_report),
         },
@@ -1334,6 +2443,8 @@ def main() -> None:
     print(f"Transitabilidad: {relative_name(output_overlay)} ({report['walkability']['walkablePercent']} %)")
     if not args.no_chunks:
         print(f"Chunks: {len(chunks)} en {relative_name(chunks_path)}")
+    if comparison_info is not None:
+        print(f"Comparativa: {relative_name(output_comparison)}")
     print(f"Informe: {relative_name(output_report)}")
 
 

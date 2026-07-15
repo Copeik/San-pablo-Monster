@@ -105,6 +105,35 @@ const CITY_MAP_TILES = Object.freeze(Array.from(
   },
 ));
 
+const CITY_BASE_DOORS = [
+  { col: 18, row: 21, label: "Centro de Salud San Pablo", action: "heal", npc: "nurse" },
+  { col: 46, row: 25, label: "Galería Jazmín", action: "shop", npc: "clerk" },
+  { col: 50, row: 34, label: "Umbral Prisma", action: "prism" },
+  { col: 21, row: 30, label: "Casa", action: "house", npc: "abuela" },
+  { col: 30, row: 40, label: "Casa", action: "house", npc: "nino" },
+  { col: 21, row: 53, label: "Casa", action: "house", npc: "pescador" },
+  { col: 30, row: 62, label: "Casa", action: "house", npc: "jubilado" },
+  { col: 61, row: 28, label: "Casa", action: "house", npc: "estudiante" },
+  { col: 71, row: 40, label: "Casa", action: "house", npc: "comerciante" },
+  { col: 61, row: 51, label: "Casa", action: "house", npc: "artista" },
+  { col: 39, row: 69, label: "Casa del parque", action: "house", npc: "guarderia" },
+  { col: 53, row: 71, label: "Jardín Tesalónica", action: "route" },
+  { col: 45, row: 13, label: "UNED Sevilla", action: "lab", npc: "professor" },
+  { col: 42, row: 54, label: "Campus Cívico", action: "lab", npc: "professor" },
+  { col: 69, row: 60, label: "Banco San Pablo", action: "closed" },
+  { col: 67, row: 73, label: "Servicios del Sureste", action: "closed" },
+];
+const CITY_HIDDEN_ASSET_DOORS = new Set((CITY_LAYOUT.hiddenAssetDoors || [])
+  .map((door) => `${door.col},${door.row}`));
+const CITY_MOVED_ASSET_DOORS = new Map((CITY_LAYOUT.assetDoors || [])
+  .map((door) => [`${door.sourceCol},${door.sourceRow}`, door]));
+const CITY_EDITED_BASE_DOORS = Object.freeze(CITY_BASE_DOORS.flatMap((door) => {
+  const sourceKey = `${door.col},${door.row}`;
+  if (CITY_HIDDEN_ASSET_DOORS.has(sourceKey)) return [];
+  const moved = CITY_MOVED_ASSET_DOORS.get(sourceKey);
+  return [{ ...door, col: moved?.col ?? door.col, row: moved?.row ?? door.row, linkedAssetId: moved?.assetId || null }];
+}));
+
 window.CITY_MAP_CONFIG = Object.freeze({
   previewImage: "assets/maps/san-pablo-rebuilt-preview.webp",
   navigationMask: Object.freeze({
@@ -137,6 +166,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
   assetSprites: CITY_LAYOUT_ASSET_SPRITES,
   assetRevision: 3,
   worldAssets: CITY_LAYOUT.worldAssets || [],
+  editorVacatedRects: CITY_LAYOUT.editorVacatedRects || [],
   sections: CITY_LAYOUT.sections || [],
   blockedRects: CITY_LAYOUT_BLOCKED_RECTS,
   walkableRects: CITY_LAYOUT_WALKABLE_RECTS,
@@ -175,24 +205,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
   encounterRects: [],
 
   /* Puertas iniciales. El editor permite corregir o ampliar cualquiera. */
-  doors: [
-    { col: 18, row: 21, label: "Centro de Salud San Pablo", action: "heal", npc: "nurse" },
-    { col: 46, row: 25, label: "Galería Jazmín", action: "shop", npc: "clerk" },
-    { col: 50, row: 34, label: "Umbral Prisma", action: "prism" },
-    { col: 21, row: 30, label: "Casa", action: "house", npc: "abuela" },
-    { col: 30, row: 40, label: "Casa", action: "house", npc: "nino" },
-    { col: 21, row: 53, label: "Casa", action: "house", npc: "pescador" },
-    { col: 30, row: 62, label: "Casa", action: "house", npc: "jubilado" },
-    { col: 61, row: 28, label: "Casa", action: "house", npc: "estudiante" },
-    { col: 71, row: 40, label: "Casa", action: "house", npc: "comerciante" },
-    { col: 61, row: 51, label: "Casa", action: "house", npc: "artista" },
-    { col: 39, row: 69, label: "Habitación del Entrenador", action: "bedroom" },
-    { col: 53, row: 71, label: "Jardín Tesalónica", action: "route" },
-    { col: 45, row: 13, label: "UNED Sevilla", action: "lab", npc: "professor" },
-    { col: 42, row: 54, label: "Campus Cívico", action: "lab", npc: "professor" },
-    { col: 69, row: 60, label: "Banco San Pablo", action: "closed" },
-    { col: 67, row: 73, label: "Servicios del Sureste", action: "closed" },
-  ],
+  doors: CITY_EDITED_BASE_DOORS,
 
   /* NPC exteriores. col/row indican la casilla; direction: down/left/right/up. */
   npcs: [

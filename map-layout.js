@@ -9,6 +9,8 @@
 (function buildSanPabloLayout() {
   "use strict";
 
+  const editorData = window.CITY_MAP_EDITOR_DATA || {};
+
   const assetCatalog = Object.freeze({
     institutional: {
       src: "assets/generated/san-pablo-derived/runtime/building-institutional.png",
@@ -340,6 +342,92 @@
     { id: "south-east", name: "San Pablo · Distrito Moderno", x: 1672, y: 1672, w: 836, h: 836 },
   ]);
 
+  /* Los cambios del editor se aplican antes de congelar el layout. El archivo
+     map-editor-data.js queda asi como parte de la fuente de verdad del juego,
+     aunque las herramientas para modificarlo solo existan en desarrollo. */
+  const applyEditorTransform = (asset, transform = {}) => {
+    const previousX = Number(asset.x) || 0;
+    const previousY = Number(asset.y) || 0;
+    const scale = Math.max(.25, Math.min(4, Number(transform.scale) || 1));
+    const baseWidth = Number(asset.w) || 1;
+    const baseHeight = Number(asset.h) || 1;
+    const baseColliders = (asset.colliders || []).map((collider) => [...collider]);
+    if (Number.isFinite(Number(transform.x))) asset.x = Number(transform.x);
+    if (Number.isFinite(Number(transform.y))) asset.y = Number(transform.y);
+    if (Number.isFinite(Number(transform.depthY))) asset.depthY = Number(transform.depthY);
+    else if (transform.y !== undefined) asset.depthY = asset.y - (asset.kind === "building" ? 10 : 2);
+    if (Number.isFinite(Number(transform.rotation))) asset.rotation = Number(transform.rotation);
+    if (typeof transform.flipX === "boolean") asset.flipX = transform.flipX;
+    if (typeof transform.solid === "boolean") asset.solid = transform.solid;
+    if (typeof transform.label === "string" && transform.label.trim()) asset.label = transform.label.trim().slice(0, 80);
+    const deltaX = (Number(asset.x) || 0) - previousX;
+    const deltaY = (Number(asset.y) || 0) - previousY;
+    if (Array.isArray(asset.door) && asset.door.length >= 2 && (deltaX || deltaY)) {
+      asset.sourceDoor = asset.sourceDoor || [...asset.door];
+      asset.door = [
+        Math.max(0, Math.min(78, Math.round(Number(asset.door[0]) + deltaX / 32))),
+        Math.max(0, Math.min(78, Math.round(Number(asset.door[1]) + deltaY / 32))),
+      ];
+    }
+    if (Array.isArray(asset.approach) && asset.approach.length >= 2 && (deltaX || deltaY)) {
+      asset.approach = [
+        Number(asset.approach[0]) + deltaX,
+        Number(asset.approach[1]) + deltaY,
+        asset.approach[2] || "up",
+      ];
+    }
+    asset.scale = scale;
+    asset.w = Math.round(baseWidth * scale * 100) / 100;
+    asset.h = Math.round(baseHeight * scale * 100) / 100;
+    asset.colliders = baseColliders.map(([x, y, w, h]) => [x * scale, y * scale, w * scale, h * scale]);
+    return asset;
+  };
+
+  const assetOverrides = editorData.assetOverrides && typeof editorData.assetOverrides === "object"
+    ? editorData.assetOverrides
+    : {};
+  const hiddenAssetIds = new Set(Array.isArray(editorData.hiddenAssets) ? editorData.hiddenAssets : []);
+  const editedBaseIds = new Set([...Object.keys(assetOverrides), ...hiddenAssetIds]);
+  const editorVacatedRects = worldAssets
+    .filter((asset) => editedBaseIds.has(asset.id))
+    .flatMap((asset) => (asset.colliders || []).map(([x, y, w, h]) => ({
+      x: Number(asset.x) + Number(x), y: Number(asset.y) + Number(y),
+      w: Number(w), h: Number(h), sourceAssetId: asset.id,
+    })));
+  worldAssets.forEach((asset) => {
+    if (assetOverrides[asset.id]) applyEditorTransform(asset, assetOverrides[asset.id]);
+  });
+  const knownIds = new Set(worldAssets.map((asset) => asset.id));
+  (Array.isArray(editorData.addedAssets) ? editorData.addedAssets : []).forEach((entry) => {
+    if (!entry || typeof entry.id !== "string" || knownIds.has(entry.id) || !assetCatalog[entry.sprite]) return;
+    const asset = addAsset(entry.id, entry.sprite, Number(entry.x), Number(entry.y), {
+      label: entry.label || `Objeto ${entry.sprite}`,
+      solid: entry.solid !== false,
+    });
+    asset.placement = "editor";
+    applyEditorTransform(asset, entry);
+    knownIds.add(asset.id);
+  });
+  const visibleWorldAssets = worldAssets.filter((asset) => !hiddenAssetIds.has(asset.id));
+  const assetDoors = visibleWorldAssets
+    .filter((asset) => Array.isArray(asset.door) && asset.door.length >= 2)
+    .map((asset) => Object.freeze({
+      assetId: asset.id,
+      sourceCol: Number(asset.sourceDoor?.[0] ?? asset.door[0]),
+      sourceRow: Number(asset.sourceDoor?.[1] ?? asset.door[1]),
+      col: Number(asset.door[0]),
+      row: Number(asset.door[1]),
+      approach: Array.isArray(asset.approach) ? [...asset.approach] : null,
+      label: asset.label || asset.id,
+    }));
+  const hiddenAssetDoors = worldAssets
+    .filter((asset) => hiddenAssetIds.has(asset.id) && Array.isArray(asset.door) && asset.door.length >= 2)
+    .map((asset) => Object.freeze({
+      col: Number(asset.sourceDoor?.[0] ?? asset.door[0]),
+      row: Number(asset.sourceDoor?.[1] ?? asset.door[1]),
+      assetId: asset.id,
+    }));
+
   const layout = Object.freeze({
     revision: 3,
     width: 2508,
@@ -348,7 +436,10 @@
     navigationCellSize: 8,
     includeMapDataWalkability: false,
     assetCatalog,
-    worldAssets: Object.freeze(worldAssets.map((asset) => Object.freeze(asset))),
+    worldAssets: Object.freeze(visibleWorldAssets.map((asset) => Object.freeze(asset))),
+    assetDoors: Object.freeze(assetDoors),
+    hiddenAssetDoors: Object.freeze(hiddenAssetDoors),
+    editorVacatedRects: Object.freeze(editorVacatedRects.map((rect) => Object.freeze(rect))),
     roads,
     paths,
     surfaceRects,

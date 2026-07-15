@@ -1,5 +1,7 @@
 Doctor Potato portrait
 ======================
 
-doctor-potato.png was supplied by the project owner for the opening dialogue.
-It is preserved as provided and used only in this free fan project.
+doctor-potato-source.png was supplied by the project owner for the opening
+dialogue. doctor-potato.png is its exact character cutout: only the connected
+white backdrop was converted to transparency and the empty canvas was cropped.
+Both are used only in this free fan project.

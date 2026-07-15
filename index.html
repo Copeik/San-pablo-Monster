@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Una aventura Pokémon web sobre un mapa de estilo HeartGold y SoulSilver." />
     <title>Pokémon · Ciudad Pokémon</title>
-    <link rel="stylesheet" href="styles.css?v=19" />
+    <link rel="stylesheet" href="styles.css?v=25" />
   </head>
   <body>
     <main class="app-shell">
@@ -26,7 +26,7 @@
           <button id="fullscreenButton" type="button" aria-label="Cambiar pantalla completa" title="Pantalla completa">⛶</button>
           <button id="inventoryButton" type="button" aria-label="Abrir mochila" title="Mochila">▣</button>
           <button id="sanpledexButton" type="button" aria-label="Abrir Sanpledex" title="Sanpledex (P)">S</button>
-          <button id="buildingEditorButton" type="button" aria-label="Editar casillas del mapa" title="Editor de casillas">#</button>
+          <button id="buildingEditorButton" type="button" aria-label="Abrir modo dios" title="Modo dios de desarrollo" hidden>✦</button>
           <button id="teamButton" type="button" aria-label="Abrir equipo" title="Equipo">☰</button>
           <button id="soundButton" type="button" aria-label="Activar o desactivar sonido" title="Sonido"><span id="soundIcon">♪</span></button>
         </div>
@@ -43,7 +43,7 @@
               <button id="newGameButton" class="primary-button" type="button">Nueva aventura <span>→</span></button>
               <button id="continueButton" class="secondary-button hidden" type="button">Continuar partida</button>
             </div>
-            <div class="title-controls"><kbd>WASD</kbd> andar <kbd>SHIFT</kbd> correr <kbd>E</kbd> interactuar <kbd>#</kbd> editar mapa</div>
+            <div class="title-controls"><kbd>WASD</kbd> andar <kbd>SHIFT</kbd> correr <kbd>E</kbd> interactuar</div>
           </div>
           <div class="title-visual" aria-hidden="true">
             <span class="sun"></span>
@@ -93,6 +93,7 @@
 
           <div id="mapViewport" class="map-viewport">
             <canvas id="worldCanvas" width="960" height="624" tabindex="-1" aria-label="Mapa jugable de Ciudad Pokémon"></canvas>
+            <div id="mapEditorCursorLayer" class="map-editor-cursor-layer" aria-hidden="true"></div>
             <div id="assetNotice" class="asset-notice">Cargando sprites del mapa…</div>
             <div id="runBadge" class="run-badge hidden">CORRIENDO</div>
             <div id="mazeHud" class="maze-hud hidden">
@@ -107,15 +108,25 @@
               <div><small>ZONA DE CAPTURA</small><strong id="captureAreaName">Hierba activa</strong></div>
               <div class="capture-activity" aria-label="Actividad de Pokémon"><i id="captureActivity"></i></div>
             </div>
-            <aside id="miniMap" class="mini-map" aria-label="Minimapa de Ciudad Pokémon">
+            <aside id="miniMap" class="mini-map" aria-label="Minimapa de San Pablo, Barrio C">
               <header><strong>MAPA</strong><span id="miniMapArea">SAN PABLO</span></header>
-              <canvas id="miniMapCanvas" width="180" height="180" aria-label="Posición actual en el barrio"></canvas>
+              <canvas id="miniMapCanvas" width="120" height="240" aria-label="Posición actual en el barrio"></canvas>
               <div class="mini-map-legend"><span><i class="you"></i>Tú</span><span><i class="portal"></i>Puerta</span><span><i class="capture"></i>Hierba</span><span><i class="npc"></i>NPC</span></div>
             </aside>
             <div id="saveStatus" class="save-status hidden" aria-live="polite">✓ PARTIDA GUARDADA</div>
             <div id="coordinateHud" class="coordinate-hud" aria-label="Coordenadas actuales">
               <small>CASILLA ACTUAL</small><strong>C— · F—</strong><span>X— · Y— px</span>
             </div>
+            <aside id="voiceNpcHud" class="voice-npc-hud hidden" data-state="disabled" aria-live="polite">
+              <span class="voice-npc-mic" aria-hidden="true"><i></i></span>
+              <div class="voice-npc-copy">
+                <small>MANOLÍN · DOCTOR POTATO</small>
+                <strong id="voiceNpcStatus">Pidiendo acceso al micrófono…</strong>
+                <p id="voiceNpcTranscript">Di «Manolín» para que te oiga y venga a discutir.</p>
+                <blockquote id="voiceNpcReply" class="hidden"></blockquote>
+              </div>
+              <button id="voiceNpcRetry" class="hidden" type="button">Activar micro</button>
+            </aside>
             <div class="map-scale" aria-label="Escala del mapa"><i></i><span>32 px · 1 casilla</span></div>
             <div id="interactPrompt" class="interact-prompt hidden"><kbd>E</kbd> Interactuar</div>
             <div id="areaToast" class="area-toast hidden">SAN PABLO · SEVILLA</div>
@@ -232,25 +243,211 @@
 
         <aside id="buildingEditor" class="building-editor" aria-hidden="true">
           <header>
-            <div><small>EDITOR DEL MAPA</small><h2>Casillas 32×32</h2></div>
+            <div><small>MODO DIOS · SOLO DESARROLLO</small><h2>Editor del mundo</h2></div>
             <button id="closeBuildingEditor" type="button" aria-label="Cerrar editor">×</button>
           </header>
-          <p class="editor-help">Pulsa una casilla para asignarle comportamiento. <strong>C</strong> es columna, <strong>F</strong> es fila y C0/F0 está arriba a la izquierda. La cuadrícula se guarda en este navegador.</p>
-          <div id="tileSelectionInfo" class="selected-building-info"><span>Selecciona una casilla</span><span>C— · F—</span></div>
-          <div class="sprite-options-title"><strong>Comportamiento</strong><small>Un clic para pintar</small></div>
-          <div id="tilePalette" class="tile-palette" role="group" aria-label="Tipo de casilla">
-            <button type="button" data-tile-type="walkable"><i></i>Transitable</button>
-            <button type="button" data-tile-type="blocked" class="selected"><i></i>Bloqueada</button>
-            <button type="button" data-tile-type="door"><i></i>Puerta</button>
-            <button type="button" data-tile-type="encounter"><i></i>Hierba / encuentro</button>
-            <button type="button" data-tile-type="event"><i></i>Evento</button>
+          <section class="map-editor-collaboration" aria-label="Sesión colaborativa">
+            <div class="map-editor-identity">
+              <label for="mapEditorNameInput">Tu nombre</label>
+              <input id="mapEditorNameInput" type="text" maxlength="32" autocomplete="nickname" placeholder="Editor" />
+              <button id="copyEditorInviteButton" type="button" title="Copiar enlace de esta sesión">Compartir</button>
+            </div>
+            <div class="map-editor-session-row">
+              <span id="mapEditorConnectionStatus" class="map-editor-connection-status" data-state="connecting" role="status">Conectando…</span>
+              <div id="mapEditorPresenceList" class="map-editor-presence-list" role="list" aria-label="Editores conectados"></div>
+            </div>
+          </section>
+          <div id="mapEditorSaveStatus" class="map-editor-save-status" data-state="saved" aria-live="polite"><i></i><span>Conectando con el archivo…</span></div>
+          <div class="map-editor-toolbar" role="toolbar" aria-label="Historial de edición">
+            <button id="mapEditorUndoButton" type="button" aria-label="Deshacer" title="Deshacer (Ctrl+Z)" disabled>↶ <span>Deshacer</span></button>
+            <button id="mapEditorRedoButton" type="button" aria-label="Rehacer" title="Rehacer (Ctrl+Shift+Z)" disabled>↷ <span>Rehacer</span></button>
+            <span id="mapEditorRevision" class="map-editor-revision">rev —</span>
           </div>
-          <p id="tileEditorHint" class="tile-editor-hint">Modo actual: Bloqueada</p>
-          <div class="editor-actions">
-            <button id="copyTileButton" type="button">Copiar coordenada</button>
-            <button id="copyNpcButton" type="button">Copiar NPC</button>
-            <button id="resetTileMap" type="button">Restaurar mapa</button>
+          <details id="mapEditorActivity" class="map-editor-activity">
+            <summary>Actividad compartida</summary>
+            <ol id="mapEditorActivityList" aria-live="polite"><li>Aún no hay cambios en esta sesión.</li></ol>
+          </details>
+          <div class="map-editor-tabs" role="tablist" aria-label="Herramientas del mapa">
+            <button id="mapEditorTabObjects" class="selected" type="button" role="tab" data-editor-mode="objects" aria-controls="objectEditorPanel" aria-selected="true" tabindex="0">Objetos</button>
+            <button id="mapEditorTabTerrain" type="button" role="tab" data-editor-mode="terrain" aria-controls="terrainEditorPanel" aria-selected="false" tabindex="-1">Terreno</button>
+            <button id="mapEditorTabNpcs" type="button" role="tab" data-editor-mode="npcs" aria-controls="npcEditorPanel" aria-selected="false" tabindex="-1">NPC</button>
+            <button id="mapEditorTabEntrances" type="button" role="tab" data-editor-mode="entrances" aria-controls="entranceEditorPanel" aria-selected="false" tabindex="-1">Entradas</button>
+            <button id="mapEditorTabEvents" type="button" role="tab" data-editor-mode="events" aria-controls="eventEditorPanel" aria-selected="false" tabindex="-1">Eventos</button>
           </div>
+
+          <section id="objectEditorPanel" class="map-editor-panel" data-editor-panel="objects" role="tabpanel" aria-labelledby="mapEditorTabObjects">
+            <p class="editor-help">Selecciona y arrastra cualquier edificio u objeto. Usa las flechas para ajustar; <strong>Shift + flecha</strong> mueve una casilla completa.</p>
+            <label class="editor-field">Nuevo objeto
+              <select id="assetPrototypeSelect" aria-label="Prototipo de objeto"></select>
+            </label>
+            <div class="editor-inline-actions">
+              <button id="addAssetButton" class="editor-primary" type="button">+ Colocar en el centro</button>
+              <label class="editor-snap">Ajuste
+                <select id="assetSnapSelect"><option value="1">1 px</option><option value="8">8 px</option><option value="16">16 px</option><option value="32" selected>32 px</option></select>
+              </label>
+            </div>
+            <div id="assetSelectionInfo" class="selected-building-info"><span>Selecciona un objeto</span><span>Arrastra sobre el mapa</span></div>
+            <fieldset id="assetInspector" class="asset-inspector" disabled>
+              <legend>Transformación</legend>
+              <label class="editor-field">Nombre <input id="assetLabelInput" type="text" maxlength="80" /></label>
+              <div class="editor-number-grid">
+                <label>X <input id="assetXInput" type="number" min="0" max="2508" step="1" /></label>
+                <label>Y <input id="assetYInput" type="number" min="0" max="2508" step="1" /></label>
+                <label>Escala <input id="assetScaleInput" type="number" min="0.25" max="4" step="0.05" /></label>
+                <label>Profundidad <input id="assetDepthInput" type="number" min="-2508" max="5016" step="1" /></label>
+                <label>Rotación <input id="assetRotationInput" type="number" min="-360" max="360" step="1" /></label>
+              </div>
+              <label class="editor-check"><input id="assetSolidInput" type="checkbox" /> Bloquea el paso</label>
+              <div class="editor-object-actions">
+                <button id="duplicateAssetButton" type="button">Duplicar</button>
+                <button id="flipAssetButton" type="button">Voltear</button>
+                <button id="deleteAssetButton" class="danger" type="button">Eliminar</button>
+              </div>
+            </fieldset>
+          </section>
+
+          <section id="terrainEditorPanel" class="map-editor-panel hidden" data-editor-panel="terrain" role="tabpanel" aria-labelledby="mapEditorTabTerrain" hidden>
+            <p class="editor-help">Pulsa o arrastra para pintar casillas de 32×32. La hierba crea encuentros visibles; “Original” elimina una corrección.</p>
+            <div id="tileSelectionInfo" class="selected-building-info"><span>Selecciona una casilla</span><span>C— · F—</span></div>
+            <div class="sprite-options-title"><strong>Comportamiento</strong><small>Arrastra para pintar</small></div>
+            <div id="tilePalette" class="tile-palette" role="group" aria-label="Tipo de casilla">
+              <button type="button" data-tile-type="inherit"><i></i>Original</button>
+              <button type="button" data-tile-type="walkable"><i></i>Transitable</button>
+              <button type="button" data-tile-type="blocked" class="selected"><i></i>Bloqueada</button>
+              <button type="button" data-tile-type="door"><i></i>Puerta</button>
+              <button type="button" data-tile-type="encounter"><i></i>Hierba / encuentro</button>
+              <button type="button" data-tile-type="event"><i></i>Evento</button>
+            </div>
+            <label class="editor-field editor-compact-field">Tamaño del pincel
+              <select id="terrainBrushSize"><option value="1">1 × 1</option><option value="3">3 × 3</option><option value="5">5 × 5</option></select>
+            </label>
+            <p id="tileEditorHint" class="tile-editor-hint">Modo actual: Bloqueada</p>
+            <div class="editor-actions">
+              <button id="copyTileButton" type="button">Copiar casilla</button>
+              <button id="copyNpcButton" type="button">Copiar NPC</button>
+              <button id="resetTileMap" type="button">Borrar cambios</button>
+            </div>
+          </section>
+
+          <section id="npcEditorPanel" class="map-editor-panel hidden" data-editor-panel="npcs" role="tabpanel" aria-labelledby="mapEditorTabNpcs" hidden>
+            <p class="editor-help">Coloca personajes sobre la cuadrícula, edita su diálogo y comprueba el resultado sin salir del modo dios.</p>
+            <div class="editor-template-list" aria-label="Plantillas de NPC">
+              <button type="button" data-npc-template="dialogue"><strong>Vecino</strong><span>Diálogo sencillo</span></button>
+              <button type="button" data-npc-template="patrol"><strong>Paseante</strong><span>Con patrulla</span></button>
+            </div>
+            <button id="addNpcButton" class="editor-primary editor-wide-action" type="button">+ Colocar NPC en el centro</button>
+            <div id="npcSelectionInfo" class="selected-building-info"><span>Selecciona un NPC</span><span>Haz clic en el mapa</span></div>
+            <fieldset id="npcInspector" class="asset-inspector" disabled>
+              <legend>NPC</legend>
+              <div class="editor-number-grid">
+                <label>Columna <input id="npcColInput" type="number" min="0" max="78" step="1" /></label>
+                <label>Fila <input id="npcRowInput" type="number" min="0" max="78" step="1" /></label>
+              </div>
+              <label class="editor-field">Nombre <input id="npcNameInput" type="text" maxlength="60" /></label>
+              <label class="editor-field">Sprite <select id="npcSpriteInput"></select></label>
+              <label class="editor-field">Dirección
+                <select id="npcDirectionInput"><option value="down">Abajo</option><option value="left">Izquierda</option><option value="right">Derecha</option><option value="up">Arriba</option></select>
+              </label>
+              <label class="editor-field">Diálogo <textarea id="npcLinesInput" rows="5" maxlength="1200" placeholder="Una frase por línea"></textarea></label>
+              <label class="editor-check"><input id="npcPatrolEnabledInput" type="checkbox" /> Patrulla hasta otra casilla</label>
+              <div id="npcPatrolFields" class="editor-number-grid hidden">
+                <label>Destino C <input id="npcPatrolColInput" type="number" min="0" max="78" step="1" /></label>
+                <label>Destino F <input id="npcPatrolRowInput" type="number" min="0" max="78" step="1" /></label>
+                <label>Velocidad <input id="npcPatrolSpeedInput" type="number" min="0.1" max="4" step="0.1" /></label>
+              </div>
+              <div class="editor-object-actions">
+                <button id="testNpcButton" type="button">Probar</button>
+                <button id="duplicateNpcButton" type="button">Duplicar</button>
+                <button id="deleteNpcButton" class="danger" type="button">Eliminar</button>
+              </div>
+            </fieldset>
+          </section>
+
+          <section id="entranceEditorPanel" class="map-editor-panel hidden" data-editor-panel="entrances" role="tabpanel" aria-labelledby="mapEditorTabEntrances" hidden>
+            <p class="editor-help">Vincula una puerta o casilla con un interior u otro mapa. La plantilla “Nuevo mapa” deja un destino seguro y editable.</p>
+            <div class="editor-template-list" aria-label="Plantillas de entrada">
+              <button type="button" data-entrance-template="interior"><strong>Interior</strong><span>Casa básica</span></button>
+              <button type="button" data-entrance-template="new-map"><strong>Nuevo mapa</strong><span>Transición con fundido</span></button>
+            </div>
+            <button id="addEntranceButton" class="editor-primary editor-wide-action" type="button">+ Colocar entrada en el centro</button>
+            <div id="entranceSelectionInfo" class="selected-building-info"><span>Selecciona una entrada</span><span>Haz clic en el mapa</span></div>
+            <fieldset id="entranceInspector" class="asset-inspector" disabled>
+              <legend>Entrada</legend>
+              <div class="editor-number-grid">
+                <label>Columna <input id="entranceColInput" type="number" min="0" max="78" step="1" /></label>
+                <label>Fila <input id="entranceRowInput" type="number" min="0" max="78" step="1" /></label>
+              </div>
+              <label class="editor-field">Nombre <input id="entranceLabelInput" type="text" maxlength="80" /></label>
+              <label class="editor-field">Acción
+                <select id="entranceActionInput">
+                  <option value="transition">Ir a otro mapa</option><option value="house">Casa</option><option value="heal">Centro de salud</option><option value="shop">Tienda</option><option value="lab">Laboratorio</option><option value="route">Ruta</option><option value="closed">Cerrada</option><option value="prism">Portal Prisma</option>
+                </select>
+              </label>
+              <label class="editor-field">Mapa de destino <input id="entranceTargetMapInput" type="text" maxlength="80" placeholder="new-map" /></label>
+              <div class="editor-number-grid">
+                <label>Destino X <input id="entranceTargetXInput" type="number" min="0" max="99999" step="1" /></label>
+                <label>Destino Y <input id="entranceTargetYInput" type="number" min="0" max="99999" step="1" /></label>
+              </div>
+              <label class="editor-field">Dirección al llegar
+                <select id="entranceTargetDirectionInput"><option value="down">Abajo</option><option value="left">Izquierda</option><option value="right">Derecha</option><option value="up">Arriba</option></select>
+              </label>
+              <label class="editor-field">Efecto <select id="entranceEffectInput"><option value="fade">Fundido</option><option value="flash">Destello</option><option value="none">Ninguno</option></select></label>
+              <label class="editor-field">Edificio vinculado <input id="entranceLinkedAssetInput" type="text" maxlength="80" placeholder="ID opcional" /></label>
+              <p id="entranceValidation" class="editor-validation" role="status"></p>
+              <div class="editor-object-actions">
+                <button id="testEntranceButton" type="button">Probar</button>
+                <button id="duplicateEntranceButton" type="button">Duplicar</button>
+                <button id="deleteEntranceButton" class="danger" type="button">Eliminar</button>
+              </div>
+            </fieldset>
+          </section>
+
+          <section id="eventEditorPanel" class="map-editor-panel hidden" data-editor-panel="events" role="tabpanel" aria-labelledby="mapEditorTabEvents" hidden>
+            <p class="editor-help">Crea interacciones sin escribir código: diálogos, pensamientos, vibraciones o transiciones. “Probar” no guarda ni mueve definitivamente al jugador.</p>
+            <div class="editor-template-list editor-template-list-events" aria-label="Plantillas de evento">
+              <button type="button" data-event-template="dialogue"><strong>Diálogo</strong><span>Texto al interactuar</span></button>
+              <button type="button" data-event-template="thought"><strong>Pensamiento</strong><span>Reflexión del jugador</span></button>
+              <button type="button" data-event-template="vibration"><strong>Vibración</strong><span>Vibración + sacudida</span></button>
+              <button type="button" data-event-template="transition"><strong>Nuevo mapa</strong><span>Fundido y traslado</span></button>
+            </div>
+            <button id="addEventButton" class="editor-primary editor-wide-action" type="button">+ Colocar evento en el centro</button>
+            <div id="eventSelectionInfo" class="selected-building-info"><span>Selecciona un evento</span><span>Haz clic en el mapa</span></div>
+            <fieldset id="eventInspector" class="asset-inspector" disabled>
+              <legend>Evento</legend>
+              <div class="editor-number-grid">
+                <label>Columna <input id="eventColInput" type="number" min="0" max="78" step="1" /></label>
+                <label>Fila <input id="eventRowInput" type="number" min="0" max="78" step="1" /></label>
+              </div>
+              <label class="editor-field">Tipo
+                <select id="eventTypeInput"><option value="dialogue">Diálogo</option><option value="thought">Pensamiento</option><option value="vibration">Vibración</option><option value="teleport">Teletransporte</option><option value="transition">Transición de mapa</option></select>
+              </label>
+              <label class="editor-field">Activación <select id="eventTriggerInput"><option value="interact">Al interactuar</option><option value="step">Al pisar</option></select></label>
+              <label class="editor-field" data-event-fields="message">Mensaje <textarea id="eventMessageInput" rows="4" maxlength="1200"></textarea></label>
+              <div data-event-fields="target">
+                <label class="editor-field">Mapa de destino <input id="eventTargetMapInput" type="text" maxlength="80" placeholder="new-map" /></label>
+                <div class="editor-number-grid">
+                  <label>Destino X <input id="eventTargetXInput" type="number" min="0" max="99999" step="1" /></label>
+                  <label>Destino Y <input id="eventTargetYInput" type="number" min="0" max="99999" step="1" /></label>
+                </div>
+                <label class="editor-field">Dirección al llegar <select id="eventTargetDirectionInput"><option value="down">Abajo</option><option value="left">Izquierda</option><option value="right">Derecha</option><option value="up">Arriba</option></select></label>
+                <label class="editor-field">Efecto <select id="eventEffectInput"><option value="fade">Fundido</option><option value="flash">Destello</option><option value="none">Ninguno</option></select></label>
+              </div>
+              <div class="editor-number-grid" data-event-fields="vibration">
+                <label>Duración ms <input id="eventDurationInput" type="number" min="0" max="3000" step="10" /></label>
+                <label>Intensidad <input id="eventIntensityInput" type="number" min="0" max="1" step="0.1" /></label>
+              </div>
+              <label class="editor-check"><input id="eventOnceInput" type="checkbox" /> Ejecutar una sola vez</label>
+              <label class="editor-check"><input id="eventEnabledInput" type="checkbox" checked /> Evento activo</label>
+              <p id="eventValidation" class="editor-validation" role="status"></p>
+              <div class="editor-object-actions">
+                <button id="testEventButton" type="button">Probar</button>
+                <button id="duplicateEventButton" type="button">Duplicar</button>
+                <button id="deleteEventButton" class="danger" type="button">Eliminar</button>
+              </div>
+            </fieldset>
+          </section>
+
+          <p class="map-editor-shortcuts"><kbd>Ctrl</kbd>+<kbd>Z</kbd> deshacer · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> rehacer · <kbd>Ctrl</kbd>+<kbd>S</kbd> sincronizar · <kbd>G</kbd> abrir/cerrar</p>
         </aside>
         <div id="editorScrim" class="drawer-scrim editor-scrim hidden"></div>
 
@@ -286,11 +483,14 @@
       </section>
 
       <footer class="legal-note">
-        Proyecto fan, gratuito y de uso personal. Pokémon pertenece a Nintendo, Game Freak y Creatures. Mapa reconstruido desde la referencia aportada; protagonista y NPC adaptados desde las imágenes facilitadas; todos los monstruos jugables son diseños originales con recursos locales.
+        Proyecto fan, gratuito y de uso personal. Pokémon pertenece a Nintendo, Game Freak y Creatures. San Pablo C se ha reconstruido con cartografía IDE.Sevilla del Ayuntamiento de Sevilla y ortofoto PNOA del IGN; todos los monstruos jugables son diseños originales con recursos locales.
       </footer>
     </main>
-    <script src="map-layout.js?v=3"></script>
-    <script src="map-data.js?v=24"></script>
-    <script src="script.js?v=66"></script>
+    <script src="map-geography.js?v=2"></script>
+    <script src="map-editor-data.js?v=3"></script>
+    <script src="map-layout.js?v=8"></script>
+    <script src="map-data.js?v=26"></script>
+    <script src="script.js?v=77"></script>
+    <script src="map-editor.js?v=7"></script>
   </body>
 </html>

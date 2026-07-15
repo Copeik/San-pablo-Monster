@@ -1,0 +1,10 @@
+Origen: ficha conceptual aportada por el usuario (codex-clipboard-733ef474-126c-42f2-a7d9-f4a58293ae24.png).
+Proceso: recorte de las vistas dibujadas y eliminación del fondo de pergamino; no se generaron perspectivas nuevas.
+
+Archivos extraídos:
+- ascuero-front.png
+- ascuero-back.png
+- tolebrasa-front.png
+- tolebrasa-back.png
+- matallama-front.png
+- matallama-back.png

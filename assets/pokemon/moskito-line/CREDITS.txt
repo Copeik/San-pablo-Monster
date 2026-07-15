@@ -7,3 +7,5 @@ Archivos:
 - moskito-front.png / moskito-back.png
 - zumkito-front.png / zumkito-back.png
 - sanguento-front.png / sanguento-back.png
+
+Ajuste de recorte (julio de 2026): se limpiaron de forma determinista las bolsas de fondo y sombras residuales de las seis vistas, conservando los dibujos originales sin regenerarlos.

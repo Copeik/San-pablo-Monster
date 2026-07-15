@@ -2,9 +2,162 @@
   "use strict";
 
   const SAVE_KEY = "pokemon-city-save-v3";
-  const MAP_EDIT_KEY = "pokemon-city-tile-overrides-v4";
-  const MAP_REVISION = 12;
+  const MAP_EDIT_KEY = "pokemon-city-tile-overrides-v5";
+  const MAP_REVISION = 14;
   const CITY_MAP = window.CITY_MAP_CONFIG;
+  const BASE_CITY_NPCS = Array.isArray(CITY_MAP.npcs) ? CITY_MAP.npcs.map((npc) => ({ ...npc })) : [];
+  const BASE_CITY_ENTRANCES = Array.isArray(CITY_MAP.entrances)
+    ? CITY_MAP.entrances.map((entrance) => ({ ...entrance }))
+    : (Array.isArray(CITY_MAP.doors) ? CITY_MAP.doors.map((entrance) => ({ ...entrance })) : []);
+
+  function runtimeEntityId(value, fallback = "") {
+    const normalized = String(value || fallback).trim().replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80);
+    return normalized || fallback;
+  }
+
+  function normalizeRuntimeNpc(value, fallbackId = "") {
+    if (!value || typeof value !== "object") return null;
+    const id = runtimeEntityId(value.id, fallbackId);
+    const col = Math.floor(Number(value.col));
+    const row = Math.floor(Number(value.row));
+    if (!id || !Number.isFinite(col) || !Number.isFinite(row)) return null;
+    const direction = ["up", "down", "left", "right"].includes(value.direction) ? value.direction : "down";
+    const npc = {
+      ...value,
+      id,
+      col: Math.max(0, Math.min(78, col)),
+      row: Math.max(0, Math.min(78, row)),
+      direction,
+      name: String(value.name || "NPC").slice(0, 80),
+      sprite: String(value.sprite || "guide").slice(0, 80),
+      lines: (Array.isArray(value.lines) ? value.lines : [value.lines])
+        .filter((line) => typeof line === "string" && line.trim())
+        .slice(0, 12)
+        .map((line) => line.slice(0, 500)),
+    };
+    const destination = value.patrol?.to;
+    const patrolSpeed = Number(value.patrol?.tilesPerSecond);
+    const patrolDestination = Array.isArray(destination) ? destination.map(Number) : [];
+    if (patrolDestination.length === 2 && patrolDestination.every(Number.isFinite) && Number.isFinite(patrolSpeed) && patrolSpeed > 0) {
+      npc.patrol = {
+        to: [
+          Math.max(0, Math.min(78, Math.floor(patrolDestination[0]))),
+          Math.max(0, Math.min(78, Math.floor(patrolDestination[1]))),
+        ],
+        tilesPerSecond: Math.max(.1, Math.min(6, patrolSpeed)),
+      };
+    } else delete npc.patrol;
+    return npc;
+  }
+
+  function normalizeRuntimeEntrance(value, fallbackId = "") {
+    if (!value || typeof value !== "object") return null;
+    const col = Math.floor(Number(value.col));
+    const row = Math.floor(Number(value.row));
+    if (!Number.isFinite(col) || !Number.isFinite(row)) return null;
+    const fallback = runtimeEntityId(
+      `entrance-${value.action || "transition"}-${value.npc || value.label || `${col}-${row}`}`,
+      `entrance-${col}-${row}`,
+    );
+    const id = runtimeEntityId(value.id, fallbackId || fallback);
+    if (!id) return null;
+    const targetX = Number(value.targetX);
+    const targetY = Number(value.targetY);
+    return {
+      ...value,
+      id,
+      col: Math.max(0, Math.min(78, col)),
+      row: Math.max(0, Math.min(78, row)),
+      label: String(value.label || "Entrada").slice(0, 100),
+      action: String(value.action || (value.targetMap ? "transition" : "closed")).toLowerCase(),
+      targetMap: value.targetMap == null ? null : String(value.targetMap).slice(0, 80),
+      targetX: Number.isFinite(targetX) ? targetX : null,
+      targetY: Number.isFinite(targetY) ? targetY : null,
+      targetDirection: ["up", "down", "left", "right"].includes(value.targetDirection) ? value.targetDirection : "down",
+      effect: ["fade", "flash", "none"].includes(value.effect) ? value.effect : "fade",
+      linkedAssetId: value.linkedAssetId == null ? null : runtimeEntityId(value.linkedAssetId),
+    };
+  }
+
+  function normalizeRuntimeEvent(value, fallbackId = "") {
+    if (!value || typeof value !== "object") return null;
+    const col = Math.floor(Number(value.col));
+    const row = Math.floor(Number(value.row));
+    const id = runtimeEntityId(value.id, fallbackId);
+    if (!id || !Number.isFinite(col) || !Number.isFinite(row)) return null;
+    const type = ["dialogue", "thought", "vibration", "teleport", "transition"].includes(value.type)
+      ? value.type
+      : "thought";
+    const targetX = Number(value.targetX);
+    const targetY = Number(value.targetY);
+    return {
+      ...value,
+      id,
+      col: Math.max(0, Math.min(78, col)),
+      row: Math.max(0, Math.min(78, row)),
+      label: String(value.label || "Evento").slice(0, 100),
+      type,
+      trigger: value.trigger === "step" ? "step" : "interact",
+      message: Array.isArray(value.message)
+        ? value.message.filter((line) => typeof line === "string").slice(0, 12).map((line) => line.slice(0, 500))
+        : String(value.message || "").slice(0, 1000),
+      targetMap: value.targetMap == null ? null : String(value.targetMap).slice(0, 80),
+      targetX: Number.isFinite(targetX) ? targetX : null,
+      targetY: Number.isFinite(targetY) ? targetY : null,
+      targetDirection: ["up", "down", "left", "right"].includes(value.targetDirection) ? value.targetDirection : "down",
+      duration: Math.max(80, Math.min(5000, Number(value.duration) || 440)),
+      intensity: Math.max(.1, Math.min(4, Number(value.intensity) || 1)),
+      effect: ["fade", "flash", "none"].includes(value.effect) ? value.effect : (type === "transition" ? "fade" : "none"),
+      once: Boolean(value.once),
+    };
+  }
+
+  function buildRuntimeNpcs(editorData = {}) {
+    const records = new Map();
+    BASE_CITY_NPCS.forEach((npc, index) => {
+      const normalized = normalizeRuntimeNpc(npc, `npc-base-${index + 1}`);
+      if (normalized) records.set(normalized.id, normalized);
+    });
+    Object.entries(editorData.npcOverrides && typeof editorData.npcOverrides === "object" ? editorData.npcOverrides : {})
+      .forEach(([id, patch]) => {
+        const normalized = normalizeRuntimeNpc({ ...(records.get(id) || {}), ...(patch || {}), id }, id);
+        if (normalized) records.set(id, normalized);
+      });
+    (Array.isArray(editorData.hiddenNpcs) ? editorData.hiddenNpcs : []).forEach((id) => records.delete(String(id)));
+    (Array.isArray(editorData.addedNpcs) ? editorData.addedNpcs : []).forEach((npc, index) => {
+      const normalized = normalizeRuntimeNpc(npc, `npc-editor-${index + 1}`);
+      if (normalized) records.set(normalized.id, normalized);
+    });
+    return [...records.values()];
+  }
+
+  function buildRuntimeEntrances(editorData = {}) {
+    const records = new Map();
+    BASE_CITY_ENTRANCES.forEach((entrance, index) => {
+      const normalized = normalizeRuntimeEntrance(entrance);
+      if (normalized) records.set(normalized.id, normalized);
+    });
+    (Array.isArray(editorData.entrances) ? editorData.entrances : []).forEach((entrance, index) => {
+      const fallbackId = runtimeEntityId(entrance?.id, `entrance-editor-${index + 1}`);
+      if (entrance?.enabled === false) {
+        records.delete(fallbackId);
+        return;
+      }
+      const normalized = normalizeRuntimeEntrance({ ...(records.get(fallbackId) || {}), ...entrance, id: fallbackId }, fallbackId);
+      if (normalized) records.set(normalized.id, normalized);
+    });
+    return [...records.values()];
+  }
+
+  function buildRuntimeEvents(editorData = {}) {
+    const source = Array.isArray(editorData.events) ? editorData.events : [];
+    return source.map((event, index) => normalizeRuntimeEvent(event, `event-${index + 1}`)).filter(Boolean);
+  }
+
+  const initialEditorData = window.CITY_MAP_EDITOR_DATA || {};
+  const cityNpcs = buildRuntimeNpcs(initialEditorData);
+  const cityEntrances = buildRuntimeEntrances(initialEditorData);
+  const cityEvents = buildRuntimeEvents(initialEditorData);
   const BASE_VIEW_HEIGHT = 624;
   const MAX_RENDER_WIDTH = 3840;
   const MAX_RENDER_HEIGHT = 2160;
@@ -64,11 +217,14 @@
     && new URLSearchParams(window.location.search).has("debugFragmentCinematic");
   const LOCAL_DEBUG_PLAYER_ATLAS = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
     && new URLSearchParams(window.location.search).has("debugPlayerAtlas");
+  const LOCAL_DEBUG_VOICE = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
+    ? new URLSearchParams(window.location.search).get("debugVoice")
+    : "";
   function clampDebugLevel(value) { return Math.max(1, Math.min(50, Number(value) || 5)); }
   const NORMAL_START = { ...(LOCAL_DEBUG_SPAWN || CITY_MAP.spawn) };
-  const PORTAL_DOOR = (CITY_MAP.doors || []).find((door) => door.action === "prism");
-  const PORTAL_POSITION = PORTAL_DOOR
-    ? { x: (PORTAL_DOOR.col + .5) * CITY_MAP.tileSize, y: (PORTAL_DOOR.row + .5) * CITY_MAP.tileSize }
+  const INITIAL_PORTAL_DOOR = cityEntrances.find((entrance) => entrance.action === "prism");
+  const INITIAL_PORTAL_POSITION = INITIAL_PORTAL_DOOR
+    ? { x: (INITIAL_PORTAL_DOOR.col + .5) * CITY_MAP.tileSize, y: (INITIAL_PORTAL_DOOR.row + .5) * CITY_MAP.tileSize }
     : { x: 1250, y: 1110 };
   const MAINTENANCE_ROOM = { x: 720, y: 560, w: 660, h: 520 };
   const MAINTENANCE_EXIT = { x: 1050, y: 1010, radius: 62 };
@@ -86,20 +242,6 @@
   const INDOOR_SPAWN = { x: INDOOR_ROOM.x + INDOOR_ROOM.w / 2, y: INDOOR_ROOM.y + INDOOR_ROOM.h - 54 };
   const INDOOR_NPC = { x: INDOOR_ROOM.x + INDOOR_ROOM.w / 2, y: INDOOR_ROOM.y + 120, radius: 46 };
   const INDOOR_EXIT = { x: INDOOR_SPAWN.x, y: INDOOR_SPAWN.y, radius: 42 };
-  /* Muebles sólidos del dormitorio. Solo el ordenador ofrece una acción. */
-  const BEDROOM_UPSTAIRS_FIXTURES = Object.freeze([
-    { id: "bedroom_bed", x: 158, y: 192, hitbox: { x: 108, y: 120, w: 100, h: 142 } },
-    { id: "bedroom_computer", x: 718, y: 382, radius: 80, hitbox: { x: 650, y: 300, w: 140, h: 126 } },
-    { id: "bedroom_shelf", x: 810, y: 166, hitbox: { x: 756, y: 100, w: 108, h: 130 } },
-    { id: "bedroom_stairs_down", x: 814, y: 468, radius: 88, hitbox: { x: 756, y: 414, w: 118, h: 106 } },
-  ]);
-  const BEDROOM_GROUND_FIXTURES = Object.freeze([
-    { id: "bedroom_stairs_up", x: 814, y: 146, radius: 88, hitbox: { x: 756, y: 90, w: 118, h: 110 } },
-    { id: "ground_kitchen", hitbox: { x: 100, y: 78, w: 310, h: 112 } },
-    { id: "ground_table", hitbox: { x: 356, y: 306, w: 150, h: 104 } },
-    { id: "ground_tv", hitbox: { x: 104, y: 360, w: 126, h: 102 } },
-    { id: "ground_sofa", hitbox: { x: 660, y: 356, w: 148, h: 100 } },
-  ]);
 
   const ROUTE_ROOM = { x: 20, y: 20, w: 920, h: 584, wall: 22 };
   const ROUTE_SPAWN = { x: 460, y: ROUTE_ROOM.y + ROUTE_ROOM.h - 54 };
@@ -122,7 +264,8 @@
     { id: 9601, weight: 18 }, { id: 9701, weight: 18 }, { id: 9001, weight: 14 },
     { id: 9101, weight: 12 }, { id: 9501, weight: 12 }, { id: 9201, weight: 10 },
     { id: 9301, weight: 9 }, { id: 9401, weight: 7 }, { id: 9602, weight: 4 },
-    { id: 9702, weight: 4 }, { id: 9202, weight: 3 },
+    { id: 9702, weight: 4 }, { id: 9202, weight: 3 }, { id: 9803, weight: 7 },
+    { id: 9806, weight: 5 }, { id: 9811, weight: 7 },
   ];
 
   const INTERIOR_PALETTES = {
@@ -130,7 +273,6 @@
     mart: { floor: "#cfe0ea", floorAlt: "#bfd3e0", wall: "#3f6f9c", accent: "#f4d35e", label: "POKÉ MART" },
     lab: { floor: "#e4ead6", floorAlt: "#d6dec4", wall: "#5a8a52", accent: "#9ad1f0", label: "LABORATORIO POKÉMON" },
     house: { floor: "#d9c39c", floorAlt: "#cdb088", wall: "#7a5230", accent: "#e7c86a", label: "CASA" },
-    bedroom: { floor: "#d7c39f", floorAlt: "#c8ad82", wall: "#6d4b38", accent: "#8ab8d1", label: "HABITACIÓN DEL ENTRENADOR" },
   };
 
   const NPC_DEFS = {
@@ -154,33 +296,33 @@
   const NPC_SHEET_URL = "assets/sprites/hgss-npc-idle.png";
   const GUIDE_NPC_SHEET_URL = "assets/sprites/npc-guide-walk.png";
   const DOCTOR_POTATO_PORTRAIT_URL = "assets/portraits/doctor-potato.png";
-  const PROTAGONIST_PORTRAIT_URL = "assets/portraits/protagonista.png";
-  const RIVAL_PORTRAIT_URL = "assets/portraits/rival.png";
   const DOCTOR_POTATO_THEME_URL = "assets/audio/patata-de-barrio.mp3";
-  const CHARACTER_DIALOG_PRESENTATIONS = Object.freeze({
-    "doctor-potato": Object.freeze({
-      speaker: "Doctor Potato",
-      portrait: DOCTOR_POTATO_PORTRAIT_URL,
-      portraitAlt: "Retrato del Doctor Potato",
-    }),
-    protagonista: Object.freeze({
-      speaker: "Ethan",
-      portrait: PROTAGONIST_PORTRAIT_URL,
-      portraitAlt: "Retrato del protagonista",
-    }),
-    rival: Object.freeze({
-      speaker: "Rival",
-      portrait: RIVAL_PORTRAIT_URL,
-      portraitAlt: "Retrato del Rival",
-    }),
-  });
-  const DIALOG_SPEAKER_ALIASES = Object.freeze({
-    "doctor-potato": "doctor-potato",
-    "doctor potato": "doctor-potato",
-    protagonista: "protagonista",
-    ethan: "protagonista",
-    rival: "rival",
-  });
+  const MICROPHONE_ACCESS_ENABLED = false;
+  const VOICE_NPC_ENABLED = false;
+  const VOICE_NPC_SILENCE_MS = 3000;
+  const VOICE_NPC_CHASE_SPEED = 142;
+  const VOICE_NPC_FALLBACK_REPLIES = [
+    (topic) => `Quillo, tú dices «${topic}» y esa barriga tuya ya está pidiendo turno pa responder antes que tú.`,
+    (topic) => `Miarma, con «${topic}» te has lucío menos que el sol rebotando en esa calva de rotonda.`,
+    (topic) => `Illo, «${topic}» suena valiente hasta que aparece tu cinturón pidiendo auxilio debajo de la barriga.`,
+    (topic) => `Picha, repite «${topic}» mirando de frente, que tu papada ha llegao a la discusión cinco minutos antes.`,
+    (topic) => `Arma mía, «${topic}» no impresiona ni al reflejo que llevas aparcao en la coronilla.`,
+    (topic) => `Quillo, guarda «${topic}» pa cuando tu barriga deje de entrar en las conversaciones antes que tú.`,
+  ];
+  const VOICE_NPC_WAKE_REPLIES = [
+    "¿Qué quieres ahora, quillo? Acércate, que desde tu calva me está dando el sol en los ojos.",
+    "¡Otra vez tú, miarma! Ven despacio, no vaya a coger inercia esa barriga y tengamos una desgracia.",
+    "¡Illo, ya te he oído! Entre tu voz y el brillo de tu coronilla no hay quien se esconda.",
+    "¿Me llamas a mí, picha? Pues sujeta ese cinturón y ven a discutir como un hombre.",
+    "¡Arma mía, qué pesao! Tu papada ha llegao antes que el resto de la frase.",
+  ];
+  const VOICE_NPC_SILENCE_REPLIES = [
+    "Tres segundos callao, quillo; se te habrá quedao la respuesta atrapada debajo de la papada.",
+    "¿Ya está, miarma? Mucha barriga pa tan poquita discusión.",
+    "Se acabó el ruido, illo; ahora solo oigo el viento silbando por esa azotea sin pelo.",
+    "Te has quedao mudo, picha; vuelve a decir Manolín cuando encuentres la réplica entre los michelines.",
+    "Ea, me aburro; llámame otra vez cuando tu calva tenga algo nuevo que reflejar.",
+  ];
   const NPC_IMPORTED_SPRITE_URLS = Object.freeze({
     "nino-sol": "assets/sprites/npcs/nino-sol-walk.png",
     "chica-lazo": "assets/sprites/npcs/chica-lazo-walk.png",
@@ -197,7 +339,6 @@
     bailaora: "assets/sprites/npcs/bailaora-walk.png",
     "abuelo-cana": "assets/sprites/npcs/abuelo-cana-walk.png",
     "abuela-morada": "assets/sprites/npcs/abuela-morada-walk.png",
-    rival: "assets/sprites/npcs/rival-walk.png",
   });
   const NPC_ROSTER_SHEET_URLS = Object.freeze({
     ...Object.fromEntries([
@@ -237,6 +378,21 @@
     9701: { front: "assets/pokemon/alua-line/alua-front.png", back: "assets/pokemon/alua-line/alua-back.png" },
     9702: { front: "assets/pokemon/alua-line/capulua-front.png", back: "assets/pokemon/alua-line/capulua-back.png" },
     9703: { front: "assets/pokemon/alua-line/maripulua-front.png", back: "assets/pokemon/alua-line/maripulua-back.png" },
+    9801: { front: "assets/pokemon/rubrisma-line/rubrisma-front.png", back: "assets/pokemon/rubrisma-line/rubrisma-back.png" },
+    9802: { front: "assets/pokemon/rubrisma-line/azuranima-front.png", back: "assets/pokemon/rubrisma-line/azuranima-back.png" },
+    9803: { front: "assets/pokemon/serranin-line/serranin-front.png", back: "assets/pokemon/serranin-line/serranin-back.png" },
+    9804: { front: "assets/pokemon/serranin-line/aliolomo-front.png", back: "assets/pokemon/serranin-line/aliolomo-back.png" },
+    9805: { front: "assets/pokemon/cajhumo-line/cajhumo-front.png", back: "assets/pokemon/cajhumo-line/cajhumo-back.png" },
+    9806: { front: "assets/pokemon/rebehielo-line/rebehielo-front.png", back: "assets/pokemon/rebehielo-line/rebehielo-back.png" },
+    9807: { front: "assets/pokemon/rebehielo-line/picorneo-front.png", back: "assets/pokemon/rebehielo-line/picorneo-back.png" },
+    9808: { front: "assets/pokemon/azahin-line/azahin-front.png", back: "assets/pokemon/azahin-line/azahin-back.png" },
+    9809: { front: "assets/pokemon/azahin-line/naranjil-front.png", back: "assets/pokemon/azahin-line/naranjil-back.png" },
+    9810: { front: "assets/pokemon/azahin-line/citrayo-front.png", back: "assets/pokemon/azahin-line/citrayo-back.png" },
+    9811: { front: "assets/pokemon/barbito-line/barbito-front.png", back: "assets/pokemon/barbito-line/barbito-back.png" },
+    9812: { front: "assets/pokemon/barbito-line/barbalto-front.png", back: "assets/pokemon/barbito-line/barbalto-back.png" },
+    9813: { front: "assets/pokemon/ascuero-line/ascuero-front.png", back: "assets/pokemon/ascuero-line/ascuero-back.png" },
+    9814: { front: "assets/pokemon/ascuero-line/tolebrasa-front.png", back: "assets/pokemon/ascuero-line/tolebrasa-back.png" },
+    9815: { front: "assets/pokemon/ascuero-line/matallama-front.png", back: "assets/pokemon/ascuero-line/matallama-back.png" },
   });
   const CUSTOM_POKEMON_MOTIONS = Object.freeze({
     9001: "petrillo",
@@ -261,6 +417,61 @@
     9701: "alua",
     9702: "capulua",
     9703: "maripulua",
+    9801: "rubrisma",
+    9802: "azuranima",
+    9803: "serranin",
+    9804: "aliolomo",
+    9805: "cajhumo",
+    9806: "rebehielo",
+    9807: "picorneo",
+    9808: "azahin",
+    9809: "naranjil",
+    9810: "citrayo",
+    9811: "barbito",
+    9812: "barbalto",
+    9813: "ascuero",
+    9814: "tolebrasa",
+    9815: "matallama",
+  });
+  const CUSTOM_ATTACK_DURATION = 3000;
+  const CUSTOM_POKEMON_ATTACKS = Object.freeze({
+    9001: { kind: "ram", title: "Ariete brote", anatomy: "Cabezazo, boca y hojas", x: "28%", y: "-8%", turn: "-7deg", scale: 1.08 },
+    9002: { kind: "slam", title: "Martillo musgoso", anatomy: "Dos puños, torso y rugido", x: "18%", y: "-5%", turn: "4deg", scale: 1.1 },
+    9003: { kind: "slam", title: "Puño sísmico", anatomy: "Puño gigante, piernas y enredaderas", x: "21%", y: "-4%", turn: "6deg", scale: 1.12 },
+    9101: { kind: "ram", title: "Carga de adobe", anatomy: "Cuerpo cuadrado, patas y boca", x: "27%", y: "-5%", turn: "8deg", scale: 1.07 },
+    9102: { kind: "slam", title: "Prensa fortaleza", anatomy: "Antebrazos, peso y mandíbula", x: "17%", y: "-3%", turn: "3deg", scale: 1.11 },
+    9201: { kind: "wing", title: "Garra de cría", anatomy: "Boca, alas pequeñas y garra", x: "30%", y: "-17%", turn: "-9deg", scale: 1.09 },
+    9202: { kind: "wing", title: "Tajo de cuatro alas", anatomy: "Cuatro alas y garras cruzadas", x: "34%", y: "-21%", turn: "-12deg", scale: 1.1 },
+    9203: { kind: "wing", title: "Picado guadaña", anatomy: "Cuatro alas, garras y cola", x: "38%", y: "-24%", turn: "-15deg", scale: 1.12 },
+    9301: { kind: "psychic", title: "Despertar lunar", anatomy: "Ojos, boca, patas y cola", x: "11%", y: "-12%", turn: "-3deg", scale: 1.08 },
+    9302: { kind: "psychic", title: "Látigo de cintas", anatomy: "Cintas, patas y mirada", x: "16%", y: "-13%", turn: "6deg", scale: 1.09 },
+    9303: { kind: "psychic", title: "Zarpazo astral", anatomy: "Garra, boca y gran cola", x: "27%", y: "-16%", turn: "-8deg", scale: 1.1 },
+    9401: { kind: "haunt", title: "Mueca umbría", anatomy: "Boca dentada y llamas", x: "22%", y: "-14%", turn: "-10deg", scale: 1.14 },
+    9402: { kind: "haunt", title: "Barrido de farol", anatomy: "Farol, garra y cuerpo espectral", x: "19%", y: "-10%", turn: "10deg", scale: 1.12 },
+    9403: { kind: "haunt", title: "Clamor de linternas", anatomy: "Boca gigante, brazos y faroles", x: "16%", y: "-8%", turn: "-5deg", scale: 1.15 },
+    9501: { kind: "spark", title: "Hocico relámpago", anatomy: "Hocico, patas, orejas y cola", x: "32%", y: "-12%", turn: "-8deg", scale: 1.08 },
+    9502: { kind: "spark", title: "Embestida tormenta", anatomy: "Alas, patas y boca", x: "36%", y: "-20%", turn: "-13deg", scale: 1.1 },
+    9601: { kind: "sting", title: "Aguja zumbadora", anatomy: "Cuatro alas, probóscide y patas", x: "39%", y: "-16%", turn: "-11deg", scale: 1.08 },
+    9602: { kind: "sting", title: "Finta de aguijón", anatomy: "Cuatro alas y probóscide", x: "42%", y: "-21%", turn: "-15deg", scale: 1.1 },
+    9603: { kind: "sting", title: "Combo sanguento", anatomy: "Garras, alas y aguijón abdominal", x: "34%", y: "-17%", turn: "10deg", scale: 1.12 },
+    9701: { kind: "silk", title: "Disparo de seda", anatomy: "Boca y cuerpo de oruga", x: "19%", y: "-8%", turn: "-6deg", scale: 1.09, mouth: "55% 52%" },
+    9702: { kind: "silk", title: "Hilo tóxico", anatomy: "Boca, glándulas y cuerpo", x: "21%", y: "-9%", turn: "7deg", scale: 1.1, mouth: "54% 55%" },
+    9703: { kind: "powder", title: "Vendaval ilusorio", anatomy: "Alas, antenas y escamas", x: "17%", y: "-18%", turn: "-9deg", scale: 1.12 },
+    9801: { kind: "psychic", title: "Destello destilado", anatomy: "Mirada, brazos de vapor y gema", x: "16%", y: "-13%", turn: "-5deg", scale: 1.09 },
+    9802: { kind: "haunt", title: "Licor espectral", anatomy: "Llamas, brazos etéreos y gema", x: "20%", y: "-16%", turn: "7deg", scale: 1.12 },
+    9803: { kind: "ram", title: "Bocado tostado", anatomy: "Pan, patas y mandíbula", x: "30%", y: "-7%", turn: "-8deg", scale: 1.09 },
+    9804: { kind: "slam", title: "Melena de alioli", anatomy: "Melena, garras y lomo", x: "22%", y: "-9%", turn: "5deg", scale: 1.11 },
+    9805: { kind: "haunt", title: "Emboscada tóxica", anatomy: "Tapa, humo y garras", x: "24%", y: "-12%", turn: "-9deg", scale: 1.1 },
+    9806: { kind: "slam", title: "Puño de escarcha", anatomy: "Puños de hielo, cuernos y apoyo", x: "24%", y: "-10%", turn: "-7deg", scale: 1.1 },
+    9807: { kind: "slam", title: "Doble glaciar", anatomy: "Puños de hielo, torso y cuernos", x: "27%", y: "-12%", turn: "6deg", scale: 1.13 },
+    9808: { kind: "ram", title: "Impulso de azahar", anatomy: "Orejas, flor y cola cítrica", x: "28%", y: "-9%", turn: "-7deg", scale: 1.08 },
+    9809: { kind: "ram", title: "Carrera del huerto", anatomy: "Ramas, patas y frutos", x: "31%", y: "-11%", turn: "-9deg", scale: 1.1 },
+    9810: { kind: "spark", title: "Descarga cítrica", anatomy: "Cornamenta, ramas y naranjas", x: "25%", y: "-15%", turn: "8deg", scale: 1.12 },
+    9811: { kind: "ram", title: "Bigote de corriente", anatomy: "Barbillones, aletas y cola", x: "34%", y: "-12%", turn: "-8deg", scale: 1.09 },
+    9812: { kind: "wing", title: "Embestida fluvial", anatomy: "Aletas, barbillones y cola", x: "39%", y: "-18%", turn: "-12deg", scale: 1.12 },
+    9813: { kind: "wing", title: "Tajo de fragua", anatomy: "Filo, ojo y cinta", x: "36%", y: "-18%", turn: "-14deg", scale: 1.1 },
+    9814: { kind: "wing", title: "Arco toledano", anatomy: "Filo, guarda y cinta", x: "39%", y: "-20%", turn: "-16deg", scale: 1.12 },
+    9815: { kind: "slam", title: "Sentencia matallama", anatomy: "Filo, manto y llama interior", x: "25%", y: "-10%", turn: "7deg", scale: 1.15 },
   });
   const PETRILLO_ID = 9001;
   const SHADOW_SPRITE_URL = "assets/images/shadow-stalker.png";
@@ -275,7 +486,7 @@
   const TYPE_COLORS = {
     Normal: "#8c9283", Planta: "#5a9e58", Fuego: "#df7145", Agua: "#4f8fc3",
     Volador: "#7f9dc7", Bicho: "#8ba33c", Eléctrico: "#e6b93e", Veneno: "#9970ad",
-    Fantasma: "#6d5a9b", Siniestro: "#4c4358", Psíquico: "#d96f9c", Dragón: "#7362c5", Hada: "#d985bd", Acero: "#79949f", Tierra: "#b58a54", Roca: "#9a8258",
+    Fantasma: "#6d5a9b", Siniestro: "#4c4358", Psíquico: "#d96f9c", Dragón: "#7362c5", Hada: "#d985bd", Acero: "#79949f", Tierra: "#b58a54", Roca: "#9a8258", Hielo: "#78c7dc", Lucha: "#b95b4b",
   };
 
   const MOVES = {
@@ -314,6 +525,15 @@
     silkEscape: { name: "Hilo de Fuga", type: "Bicho", power: 16, accuracy: 97 },
     toxicThread: { name: "Hilo Tóxico", type: "Veneno", power: 20, accuracy: 92 },
     hallucinationDust: { name: "Escamas Ilusorias", type: "Veneno", power: 24, accuracy: 88 },
+    spiritDistill: { name: "Destilado Ánima", type: "Psíquico", power: 21, accuracy: 93, drain: true },
+    aioliBlaze: { name: "Alioli Ardiente", type: "Hada", power: 22, accuracy: 91 },
+    toxicFume: { name: "Humo Tóxico", type: "Veneno", power: 20, accuracy: 93 },
+    darkPilfer: { name: "Hurto Sombrío", type: "Siniestro", power: 18, accuracy: 96 },
+    iceFist: { name: "Puño de Escarcha", type: "Hielo", power: 19, accuracy: 94 },
+    mountainJab: { name: "Jab Montañés", type: "Lucha", power: 21, accuracy: 92 },
+    citrusVolt: { name: "Voltio Cítrico", type: "Eléctrico", power: 23, accuracy: 91 },
+    riverWhisker: { name: "Bigote Fluvial", type: "Agua", power: 21, accuracy: 94 },
+    forgeSlash: { name: "Tajo de Fragua", type: "Acero", power: 22, accuracy: 92 },
   };
 
   const POKEMON = {
@@ -365,6 +585,21 @@
     9701: { id: 9701, name: "Alúa", type: "Bicho", baseHp: 20, catchRate: .64, moves: [MOVES.tackle, MOVES.silkEscape], description: "Monstruo Oruga Hoja. Se camufla entre el follaje y segrega un hilo pegajoso cuando peligra.", evolvesTo: 9702, evolveLevel: 14 },
     9702: { id: 9702, name: "Capulúa", type: "Bicho", secondaryType: "Veneno", baseHp: 29, catchRate: .24, moves: [MOVES.silkEscape, MOVES.toxicThread, MOVES.poisonSting], description: "Monstruo Crisálida Tóxica. Sus glándulas producen un líquido capaz de paralizar a quien lo toque.", evolvesTo: 9703, evolveLevel: 28 },
     9703: { id: 9703, name: "Maripulúa", type: "Bicho", secondaryType: "Veneno", baseHp: 38, catchRate: .09, moves: [MOVES.toxicThread, MOVES.hallucinationDust, MOVES.wingFeint], description: "Monstruo Polilla Ilusoria. Sus escamas venenosas provocan espejismos en los bosques sombríos." },
+    9801: { id: 9801, name: "Rubrisma", type: "Psíquico", baseHp: 23, catchRate: .50, moves: [MOVES.confusion, MOVES.spiritDistill], description: "Monstruo Destello. Lee las emociones que reposan en recipientes antiguos y las destila en intuiciones.", evolvesTo: 9802, evolveLevel: 28 },
+    9802: { id: 9802, name: "Azuránima", type: "Psíquico", secondaryType: "Fantasma", baseHp: 37, catchRate: .14, moves: [MOVES.spiritDistill, MOVES.shadowPrank, MOVES.confusion], description: "Monstruo Licor Espiritual. Su esencia etérea atraviesa la mente y revela verdades a quien está preparado." },
+    9803: { id: 9803, name: "Serranín", type: "Fuego", baseHp: 25, catchRate: .54, moves: [MOVES.ember, MOVES.headbutt], description: "Monstruo Bocadillo. Tuesta las puntas de su pan en rocas calientes para marcar senderos de montaña.", evolvesTo: 9804, evolveLevel: 24 },
+    9804: { id: 9804, name: "Aliolomo", type: "Fuego", secondaryType: "Hada", baseHp: 39, catchRate: .15, moves: [MOVES.ember, MOVES.aioliBlaze, MOVES.headbutt], description: "Monstruo Alioli. Su melena ardiente protege al grupo con un aroma que infunde valor y alegría." },
+    9805: { id: 9805, name: "Cajhumo", type: "Veneno", secondaryType: "Siniestro", baseHp: 28, catchRate: .42, moves: [MOVES.toxicFume, MOVES.darkPilfer, MOVES.poisonSting], description: "Monstruo Caja Tóxica. Roba objetos brillantes y desaparece por callejones dentro de una nube adormecedora." },
+    9806: { id: 9806, name: "Rebehielo", type: "Lucha", secondaryType: "Hielo", baseHp: 28, catchRate: .46, moves: [MOVES.iceFist, MOVES.mountainJab], description: "Monstruo Cabra Glacial. Entrena golpeando rocas heladas y nunca retrocede ante una pendiente.", evolvesTo: 9807, evolveLevel: 28 },
+    9807: { id: 9807, name: "Picorneo", type: "Lucha", secondaryType: "Hielo", baseHp: 42, catchRate: .12, moves: [MOVES.iceFist, MOVES.mountainJab, MOVES.headbutt], description: "Monstruo Risco. Sus puños cristalinos quiebran piedra y se endurecen con cada combate en altura." },
+    9808: { id: 9808, name: "Azahín", type: "Planta", baseHp: 21, catchRate: .60, moves: [MOVES.absorb, MOVES.vineWhip], description: "Monstruo Azahar. Convierte la luz del Mediterráneo en el aroma dulce de una pequeña naranja.", evolvesTo: 9809, evolveLevel: 16 },
+    9809: { id: 9809, name: "Naranjil", type: "Planta", baseHp: 31, catchRate: .24, moves: [MOVES.vineWhip, MOVES.absorb, MOVES.quickAttack], description: "Monstruo Naranjo. Sus ramas se alargan mientras siente la energía que recorre la savia.", evolvesTo: 9810, evolveLevel: 34 },
+    9810: { id: 9810, name: "Citrayo", type: "Planta", secondaryType: "Eléctrico", baseHp: 43, catchRate: .08, moves: [MOVES.citrusVolt, MOVES.vineWhip, MOVES.thunderShock], description: "Monstruo Huerto. Almacena electricidad en sus naranjas y la desata para proteger los cultivos." },
+    9811: { id: 9811, name: "Barbito", type: "Agua", baseHp: 24, catchRate: .56, moves: [MOVES.waterGun, MOVES.riverWhisker], description: "Monstruo Pez Barbo. Sus sensibles barbillones detectan alimento oculto entre las piedras del río.", evolvesTo: 9812, evolveLevel: 24 },
+    9812: { id: 9812, name: "Barbalto", type: "Agua", baseHp: 39, catchRate: .14, moves: [MOVES.riverWhisker, MOVES.waterGun, MOVES.quickAttack], description: "Monstruo Barbo Mayor. Domina cada corriente con grandes aletas y guía a su grupo río arriba." },
+    9813: { id: 9813, name: "Ascuero", type: "Acero", secondaryType: "Fuego", baseHp: 22, catchRate: .48, moves: [MOVES.forgeSlash, MOVES.ember], description: "Monstruo Espada Poseída. Parpadea con curiosidad y juega con las chispas de la fragua.", evolvesTo: 9814, evolveLevel: 20 },
+    9814: { id: 9814, name: "Tolebrasa", type: "Acero", secondaryType: "Fuego", baseHp: 33, catchRate: .19, moves: [MOVES.forgeSlash, MOVES.ember, MOVES.metalSound], description: "Monstruo Acero Toledano. Dibuja arcos elegantes mientras la llama de su hoja arde con orgullo.", evolvesTo: 9815, evolveLevel: 38 },
+    9815: { id: 9815, name: "Matallama", type: "Acero", secondaryType: "Fuego", baseHp: 45, catchRate: .06, moves: [MOVES.forgeSlash, MOVES.metalSound, MOVES.ember], description: "Monstruo Filo de Honor. Su manto de fuego honra la tradición y su acero canta en cada duelo." },
   };
 
   const SANPLEDEX_FAMILIES = Object.freeze([
@@ -377,6 +612,13 @@
     { name: "Linaje de la Tormenta", ids: [9501, 9502] },
     { name: "Linaje del Zumbido", ids: [9601, 9602, 9603] },
     { name: "Linaje de la Seda Tóxica", ids: [9701, 9702, 9703] },
+    { name: "Linaje del Destilado", ids: [9801, 9802] },
+    { name: "Linaje del Bocadillo", ids: [9803, 9804] },
+    { name: "Linaje del Humo", ids: [9805] },
+    { name: "Linaje del Glaciar", ids: [9806, 9807] },
+    { name: "Linaje del Azahar", ids: [9808, 9809, 9810] },
+    { name: "Linaje del Barbo", ids: [9811, 9812] },
+    { name: "Linaje de la Fragua", ids: [9813, 9814, 9815] },
   ]);
   const SANPLEDEX_IDS = Object.freeze(SANPLEDEX_FAMILIES.flatMap((family) => family.ids));
 
@@ -386,21 +628,24 @@
     133: 9701, 147: 9201, 149: 9203, 151: 9303, 248: 9102, 373: 9203,
     376: 9502, 399: 9001, 445: 9203, 635: 9403,
   });
-  const SECRET_MONSTER_IDS = Object.freeze([9003, 9102, 9203, 9303, 9403, 9502, 9603, 9703]);
-  const LOCAL_DEX_SIZE = SANPLEDEX_IDS.length;
+  const SECRET_MONSTER_IDS = Object.freeze([9003, 9102, 9203, 9303, 9403, 9502, 9603, 9703, 9802, 9804, 9805, 9807, 9810, 9812, 9815]);
+  const SECRET_POKEMON_IDS = Object.freeze(Object.keys(POKEMON).map(Number).filter((id) => !SANPLEDEX_IDS.includes(id)));
+  const LOCAL_DEX_SIZE = Object.keys(POKEMON).length - SECRET_POKEMON_IDS.length;
 
   const STARTERS = [POKEMON[9001], POKEMON[9201], POKEMON[9301], POKEMON[9501]];
   const WILD_TABLE = [
     { id: 9701, weight: 22 }, { id: 9601, weight: 20 }, { id: 9501, weight: 16 },
     { id: 9001, weight: 14 }, { id: 9101, weight: 10 }, { id: 9301, weight: 8 },
-    { id: 9401, weight: 6 }, { id: 9201, weight: 4 },
+    { id: 9401, weight: 6 }, { id: 9201, weight: 4 }, { id: 9805, weight: 5 },
+    { id: 9808, weight: 8 },
   ];
 
   const PRISM_WILD_TABLE = [
     { id: 9401, weight: 22 }, { id: 9301, weight: 18 }, { id: 9402, weight: 14 },
     { id: 9302, weight: 12 }, { id: 9201, weight: 12 }, { id: 9202, weight: 8 },
     { id: 9101, weight: 8 }, { id: 9501, weight: 8 }, { id: 9602, weight: 7 },
-    { id: 9702, weight: 7 }, { id: 9102, weight: 4 },
+    { id: 9702, weight: 7 }, { id: 9102, weight: 4 }, { id: 9801, weight: 7 },
+    { id: 9813, weight: 4 },
   ];
 
   const BUILDING_SPRITES = {
@@ -452,12 +697,40 @@
   ];
 
   const buildings = createMapBuildings();
-  const field = { x: 1250, y: 900, w: 320, h: 210, a: 0 };
+  const field = CITY_MAP.field || { x: 1250, y: 900, w: 320, h: 210, a: 0 };
+  function currentPortalDoor() {
+    return cityEntrances.find((entrance) => entrance.action === "prism") || null;
+  }
+
+  function currentPortalPosition() {
+    const entrance = currentPortalDoor();
+    return entrance
+      ? { x: (entrance.col + .5) * CITY_MAP.tileSize, y: (entrance.row + .5) * CITY_MAP.tileSize }
+      : { ...INITIAL_PORTAL_POSITION };
+  }
+
+  const INITIAL_PORTAL_RETURN = CITY_MAP.portalReturn || {
+    x: INITIAL_PORTAL_POSITION.x,
+    y: INITIAL_PORTAL_POSITION.y + field.h / 2 + 70,
+  };
+
+  function currentPortalReturn() {
+    if (CITY_MAP.portalReturn) return { ...CITY_MAP.portalReturn };
+    const position = currentPortalPosition();
+    return { x: position.x, y: position.y + field.h / 2 + 70 };
+  }
+
+  function currentHealthReturn() {
+    const entrance = cityEntrances.find((item) => item.action === "heal");
+    return Array.isArray(entrance?.approach)
+      ? { x: Number(entrance.approach[0]), y: Number(entrance.approach[1]) }
+      : { ...NORMAL_START };
+  }
   const greenAreas = createGreenAreas();
   const encounterZones = greenAreas.map((area) => area.polygon);
 
-  const pointsOfInterest = [
-    { id: "dimension_portal", x: PORTAL_POSITION.x, y: PORTAL_POSITION.y, radius: 78 },
+  const pointsOfInterest = CITY_MAP.pointsOfInterest || [
+    { id: "dimension_portal", x: INITIAL_PORTAL_POSITION.x, y: INITIAL_PORTAL_POSITION.y, radius: 78 },
     { id: "health", x: 270, y: 875, radius: 64 },
     { id: "cafe", x: 2240, y: 875, radius: 62 },
     { id: "uned", x: 1250, y: 1180, radius: 72 },
@@ -483,12 +756,7 @@
   ];
 
   const worldObjects = [
-    { id: "balls-ada", dimension: "san_pablo", x: 285, y: 1145, kind: "balls", amount: 2, name: "2 Poké Balls", sprite: "poke-ball" },
-    { id: "potion-memphis", dimension: "san_pablo", x: 1030, y: 1042, kind: "potions", amount: 1, name: "Poción", sprite: "potion" },
-    { id: "berry-estambul", dimension: "san_pablo", x: 1900, y: 742, kind: "berries", amount: 2, name: "2 Bayas Aranja", sprite: "oran-berry" },
-    { id: "shard-jerusalen", dimension: "san_pablo", x: 950, y: 505, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
-    { id: "shard-persepolis", dimension: "san_pablo", x: 900, y: 1300, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
-    { id: "shard-siracusa", dimension: "san_pablo", x: 850, y: 1572, kind: "prismShards", amount: 1, name: "Fragmento Prisma", crystal: true },
+    ...(CITY_MAP.worldObjects || []),
     { id: "ultra-west", dimension: "prism", x: 260, y: 1190, kind: "ultraBalls", amount: 2, name: "2 Ultra Balls", sprite: "ultra-ball" },
     { id: "max-potion-east", dimension: "prism", x: 1800, y: 1190, kind: "potions", amount: 2, name: "2 Pociones", sprite: "super-potion" },
     { id: "rare-candy-north", dimension: "prism", x: 1040, y: 360, kind: "rareCandies", amount: 1, name: "Caramelo Raro", sprite: "rare-candy" },
@@ -521,7 +789,7 @@
     activeTeamIndex: 0, caught: [], seen: [], team: [], questStage: 0,
     clinicGiftClaimed: false, sound: true, buildingSkins: {},
     dimension: "san_pablo", dimensionVisited: false, caughtDimension: false,
-    returnPosition: null, collectedObjects: [], interior: null, interiorData: null, maintenanceReturn: null,
+    returnPosition: null, collectedObjects: [], triggeredEvents: [], interior: null, interiorData: null, maintenanceReturn: null,
     maze: null, secretPokemonSaved: false, secretPokemonId: null,
     money: 500, battlesWon: 0, gifts: {},
     blackMarket: { discovered: false, purchases: { rareCandy: 0, masterBall: 0, prismBattery: 0 } },
@@ -554,6 +822,7 @@
   let inventoryOpenedFromBattle = false;
   let selectedSanpledexId = PETRILLO_ID;
   let lastSanpledexFocus = null;
+  let sanpledexAttackTimer = 0;
   let mazeDefinition = null;
   let microphoneStream = null;
   let microphoneAnalyser = null;
@@ -576,6 +845,23 @@
   let starterIntroActive = false;
   let fragmentCinematicActive = false;
   let doctorPotatoScene = null;
+  let mapEventRunning = false;
+  let lastStepEventTile = "";
+  let entranceTileIndex = new Map();
+  let eventTileIndex = new Map();
+  let selectedEditorEntity = null;
+  let collaboratorCursors = [];
+  const voiceNpc = {
+    x: NORMAL_START.x + 150, y: NORMAL_START.y, direction: "left",
+    moving: false, animationElapsed: 0, positionReady: false,
+    active: false, listening: false, shouldListen: false, speaking: false,
+    permission: VOICE_NPC_ENABLED ? "idle" : "disabled", recognition: null, recognitionStarting: false,
+    permissionRequest: null, restartTimer: 0, lastSpeechAt: 0,
+    transcript: "", reply: "", replyAt: 0, lastFinalText: "", lastFinalAt: 0,
+    requestPending: false, queuedUtterance: "", history: [], model: "MiniMax-M3",
+    apiState: "idle", wakeCount: 0, chaseStartedAt: 0, chaseStartX: 0, chaseStartY: 0,
+    lastChaseDurationMs: 0, lastChaseDistance: 0,
+  };
   const mazeMotion = { forward: 0, strafe: 0, turn: 0 };
   const input = {
     up: false, down: false, left: false, right: false,
@@ -592,7 +878,26 @@
   const encounterGrassSheet = new Image();
   const cityMapTileCache = new Map();
   const cityMapVisibleTileIds = new Set();
-  const cityWorldAssets = Array.isArray(CITY_MAP.worldAssets) ? CITY_MAP.worldAssets : [];
+  /* El runtime usa copias mutables: el layout declarativo permanece congelado,
+     mientras el editor local puede previsualizar cambios antes de guardarlos. */
+  const cityWorldAssets = Array.isArray(CITY_MAP.worldAssets) ? CITY_MAP.worldAssets.map((asset) => ({
+    ...asset,
+    colliders: (asset.colliders || []).map((collider) => [...collider]),
+  })) : [];
+  const initialAddedAssetIds = new Set((Array.isArray(initialEditorData.addedAssets) ? initialEditorData.addedAssets : [])
+    .map((asset) => String(asset?.id || ""))
+    .filter(Boolean));
+  /* El layout ya llega con el snapshot inicial aplicado. Conservamos una copia
+     de sus assets base visibles para poder reconciliar snapshots posteriores
+     sin convertir overrides o eliminaciones temporales en pérdida destructiva. */
+  const runtimeBaseWorldAssets = new Map(cityWorldAssets
+    .filter((asset) => !initialAddedAssetIds.has(asset.id))
+    .map((asset) => [asset.id, cloneRuntimeRecord(asset)]));
+  const baseLinkedAssetPositions = new Map(cityWorldAssets.map((asset) => [asset.id, { x: Number(asset.x), y: Number(asset.y) }]));
+  const linkedAssetPositions = new Map(cityWorldAssets.map((asset) => [asset.id, { x: Number(asset.x), y: Number(asset.y) }]));
+  const linkedEntrancePositions = new Map();
+  const cityBuildingFootprints = Array.isArray(CITY_MAP.buildingFootprints) ? CITY_MAP.buildingFootprints : [];
+  const cityBarrierSegments = Array.isArray(CITY_MAP.barrierSegments) ? CITY_MAP.barrierSegments : [];
   const cityStreetPolish = CITY_MAP.streetPolish || {};
   const cityWorldAssetImages = new Map();
   const MAP_MEMORY_BUDGET_BYTES = (Number(CITY_MAP.memoryBudgetMB) || 96) * 1024 * 1024;
@@ -610,6 +915,11 @@
     audio.loop = key === "chase" || key === "breathing";
     return [key, audio];
   }));
+  const dialogMusicAudio = new Audio();
+  dialogMusicAudio.preload = "auto";
+  dialogMusicAudio.loop = true;
+  dialogMusicAudio.volume = .72;
+  let loadedDialogMusicMediaSource = null;
   let loadedDialogMusicSource = null;
   let pendingDialogMusicSource = null;
   let dialogMusicBuffer = null;
@@ -633,6 +943,8 @@
   const playerFrames = new Map();
   let selectedTileType = "blocked";
   let selectedMapTile = null;
+  let developerEditorEnabled = false;
+  let selectedEditorAssetId = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -702,6 +1014,9 @@
     battleScene: $(".battle-scene"), shopModal: $("#shopModal"), shopDialog: $("#shopDialog"),
     shopTitle: $("#shopTitle"), shopEyebrow: $("#shopEyebrow"), shopTip: $("#shopTip"),
     shopMoney: $("#shopMoney"), shopList: $("#shopList"), closeShop: $("#closeShop"), money: $("#money"),
+    voiceNpcHud: $("#voiceNpcHud"), voiceNpcStatus: $("#voiceNpcStatus"),
+    voiceNpcTranscript: $("#voiceNpcTranscript"), voiceNpcReply: $("#voiceNpcReply"),
+    voiceNpcRetry: $("#voiceNpcRetry"),
   };
 
   async function requestGameFullscreen() {
@@ -882,6 +1197,10 @@
   }
 
   async function requestMicrophoneAccess() {
+    if (!MICROPHONE_ACCESS_ENABLED) {
+      microphoneFallbackMode = true;
+      return "movement";
+    }
     if (microphoneStream?.getAudioTracks().some((track) => track.readyState === "live")) {
       microphoneFallbackMode = false;
       return "microphone";
@@ -1014,10 +1333,13 @@
     if (target === 0 && breathingVolume < .008 && !breathing.paused) breathing.pause();
   }
 
-  function stopMicrophone() {
-    microphoneStream?.getTracks().forEach((track) => track.stop());
-    microphoneStream = null; microphoneAnalyser = null; microphoneData = null; microphoneLevel = 0;
-    microphoneFallbackMode = false;
+  function stopMicrophone(force = false) {
+    const keepSharedVoiceStream = !force && voiceNpc.shouldListen && voiceNpc.permission === "granted";
+    if (!keepSharedVoiceStream) {
+      microphoneStream?.getTracks().forEach((track) => track.stop());
+      microphoneStream = null; microphoneAnalyser = null; microphoneData = null; microphoneLevel = 0;
+      microphoneFallbackMode = false;
+    }
     sprintScare = null;
     quietStillTime = 0;
     mazeMotion.forward = 0; mazeMotion.strafe = 0; mazeMotion.turn = 0;
@@ -1032,6 +1354,321 @@
     const rms = Math.sqrt(sum / microphoneData.length);
     microphoneLevel = clamp((rms - .012) * 7.5, 0, 1);
     return microphoneLevel;
+  }
+
+  function normalizeVoiceCommand(text) {
+    return String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
+  function localVoiceNpcReply(message) {
+    const topic = String(message || "")
+      .replace(/\bmanol[ií]+n\b/gi, "")
+      .replace(/[«»“”"]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 46) || "esa pamplina";
+    const turn = Math.floor(voiceNpc.history.length / 2);
+    return VOICE_NPC_FALLBACK_REPLIES[turn % VOICE_NPC_FALLBACK_REPLIES.length](topic);
+  }
+
+  function voiceNpcTriggerDetected(text) {
+    return /\bmanoli+n\b/.test(normalizeVoiceCommand(text));
+  }
+
+  function voiceNpcUiState() {
+    if (voiceNpc.permission === "requesting") return "requesting";
+    if (["denied", "unsupported", "error"].includes(voiceNpc.permission)) return "error";
+    if (voiceNpc.requestPending) return "thinking";
+    if (voiceNpc.active) return "active";
+    return voiceNpc.listening ? "listening" : "idle";
+  }
+
+  function updateVoiceNpcUi() {
+    if (elements.voiceNpcHud) elements.voiceNpcHud.classList.toggle("hidden", !VOICE_NPC_ENABLED);
+    document.documentElement.dataset.voiceNpcEnabled = String(VOICE_NPC_ENABLED);
+    if (!VOICE_NPC_ENABLED) return;
+    const uiState = voiceNpcUiState();
+    if (elements.voiceNpcHud) elements.voiceNpcHud.dataset.state = uiState;
+    if (elements.voiceNpcStatus) {
+      const labels = {
+        requesting: "Pidiendo acceso al micrófono…",
+        error: voiceNpc.permission === "unsupported"
+          ? "Este navegador no transcribe voz"
+          : "Micrófono desactivado",
+        thinking: "Pensando una pulla con MiniMax…",
+        active: "DISCUTIENDO · TE SIGUE 3 S",
+        listening: "ESCUCHANDO · DI «MANOLÍN»",
+        idle: "Micrófono preparado",
+      };
+      elements.voiceNpcStatus.textContent = labels[uiState];
+    }
+    if (elements.voiceNpcTranscript) {
+      elements.voiceNpcTranscript.textContent = voiceNpc.transcript
+        ? `Te ha oído: «${voiceNpc.transcript.slice(0, 110)}»`
+        : "Di «Manolín» para que te oiga y venga a discutir.";
+    }
+    if (elements.voiceNpcReply) {
+      elements.voiceNpcReply.textContent = voiceNpc.reply;
+      elements.voiceNpcReply.classList.toggle("hidden", !voiceNpc.reply);
+    }
+    if (elements.voiceNpcRetry) {
+      elements.voiceNpcRetry.classList.toggle("hidden", !["denied", "unsupported", "error"].includes(voiceNpc.permission));
+    }
+    document.documentElement.dataset.voiceNpcPermission = voiceNpc.permission;
+    document.documentElement.dataset.voiceNpcListening = String(voiceNpc.listening);
+    document.documentElement.dataset.voiceNpcActive = String(voiceNpc.active);
+    document.documentElement.dataset.voiceNpcApi = voiceNpc.apiState;
+    document.documentElement.dataset.voiceNpcModel = voiceNpc.model;
+    document.documentElement.dataset.voiceNpcSilenceMs = String(VOICE_NPC_SILENCE_MS);
+    document.documentElement.dataset.voiceNpcWakeCount = String(voiceNpc.wakeCount);
+    document.documentElement.dataset.voiceNpcX = voiceNpc.x.toFixed(1);
+    document.documentElement.dataset.voiceNpcY = voiceNpc.y.toFixed(1);
+    document.documentElement.dataset.voiceNpcLastChaseMs = String(Math.round(voiceNpc.lastChaseDurationMs));
+    document.documentElement.dataset.voiceNpcLastChaseDistance = voiceNpc.lastChaseDistance.toFixed(1);
+  }
+
+  function voiceNpcPositionOpen(x, y) {
+    return cityMapCanOccupy(x, y) && !worldNpcBlocksPosition(x, y)
+      && Math.hypot(x - state.worldX, y - state.worldY) >= 72;
+  }
+
+  function placeVoiceNpcNearPlayer(force = false) {
+    if (!VOICE_NPC_ENABLED) { voiceNpc.positionReady = false; return false; }
+    if (!state.started || state.dimension !== "san_pablo" || state.interior) return false;
+    if (!force && voiceNpc.positionReady && Math.hypot(voiceNpc.x - state.worldX, voiceNpc.y - state.worldY) < 340) return true;
+    const offsets = [[156, 0], [-156, 0], [0, 156], [0, -156], [112, 112], [-112, 112], [112, -112], [-112, -112]];
+    const candidate = offsets
+      .map(([offsetX, offsetY]) => ({ x: state.worldX + offsetX, y: state.worldY + offsetY }))
+      .find((position) => voiceNpcPositionOpen(position.x, position.y));
+    if (!candidate) return false;
+    voiceNpc.x = candidate.x; voiceNpc.y = candidate.y;
+    voiceNpc.direction = directionFromNpcToPlayer(candidate, "left");
+    voiceNpc.positionReady = true;
+    return true;
+  }
+
+  function speakVoiceNpcReply(reply) {
+    if (!state.sound || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+    window.speechSynthesis.cancel();
+    const speech = new SpeechSynthesisUtterance(reply);
+    speech.lang = "es-ES";
+    speech.rate = .92;
+    speech.pitch = .72;
+    const spanishVoices = window.speechSynthesis.getVoices().filter((voice) => voice.lang?.toLowerCase().startsWith("es"));
+    speech.voice = spanishVoices.find((voice) => /jorge|antonio|enrique|pablo|male/i.test(voice.name)) || spanishVoices[0] || null;
+    speech.onstart = () => { voiceNpc.speaking = true; };
+    speech.onend = speech.onerror = () => { voiceNpc.speaking = false; };
+    window.speechSynthesis.speak(speech);
+  }
+
+  async function askVoiceNpc(utterance) {
+    const message = String(utterance || "").trim().slice(0, 320);
+    if (!message) return;
+    if (voiceNpc.requestPending) {
+      voiceNpc.queuedUtterance = message;
+      return;
+    }
+    voiceNpc.requestPending = true;
+    voiceNpc.apiState = "loading";
+    updateVoiceNpcUi();
+    try {
+      const response = await fetch("/api/manolin/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, history: voiceNpc.history.slice(-12) }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.reply) throw new Error(payload.error || "MiniMax no ha respondido");
+      voiceNpc.reply = String(payload.reply).slice(0, 260);
+      voiceNpc.model = payload.model || voiceNpc.model;
+      voiceNpc.apiState = "ready";
+    } catch (error) {
+      voiceNpc.reply = localVoiceNpcReply(message);
+      voiceNpc.apiState = "fallback";
+      console.info("Manolín usa una pulla local porque MiniMax no respondió.", error);
+    }
+    voiceNpc.replyAt = performance.now();
+    voiceNpc.history.push({ role: "user", content: message }, { role: "assistant", content: voiceNpc.reply });
+    voiceNpc.history = voiceNpc.history.slice(-12);
+    speakVoiceNpcReply(voiceNpc.reply);
+    voiceNpc.requestPending = false;
+    updateVoiceNpcUi();
+    const queued = voiceNpc.queuedUtterance;
+    voiceNpc.queuedUtterance = "";
+    if (queued && voiceNpc.active) askVoiceNpc(queued);
+  }
+
+  function activateVoiceNpc() {
+    const wasActive = voiceNpc.active;
+    voiceNpc.active = true;
+    voiceNpc.lastSpeechAt = performance.now();
+    if (!wasActive) {
+      voiceNpc.wakeCount += 1;
+      placeVoiceNpcNearPlayer(true);
+      voiceNpc.chaseStartedAt = performance.now();
+      voiceNpc.chaseStartX = voiceNpc.x;
+      voiceNpc.chaseStartY = voiceNpc.y;
+      voiceNpc.reply = VOICE_NPC_WAKE_REPLIES[(voiceNpc.wakeCount - 1) % VOICE_NPC_WAKE_REPLIES.length];
+      voiceNpc.replyAt = performance.now();
+    }
+    updateVoiceNpcUi();
+  }
+
+  function handleVoiceNpcTranscript(text, isFinal = false) {
+    if (!VOICE_NPC_ENABLED) return false;
+    const transcript = String(text || "").trim();
+    if (!transcript || voiceNpc.speaking) return false;
+    voiceNpc.transcript = transcript;
+    const triggered = voiceNpcTriggerDetected(transcript);
+    if (triggered && state.started && state.dimension === "san_pablo" && !state.interior) activateVoiceNpc();
+    if (voiceNpc.active) voiceNpc.lastSpeechAt = performance.now();
+    updateVoiceNpcUi();
+    if (isFinal && voiceNpc.active) {
+      const now = performance.now();
+      if (transcript !== voiceNpc.lastFinalText || now - voiceNpc.lastFinalAt > 1800) {
+        voiceNpc.lastFinalText = transcript;
+        voiceNpc.lastFinalAt = now;
+        askVoiceNpc(transcript);
+      }
+    }
+    return triggered;
+  }
+
+  function scheduleVoiceRecognitionRestart(delay = 300) {
+    window.clearTimeout(voiceNpc.restartTimer);
+    if (!voiceNpc.shouldListen || document.hidden || voiceNpc.permission !== "granted") return;
+    voiceNpc.restartTimer = window.setTimeout(() => startVoiceRecognition(), delay);
+  }
+
+  function startVoiceRecognition() {
+    if (!voiceNpc.shouldListen || voiceNpc.recognitionStarting || voiceNpc.listening || document.hidden) return;
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+      voiceNpc.permission = "unsupported";
+      updateVoiceNpcUi();
+      return;
+    }
+    if (!voiceNpc.recognition) {
+      const recognition = new Recognition();
+      recognition.lang = "es-ES";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      recognition.onstart = () => {
+        voiceNpc.recognitionStarting = false;
+        voiceNpc.listening = true;
+        updateVoiceNpcUi();
+      };
+      recognition.onresult = (event) => {
+        if (voiceNpc.speaking) return;
+        let interim = "";
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const text = event.results[index][0]?.transcript || "";
+          if (event.results[index].isFinal) handleVoiceNpcTranscript(text, true);
+          else interim += `${text} `;
+        }
+        if (interim.trim()) handleVoiceNpcTranscript(interim, false);
+      };
+      recognition.onspeechstart = () => { if (voiceNpc.active) voiceNpc.lastSpeechAt = performance.now(); };
+      recognition.onerror = (event) => {
+        voiceNpc.recognitionStarting = false;
+        if (["not-allowed", "service-not-allowed", "audio-capture"].includes(event.error)) {
+          voiceNpc.permission = "denied";
+          voiceNpc.shouldListen = false;
+        } else if (event.error !== "no-speech") voiceNpc.permission = "error";
+        updateVoiceNpcUi();
+      };
+      recognition.onend = () => {
+        voiceNpc.recognitionStarting = false;
+        voiceNpc.listening = false;
+        updateVoiceNpcUi();
+        scheduleVoiceRecognitionRestart();
+      };
+      voiceNpc.recognition = recognition;
+    }
+    try {
+      voiceNpc.recognitionStarting = true;
+      voiceNpc.recognition.start();
+    } catch (error) {
+      voiceNpc.recognitionStarting = false;
+      scheduleVoiceRecognitionRestart(500);
+    }
+  }
+
+  function requestVoiceNpcAccess(force = false) {
+    if (!VOICE_NPC_ENABLED) {
+      voiceNpc.shouldListen = false;
+      voiceNpc.active = false;
+      voiceNpc.positionReady = false;
+      voiceNpc.permission = "disabled";
+      return Promise.resolve(false);
+    }
+    if (voiceNpc.permissionRequest && !force) return voiceNpc.permissionRequest;
+    voiceNpc.shouldListen = true;
+    voiceNpc.permission = "requesting";
+    updateVoiceNpcUi();
+    voiceNpc.permissionRequest = requestMicrophoneAccess().then((mode) => {
+      if (mode !== "microphone") {
+        voiceNpc.permission = "denied";
+        voiceNpc.shouldListen = false;
+        updateVoiceNpcUi();
+        return false;
+      }
+      voiceNpc.permission = "granted";
+      updateVoiceNpcUi();
+      startVoiceRecognition();
+      return true;
+    }).catch((error) => {
+      voiceNpc.permission = "error";
+      voiceNpc.shouldListen = false;
+      updateVoiceNpcUi();
+      return false;
+    }).finally(() => { voiceNpc.permissionRequest = null; });
+    return voiceNpc.permissionRequest;
+  }
+
+  function updateVoiceNpc(deltaSeconds) {
+    if (!VOICE_NPC_ENABLED) return;
+    const now = performance.now();
+    if (voiceNpc.active && now - voiceNpc.lastSpeechAt >= VOICE_NPC_SILENCE_MS) {
+      voiceNpc.active = false;
+      voiceNpc.moving = false;
+      voiceNpc.lastChaseDurationMs = now - voiceNpc.chaseStartedAt;
+      voiceNpc.lastChaseDistance = Math.hypot(voiceNpc.x - voiceNpc.chaseStartX, voiceNpc.y - voiceNpc.chaseStartY);
+      voiceNpc.reply = VOICE_NPC_SILENCE_REPLIES[(voiceNpc.wakeCount - 1) % VOICE_NPC_SILENCE_REPLIES.length];
+      voiceNpc.replyAt = now;
+      updateVoiceNpcUi();
+    }
+    const available = state.started && state.dimension === "san_pablo" && !state.interior && !doctorPotatoScene;
+    if (!available || !voiceNpc.active) { voiceNpc.moving = false; return; }
+    placeVoiceNpcNearPlayer();
+    const dx = state.worldX - voiceNpc.x;
+    const dy = state.worldY - voiceNpc.y;
+    const separation = Math.hypot(dx, dy);
+    if (separation <= 43) {
+      voiceNpc.moving = false;
+      voiceNpc.direction = directionFromNpcToPlayer(voiceNpc, voiceNpc.direction);
+      return;
+    }
+    const amount = Math.min(VOICE_NPC_CHASE_SPEED * deltaSeconds, separation - 43);
+    const unitX = dx / separation;
+    const unitY = dy / separation;
+    const previousX = voiceNpc.x; const previousY = voiceNpc.y;
+    const canNpcOccupy = (x, y) => cityMapCanOccupy(x, y) && !worldNpcBlocksPosition(x, y);
+    const nextX = voiceNpc.x + unitX * amount;
+    const nextY = voiceNpc.y + unitY * amount;
+    if (canNpcOccupy(nextX, voiceNpc.y)) voiceNpc.x = nextX;
+    if (canNpcOccupy(voiceNpc.x, nextY)) voiceNpc.y = nextY;
+    if (voiceNpc.x === previousX && voiceNpc.y === previousY) {
+      const slideX = voiceNpc.x - unitY * amount;
+      const slideY = voiceNpc.y + unitX * amount;
+      if (canNpcOccupy(slideX, voiceNpc.y)) voiceNpc.x = slideX;
+      if (canNpcOccupy(voiceNpc.x, slideY)) voiceNpc.y = slideY;
+    }
+    voiceNpc.moving = voiceNpc.x !== previousX || voiceNpc.y !== previousY;
+    voiceNpc.animationElapsed += deltaSeconds * 1000;
+    if (Math.abs(dx) > Math.abs(dy)) voiceNpc.direction = dx < 0 ? "left" : "right";
+    else voiceNpc.direction = dy < 0 ? "up" : "down";
   }
 
   function prepareWorldDecorations() {
@@ -1069,13 +1706,32 @@
   }
 
   function customPokemonAsset(id, view = "front") { return CUSTOM_POKEMON_ASSETS[id]?.[view] || null; }
+  function customPokemonAttack(id) { return CUSTOM_POKEMON_ATTACKS[Number(id)] || null; }
+  function customAttackStyle(profile) {
+    if (!profile) return "";
+    const [mouthX = "50%", mouthY = "50%"] = String(profile.mouth || "50% 50%").split(" ");
+    return `--attack-x:${profile.x};--attack-y:${profile.y};--attack-turn:${profile.turn};--attack-scale:${profile.scale};--mouth-x:${mouthX};--mouth-y:${mouthY};`;
+  }
   function isCustomPokemon(id) { return Boolean(CUSTOM_POKEMON_ASSETS[id]); }
   function isPetrillo(id) { return Number(id) === PETRILLO_ID; }
-  function setBattlePokemonMotion(element, id) {
+  function setBattlePokemonMotion(element, id, view = "front") {
     const motion = CUSTOM_POKEMON_MOTIONS[Number(id)];
+    const attack = customPokemonAttack(id);
     element.classList.toggle("custom-pokemon-motion", Boolean(motion));
-    if (motion) element.dataset.pokemonMotion = motion;
-    else delete element.dataset.pokemonMotion;
+    element.dataset.pokemonId = String(id);
+    element.dataset.view = view;
+    if (motion) element.dataset.pokemonMotion = motion; else delete element.dataset.pokemonMotion;
+    if (attack) {
+      element.dataset.attackKind = attack.kind;
+      element.style.setProperty("--attack-x", attack.x);
+      element.style.setProperty("--attack-shift-x", view === "front" ? `-${attack.x}` : attack.x);
+      element.style.setProperty("--attack-y", attack.y);
+      element.style.setProperty("--attack-turn", attack.turn);
+      element.style.setProperty("--attack-scale", attack.scale);
+    } else {
+      delete element.dataset.attackKind;
+      ["--attack-x", "--attack-shift-x", "--attack-y", "--attack-turn", "--attack-scale"].forEach((name) => element.style.removeProperty(name));
+    }
   }
   function artworkUrl(id) { return customPokemonAsset(id) || ""; }
   function iconUrl(id) { return customPokemonAsset(id) || ""; }
@@ -1136,37 +1792,83 @@
     document.documentElement.dataset.worldAssetsReady = failed ? "error" : (records.length && ready === records.length ? "true" : "loading");
   }
 
-  function loadCityWorldAssets() {
+  function syncLinkedEntrancesFromAssets({ force = false, entrancesAreBaseline = false } = {}) {
+    let changed = false;
     cityWorldAssets.forEach((asset) => {
-      const source = worldAssetSource(asset);
-      if (!source || cityWorldAssetImages.has(source)) return;
-      const image = new Image();
-      const record = { image, drawable: null, ready: false, failed: false };
-      cityWorldAssetImages.set(source, record);
-      image.onload = () => {
-        record.drawable = buildWorldAssetDrawable(image);
-        record.ready = true;
-        record.failed = false;
-        updateWorldAssetDataset();
-        updateAssetNotice();
-      };
-      image.onerror = () => {
-        record.drawable = null;
-        record.ready = false;
-        record.failed = true;
-        updateWorldAssetDataset();
-        updateAssetNotice();
-      };
-      image.decoding = "async";
-      image.src = worldAssetUrl(source);
+      const current = { x: Number(asset.x), y: Number(asset.y) };
+      const previous = linkedAssetPositions.get(asset.id);
+      const baselineAsset = baseLinkedAssetPositions.get(asset.id) || previous || current;
+      linkedAssetPositions.set(asset.id, current);
+      if (!previous || !Number.isFinite(current.x) || !Number.isFinite(current.y)) return;
+      const deltaX = current.x - previous.x;
+      const deltaY = current.y - previous.y;
+      if (!force && !deltaX && !deltaY) return;
+      const totalDeltaX = current.x - baselineAsset.x;
+      const totalDeltaY = current.y - baselineAsset.y;
+      const previousTotalDeltaX = previous.x - baselineAsset.x;
+      const previousTotalDeltaY = previous.y - baselineAsset.y;
+      cityEntrances.filter((entrance) => entrance.linkedAssetId === asset.id).forEach((entrance) => {
+        const trackingKey = `${asset.id}:${entrance.id}`;
+        const entranceX = (entrance.col + .5) * CITY_MAP.tileSize;
+        const entranceY = (entrance.row + .5) * CITY_MAP.tileSize;
+        const tracked = linkedEntrancePositions.get(trackingKey) || {
+          x: entrancesAreBaseline ? entranceX : entranceX - previousTotalDeltaX,
+          y: entrancesAreBaseline ? entranceY : entranceY - previousTotalDeltaY,
+          approachX: Array.isArray(entrance.approach) ? Number(entrance.approach[0]) - (entrancesAreBaseline ? 0 : previousTotalDeltaX) : null,
+          approachY: Array.isArray(entrance.approach) ? Number(entrance.approach[1]) - (entrancesAreBaseline ? 0 : previousTotalDeltaY) : null,
+        };
+        linkedEntrancePositions.set(trackingKey, tracked);
+        const centerX = tracked.x + totalDeltaX;
+        const centerY = tracked.y + totalDeltaY;
+        entrance.col = Math.max(0, Math.min(78, Math.round(centerX / CITY_MAP.tileSize - .5)));
+        entrance.row = Math.max(0, Math.min(78, Math.round(centerY / CITY_MAP.tileSize - .5)));
+        if (Number.isFinite(tracked.approachX) && Number.isFinite(tracked.approachY)) {
+          entrance.approach = [
+            tracked.approachX + totalDeltaX,
+            tracked.approachY + totalDeltaY,
+            entrance.approach[2] || "up",
+          ];
+        }
+        asset.door = [entrance.col, entrance.row];
+        changed = true;
+      });
     });
+    if (changed) rebuildDefaultMapTiles();
+    return changed;
+  }
+
+  function ensureCityWorldAssetImage(asset) {
+    const source = worldAssetSource(asset);
+    if (!source || cityWorldAssetImages.has(source)) return;
+    const image = new Image();
+    const record = { image, drawable: null, ready: false, failed: false };
+    cityWorldAssetImages.set(source, record);
+    image.onload = () => {
+      record.drawable = buildWorldAssetDrawable(image);
+      record.ready = true;
+      record.failed = false;
+      updateWorldAssetDataset();
+      updateAssetNotice();
+    };
+    image.onerror = () => {
+      record.drawable = null;
+      record.ready = false;
+      record.failed = true;
+      updateWorldAssetDataset();
+      updateAssetNotice();
+    };
+    image.decoding = "async";
+    image.src = worldAssetUrl(source);
+  }
+
+  function loadCityWorldAssets() {
+    cityWorldAssets.forEach(ensureCityWorldAssetImage);
     updateWorldAssetDataset();
   }
 
   function worldAssetsReady() {
-    const expected = new Set(cityWorldAssets.map(worldAssetSource).filter(Boolean)).size;
-    return cityWorldAssetImages.size === expected
-      && [...cityWorldAssetImages.values()].every((record) => record.ready);
+    const expected = new Set(cityWorldAssets.map(worldAssetSource).filter(Boolean));
+    return [...expected].every((source) => cityWorldAssetImages.get(source)?.ready);
   }
 
   function encounterGrassReady() {
@@ -1174,10 +1876,10 @@
   }
 
   function deployedNpcRosterSprites() {
-    const exterior = (CITY_MAP.npcs || [])
+    const exterior = cityNpcs
       .map((npc) => npc.sprite)
       .filter((sprite) => typeof sprite === "string" && NPC_ROSTER_SHEET_URLS[sprite]);
-    const interior = (CITY_MAP.doors || [])
+    const interior = cityEntrances
       .map((door) => NPC_DEFS[door.npc]?.sprite)
       .filter((sprite) => typeof sprite === "string" && NPC_ROSTER_SHEET_URLS[sprite]);
     return new Set([...interior, ...exterior, "doctor-potato"]);
@@ -1706,26 +2408,44 @@
     }
   }
 
-  function initializeMapTiles() {
+  function rebuildRuntimeEntityIndexes() {
+    entranceTileIndex = new Map();
+    cityEntrances.forEach((entrance) => entranceTileIndex.set(tileKey(entrance.col, entrance.row), entrance));
+    eventTileIndex = new Map();
+    cityEvents.filter((event) => event.enabled !== false).forEach((event) => {
+      const key = tileKey(event.col, event.row);
+      if (!eventTileIndex.has(key)) eventTileIndex.set(key, []);
+      eventTileIndex.get(key).push(event);
+    });
+  }
+
+  function rebuildDefaultMapTiles() {
     defaultMapTiles.clear();
     (CITY_MAP.blockedRects || []).forEach((rect) => setDefaultTileRect("blocked", rect));
     (CITY_MAP.walkableRects || []).forEach((rect) => setDefaultTileRect("walkable", rect));
     (CITY_MAP.walkableSegments || []).forEach((segment) => setDefaultTileSegment("walkable", segment));
     (CITY_MAP.encounterRects || []).forEach((rect) => setDefaultTileRect("encounter", rect));
     (CITY_MAP.encounterTiles || []).forEach(([col, row]) => defaultMapTiles.set(tileKey(col, row), "encounter"));
-    CITY_MAP.doors.forEach((door) => defaultMapTiles.set(tileKey(door.col, door.row), "door"));
+    cityEvents.filter((event) => event.enabled !== false)
+      .forEach((event) => defaultMapTiles.set(tileKey(event.col, event.row), "event"));
+    cityEntrances.forEach((entrance) => defaultMapTiles.set(tileKey(entrance.col, entrance.row), "door"));
+    rebuildRuntimeEntityIndexes();
+  }
+
+  function applyRuntimeTileOverrides(overrides = {}) {
     tileOverrides.clear();
-    try {
-      const saved = JSON.parse(window.localStorage.getItem(MAP_EDIT_KEY) || "[]");
-      if (Array.isArray(saved)) saved.forEach(([key, type]) => {
-        if (/^\d+,\d+$/.test(key) && ["walkable", "blocked", "door", "encounter", "event"].includes(type)) tileOverrides.set(key, type);
-      });
-    } catch (error) { console.warn("No se pudo cargar la cuadrícula editada.", error); }
+    Object.entries(overrides && typeof overrides === "object" ? overrides : {}).forEach(([key, type]) => {
+      if (/^\d+,\d+$/.test(key) && ["walkable", "blocked", "door", "encounter", "event"].includes(type)) tileOverrides.set(key, type);
+    });
+  }
+
+  function initializeMapTiles() {
+    rebuildDefaultMapTiles();
+    applyRuntimeTileOverrides(window.CITY_MAP_EDITOR_DATA?.tileOverrides || {});
   }
 
   function saveMapTiles() {
-    try { window.localStorage.setItem(MAP_EDIT_KEY, JSON.stringify([...tileOverrides])); }
-    catch (error) { console.warn("No se pudo guardar la cuadrícula.", error); }
+    window.PokemonMapEditor?.syncTileOverrides?.(Object.fromEntries(tileOverrides));
   }
 
   function mapTileType(col, row) {
@@ -1789,7 +2509,7 @@
 
   function updateNpcPatrols(deltaSeconds) {
     if (!state.started || state.dimension !== "san_pablo" || state.interior || deltaSeconds <= 0) return;
-    (CITY_MAP.npcs || []).forEach((npc) => {
+    cityNpcs.forEach((npc) => {
       const patrol = npcPatrolState(npc);
       if (!patrol) return;
       patrol.moving = false;
@@ -1809,6 +2529,15 @@
         const nextX = patrol.x + dx / distanceToTarget * travelled;
         const nextY = patrol.y + dy / distanceToTarget * travelled;
         if (segmentHitsPlayer(patrol.x, patrol.y, nextX, nextY)) return;
+        const blockedByNpc = cityNpcs.some((other) => {
+          if (other.id === npc.id || other.solid === false) return false;
+          const position = mapNpcPosition(other);
+          return Math.hypot(nextX - position.x, nextY - position.y) < NPC_COLLISION_RADIUS;
+        });
+        if (!cityMapCanOccupy(nextX, nextY) || blockedByNpc) {
+          patrol.forward = !patrol.forward;
+          return;
+        }
         patrol.direction = directionFromDelta(dx, dy, patrol.direction);
         patrol.x = nextX;
         patrol.y = nextY;
@@ -1822,11 +2551,18 @@
   function nearbyWorldNpc(maxDistance = 58) {
     if (state.dimension !== "san_pablo" || state.interior) return null;
     const player = { x: state.worldX, y: state.worldY };
-    return (CITY_MAP.npcs || [])
+    return cityNpcs
       .map((npc) => ({ npc, position: mapNpcPosition(npc) }))
       .map((entry) => ({ ...entry, distance: distance(player, entry.position) }))
       .filter((entry) => entry.distance <= maxDistance)
       .sort((a, b) => a.distance - b.distance)[0] || null;
+  }
+
+  function nearbyVoiceNpc(maxDistance = 58) {
+    if (!VOICE_NPC_ENABLED) return null;
+    if (!state.started || state.dimension !== "san_pablo" || state.interior || doctorPotatoScene || !voiceNpc.positionReady) return null;
+    const npcDistance = Math.hypot(state.worldX - voiceNpc.x, state.worldY - voiceNpc.y);
+    return npcDistance <= maxDistance ? { position: { x: voiceNpc.x, y: voiceNpc.y }, distance: npcDistance } : null;
   }
 
   function distanceToRect(x, y, rect) {
@@ -1850,10 +2586,17 @@
   }
 
   function worldNpcBlocksPosition(x, y) {
-    return (CITY_MAP.npcs || []).some((npc) => {
+    return cityNpcs.some((npc) => {
+      if (npc.solid === false) return false;
       const position = mapNpcPosition(npc);
       return Math.hypot(x - position.x, y - position.y) < NPC_COLLISION_RADIUS;
     });
+  }
+
+  function voiceNpcBlocksPosition(x, y) {
+    if (!VOICE_NPC_ENABLED) return false;
+    if (!state.started || state.dimension !== "san_pablo" || state.interior || doctorPotatoScene || !voiceNpc.positionReady) return false;
+    return Math.hypot(x - voiceNpc.x, y - voiceNpc.y) < 25;
   }
 
   function worldAssetColliderRects(asset) {
@@ -1869,6 +2612,101 @@
     const nearestX = clamp(x, rect.x, rect.x + rect.w);
     const nearestY = clamp(y, rect.y, rect.y + rect.h);
     return ((x - nearestX) ** 2) + ((y - nearestY) ** 2) <= radius ** 2;
+  }
+
+  function distanceToGeometrySegment(x, y, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lengthSquared = dx * dx + dy * dy || 1;
+    const amount = clamp(((x - x1) * dx + (y - y1) * dy) / lengthSquared, 0, 1);
+    return Math.hypot(x - (x1 + dx * amount), y - (y1 + dy * amount));
+  }
+
+  function geometryBounds(points, padding = 0) {
+    const xs = points.map((point) => Number(point[0]));
+    const ys = points.map((point) => Number(point[1]));
+    return {
+      x: Math.min(...xs) - padding,
+      y: Math.min(...ys) - padding,
+      w: Math.max(...xs) - Math.min(...xs) + padding * 2,
+      h: Math.max(...ys) - Math.min(...ys) + padding * 2,
+    };
+  }
+
+  function circleIntersectsPolygonFeature(feature, x, y, radius) {
+    const outer = Array.isArray(feature.points) ? feature.points : [];
+    if (outer.length < 3) return false;
+    const holes = Array.isArray(feature.holes) ? feature.holes : [];
+    if (pointInPolygon(x, y, outer) && !holes.some((hole) => pointInPolygon(x, y, hole))) return true;
+    return [outer, ...holes].some((ring) => ring.some((point, index) => {
+      const next = ring[(index + 1) % ring.length];
+      return distanceToGeometrySegment(x, y, point[0], point[1], next[0], next[1]) <= radius;
+    }));
+  }
+
+  function circleIntersectsBarrier(barrier, x, y, radius) {
+    const points = Array.isArray(barrier.points) ? barrier.points : [];
+    const allowance = radius + Math.max(1.5, Number(barrier.width) || 3) / 2;
+    return points.slice(1).some((point, index) => distanceToGeometrySegment(
+      x, y, points[index][0], points[index][1], point[0], point[1],
+    ) <= allowance);
+  }
+
+  const CITY_STATIC_BUCKET_SIZE = 128;
+  let cityStaticCollisionIndex = null;
+
+  function ensureCityStaticCollisionIndex() {
+    if (cityStaticCollisionIndex) return cityStaticCollisionIndex;
+    const buckets = new Map();
+    const records = [];
+    const addRecord = (record) => {
+      records.push(record);
+      const minCol = Math.floor(record.bounds.x / CITY_STATIC_BUCKET_SIZE);
+      const maxCol = Math.floor((record.bounds.x + record.bounds.w) / CITY_STATIC_BUCKET_SIZE);
+      const minRow = Math.floor(record.bounds.y / CITY_STATIC_BUCKET_SIZE);
+      const maxRow = Math.floor((record.bounds.y + record.bounds.h) / CITY_STATIC_BUCKET_SIZE);
+      for (let row = minRow; row <= maxRow; row += 1) {
+        for (let col = minCol; col <= maxCol; col += 1) {
+          const key = `${col},${row}`;
+          if (!buckets.has(key)) buckets.set(key, []);
+          buckets.get(key).push(record);
+        }
+      }
+    };
+    cityBuildingFootprints.filter((feature) => feature.solid !== false && feature.points?.length >= 3)
+      .forEach((feature) => addRecord({ type: "building", feature, bounds: geometryBounds(feature.points, 12) }));
+    cityBarrierSegments.filter((feature) => feature.solid !== false && feature.points?.length >= 2)
+      .forEach((feature) => {
+        const padding = Math.max(12, Number(feature.width) || 3);
+        addRecord({ type: "barrier", feature, bounds: geometryBounds(feature.points, padding) });
+      });
+    cityStaticCollisionIndex = { buckets, records };
+    document.documentElement.dataset.staticBuildingColliders = String(cityBuildingFootprints.length);
+    document.documentElement.dataset.staticBarrierColliders = String(cityBarrierSegments.length);
+    return cityStaticCollisionIndex;
+  }
+
+  function staticCollisionRecordsNear(x, y, radius = 0) {
+    const { buckets } = ensureCityStaticCollisionIndex();
+    const records = new Set();
+    const minCol = Math.floor((x - radius) / CITY_STATIC_BUCKET_SIZE);
+    const maxCol = Math.floor((x + radius) / CITY_STATIC_BUCKET_SIZE);
+    const minRow = Math.floor((y - radius) / CITY_STATIC_BUCKET_SIZE);
+    const maxRow = Math.floor((y + radius) / CITY_STATIC_BUCKET_SIZE);
+    for (let row = minRow; row <= maxRow; row += 1) {
+      for (let col = minCol; col <= maxCol; col += 1) {
+        (buckets.get(`${col},${row}`) || []).forEach((record) => records.add(record));
+      }
+    }
+    return [...records];
+  }
+
+  function staticGeometryBlocksPosition(x, y, radius = 9) {
+    return staticCollisionRecordsNear(x, y, radius).some((record) => (
+      record.type === "building"
+        ? circleIntersectsPolygonFeature(record.feature, x, y, radius)
+        : circleIntersectsBarrier(record.feature, x, y, radius)
+    ));
   }
 
   const WORLD_ASSET_BUCKET_SIZE = 128;
@@ -1921,6 +2759,13 @@
       .some(({ rect }) => circleIntersectsRect(x, y, radius, rect));
   }
 
+  function editorVacatedAt(x, y, radius = 0) {
+    return (CITY_MAP.editorVacatedRects || []).some((rect) => (
+      x + radius >= rect.x && x - radius <= rect.x + rect.w
+      && y + radius >= rect.y && y - radius <= rect.y + rect.h
+    ));
+  }
+
   function navigationMaskAllowsPosition(x, y, radius = 9) {
     if (!cityNavigationMaskReady || !cityNavigationMaskData) return null;
     const cellSize = Number(CITY_MAP.navigationMask?.cellSize) || 8;
@@ -1930,6 +2775,7 @@
       samples.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
     }
     return samples.every(([offsetX, offsetY]) => {
+      if (editorVacatedAt(x + offsetX, y + offsetY)) return true;
       const col = Math.floor((x + offsetX) / cellSize);
       const row = Math.floor((y + offsetY) / cellSize);
       if (col < 0 || row < 0 || col >= cityNavigationMaskData.width || row >= cityNavigationMaskData.height) return false;
@@ -1951,11 +2797,17 @@
     const tilesAreOpen = forcedOpen || (semanticOpen === null
       ? tileSamples.every((sample) => sample.type !== "blocked")
       : semanticOpen);
-    return tilesAreOpen && !worldAssetBlocksPosition(x, y, radius);
+    const vacatedByEditor = editorVacatedAt(x, y, radius);
+    return tilesAreOpen && (vacatedByEditor || !staticGeometryBlocksPosition(x, y, radius)) && !worldAssetBlocksPosition(x, y, radius);
   }
 
-  function defaultDoorAt(col, row) {
-    return CITY_MAP.doors.find((door) => door.col === col && door.row === row) || null;
+  function entranceAt(col, row) {
+    return entranceTileIndex.get(tileKey(col, row)) || null;
+  }
+
+  function mapEventsAt(col, row, trigger = null) {
+    const events = eventTileIndex.get(tileKey(col, row)) || [];
+    return trigger ? events.filter((event) => event.trigger === trigger) : [...events];
   }
 
   function nearbyMapInteraction() {
@@ -1964,7 +2816,14 @@
     const candidates = [worldToTile(state.worldX + offsetX, state.worldY + offsetY), worldToTile(state.worldX, state.worldY)];
     for (const tile of candidates) {
       const type = mapTileType(tile.col, tile.row);
-      if (type === "door" || type === "event") return { id: "map_tile", type, ...tile, event: defaultDoorAt(tile.col, tile.row) };
+      const entrance = entranceAt(tile.col, tile.row);
+      if (entrance) return { id: "map_entrance", type: "door", ...tile, entrance };
+      const configuredEvents = mapEventsAt(tile.col, tile.row);
+      const event = configuredEvents
+        .filter((entry) => entry.trigger === "interact")
+        .find((entry) => !entry.once || !state.triggeredEvents.includes(entry.id));
+      if (event) return { id: "map_event", type: "event", ...tile, event };
+      if (type === "door" || (type === "event" && !configuredEvents.length)) return { id: "map_tile", type, ...tile, event: null };
     }
     return null;
   }
@@ -2176,9 +3035,44 @@
     renderPlayerAnimationDebugAtlas();
   }
 
+  function enterWorldForBuildingEditor() {
+    const titleVisible = !elements.titleScreen.classList.contains("hidden");
+    const starterIntroVisible = !elements.starterIntroScreen.classList.contains("hidden");
+    if (!titleVisible && !starterIntroVisible) return;
+
+    /* El editor vive dentro de worldScreen. Si se abre desde la portada, primero
+       hay que mostrar el mundo; de lo contrario el panel recibe la clase `open`
+       pero permanece dentro de una pantalla oculta. */
+    if (!state.started) {
+      if (!state.team.length) {
+        state = defaultState();
+        state.starterChosen = true;
+        state.team = [createPokemon(PETRILLO_ID, 5)];
+        state.caught = [PETRILLO_ID];
+        state.seen = [PETRILLO_ID];
+      }
+      state.started = true;
+    }
+    starterIntroActive = false;
+    elements.starterIntroVideo.pause();
+    elements.playStarterIntro.classList.add("hidden");
+    elements.starterModal.classList.add("hidden");
+    showWorld();
+  }
+
   function openBuildingEditor() {
-    if (!state.started || state.dimension !== "san_pablo" || state.interior) return;
-    closeSanpledex(false); closeTeam(); closeInventoryPanel(); clearDirectionalInput();
+    if (!developerEditorEnabled) return;
+    enterWorldForBuildingEditor();
+    if (!elements.battleScreen.classList.contains("hidden")) {
+      setBattleMessage("Termina el combate para abrir el modo dios.");
+      return;
+    }
+    if (!state.started || state.dimension !== "san_pablo" || state.interior) {
+      if (!elements.worldScreen.classList.contains("hidden")) showAreaToast("MODO DIOS · SOLO EN EL EXTERIOR");
+      return;
+    }
+    if (elements.worldScreen.classList.contains("hidden")) return;
+    closeSanpledex(false); closeTeam(); closeInventoryPanel();
     elements.buildingEditor.classList.add("open");
     elements.buildingEditor.setAttribute("aria-hidden", "false");
     elements.editorScrim.classList.remove("hidden");
@@ -2192,7 +3086,7 @@
   }
 
   function updateTileEditorInfo() {
-    const labels = { walkable: "Transitable", blocked: "Bloqueada", door: "Puerta", encounter: "Hierba / encuentro", event: "Evento" };
+    const labels = { inherit: "Valor original", walkable: "Transitable", blocked: "Bloqueada", door: "Puerta", encounter: "Hierba / encuentro", event: "Evento" };
     elements.tileEditorHint.textContent = `Modo actual: ${labels[selectedTileType]}`;
     $$('[data-tile-type]').forEach((button) => button.classList.toggle("selected", button.dataset.tileType === selectedTileType));
     if (!selectedMapTile) {
@@ -2207,11 +3101,13 @@
 
   function handleMapEditorClick(event) {
     if (!elements.buildingEditor.classList.contains("open")) return;
+    if (window.PokemonMapEditor?.consumeLegacyClick?.(event)) return;
     const rect = elements.canvas.getBoundingClientRect();
     const worldX = camera.x + (event.clientX - rect.left) * (VIEW_WIDTH / rect.width);
     const worldY = camera.y + (event.clientY - rect.top) * (VIEW_HEIGHT / rect.height);
     selectedMapTile = worldToTile(worldX, worldY);
-    tileOverrides.set(tileKey(selectedMapTile.col, selectedMapTile.row), selectedTileType);
+    if (selectedTileType === "inherit") tileOverrides.delete(tileKey(selectedMapTile.col, selectedMapTile.row));
+    else tileOverrides.set(tileKey(selectedMapTile.col, selectedMapTile.row), selectedTileType);
     saveMapTiles(); updateTileEditorInfo();
   }
 
@@ -2429,6 +3325,9 @@
         next.blackMarket.purchases[key] = clamp(Math.floor(Number(savedBlackMarketPurchases[key]) || 0), 0, limit);
       });
       next.collectedObjects = Array.isArray(saved.collectedObjects) ? [...new Set(saved.collectedObjects)] : [];
+      next.triggeredEvents = Array.isArray(saved.triggeredEvents)
+        ? [...new Set(saved.triggeredEvents.filter((id) => typeof id === "string").slice(0, 500))]
+        : [];
       next.secretPokemonId = normalizeMonsterId(saved.secretPokemonId);
       next.interior = saved.interior === "maintenance" ? "maintenance" : null;
       next.interiorData = null;
@@ -2450,8 +3349,9 @@
       next.dimension = saved.dimension === "prism" ? "prism" : "san_pablo";
       if (next.dimension === "prism") {
         next.dimension = "san_pablo";
-        next.worldX = PORTAL_POSITION.x;
-        next.worldY = PORTAL_POSITION.y + field.h / 2 + 70;
+        const portalReturn = currentPortalReturn();
+        next.worldX = portalReturn.x;
+        next.worldY = portalReturn.y;
         next.returnPosition = null;
         next.interior = null;
         next.maintenanceReturn = null;
@@ -2516,6 +3416,8 @@
   }
 
   function startNewGame() {
+    primeDialogMusic(DOCTOR_POTATO_THEME_URL);
+    if (VOICE_NPC_ENABLED) requestVoiceNpcAccess();
     requestGameFullscreen();
     fragmentCinematicActive = false;
     elements.fragmentCinematicVideo.pause();
@@ -2649,6 +3551,8 @@
   }
 
   function continueGame() {
+    primeDialogMusic(DOCTOR_POTATO_THEME_URL);
+    if (VOICE_NPC_ENABLED) requestVoiceNpcAccess();
     requestGameFullscreen();
     if (!loadGame()) return;
     showWorld();
@@ -2663,6 +3567,7 @@
     elements.buildingEditorButton.disabled = state.dimension === "prism" || Boolean(state.interior);
     elements.worldScreen.classList.toggle("maze-mode", state.dimension === "prism");
     elements.mazeHud.classList.toggle("hidden", state.dimension !== "prism");
+    if (VOICE_NPC_ENABLED && state.dimension === "san_pablo" && !state.interior) placeVoiceNpcNearPlayer();
     renderHud();
     if (state.started) startBackgroundMusic();
   }
@@ -2715,6 +3620,18 @@
         if (pendingDialogMusicSource !== source) return null;
         loadedDialogMusicSource = source;
         dialogMusicBuffer = decodedAudio;
+        const samples = decodedAudio.getChannelData(0);
+        const sampleCount = Math.min(samples.length, Math.floor(decodedAudio.sampleRate * 5));
+        let peak = 0;
+        let squareSum = 0;
+        for (let index = 0; index < sampleCount; index += 1) {
+          const amplitude = Math.abs(samples[index]);
+          peak = Math.max(peak, amplitude);
+          squareSum += amplitude * amplitude;
+        }
+        document.documentElement.dataset.dialogMusicDuration = decodedAudio.duration.toFixed(1);
+        document.documentElement.dataset.dialogMusicPeak = peak.toFixed(3);
+        document.documentElement.dataset.dialogMusicRms = Math.sqrt(squareSum / Math.max(1, sampleCount)).toFixed(3);
         document.documentElement.dataset.dialogMusic = activeDialogMusicSource ? "ready" : "primed";
         return decodedAudio;
       })
@@ -2728,6 +3645,37 @@
     return dialogMusicBufferPromise;
   }
 
+  function playDialogMusicBuffer(source) {
+    prepareDialogMusic(source).then((buffer) => {
+      if (!buffer || activeDialogMusicSource !== source || !state.sound) return;
+      const context = ensureAudio();
+      if (!context) return;
+      const startBuffer = () => {
+        if (activeDialogMusicSource !== source || !state.sound) return;
+        if (dialogMusicSourceNode) {
+          try { dialogMusicSourceNode.stop(); } catch (error) { /* already stopped */ }
+          dialogMusicSourceNode.disconnect();
+        }
+        if (dialogMusicGainNode) dialogMusicGainNode.disconnect();
+        dialogMusicGainNode = context.createGain();
+        dialogMusicGainNode.gain.value = 3.2;
+        dialogMusicGainNode.connect(context.destination);
+        dialogMusicSourceNode = context.createBufferSource();
+        dialogMusicSourceNode.buffer = buffer;
+        dialogMusicSourceNode.loop = true;
+        dialogMusicSourceNode.connect(dialogMusicGainNode);
+        dialogMusicSourceNode.start(0);
+        dialogMusicAudio.pause();
+        try { dialogMusicAudio.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
+        document.documentElement.dataset.dialogMusic = "playing-buffer";
+        document.documentElement.dataset.dialogAudioContext = context.state;
+        delete document.documentElement.dataset.dialogMusicError;
+      };
+      if (context.state === "suspended") context.resume().then(startBuffer).catch(() => {});
+      else startBuffer();
+    });
+  }
+
   function playDialogMusic(source) {
     if (typeof source !== "string" || !source) return;
     stopBackgroundMusic();
@@ -2736,37 +3684,56 @@
       document.documentElement.dataset.dialogMusic = "muted";
       return;
     }
+    if (loadedDialogMusicMediaSource !== source) {
+      dialogMusicAudio.src = source;
+      dialogMusicAudio.load();
+      loadedDialogMusicMediaSource = source;
+    }
+    dialogMusicAudio.muted = false;
+    dialogMusicAudio.volume = .72;
+    try { dialogMusicAudio.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
     document.documentElement.dataset.dialogMusic = "starting";
-    prepareDialogMusic(source).then((buffer) => {
-      if (!buffer || activeDialogMusicSource !== source || !state.sound) return;
-      const context = ensureAudio();
-      if (!context) return;
-      if (dialogMusicSourceNode) {
-        try { dialogMusicSourceNode.stop(); } catch (error) { /* already stopped */ }
-        dialogMusicSourceNode.disconnect();
-      }
-      if (dialogMusicGainNode) dialogMusicGainNode.disconnect();
-      dialogMusicGainNode = context.createGain();
-      dialogMusicGainNode.gain.value = .22;
-      dialogMusicGainNode.connect(context.destination);
-      dialogMusicSourceNode = context.createBufferSource();
-      dialogMusicSourceNode.buffer = buffer;
-      dialogMusicSourceNode.loop = true;
-      dialogMusicSourceNode.connect(dialogMusicGainNode);
-      dialogMusicSourceNode.start(0);
-      document.documentElement.dataset.dialogMusic = "playing";
-      delete document.documentElement.dataset.dialogMusicError;
-    });
+    playDialogMusicBuffer(source);
+    const playback = dialogMusicAudio.play();
+    if (playback?.then) {
+      playback.then(() => {
+        if (activeDialogMusicSource !== source || dialogMusicAudio.paused) return;
+        document.documentElement.dataset.dialogMusic = "playing-media";
+        delete document.documentElement.dataset.dialogMusicError;
+      }).catch((error) => {
+        if (activeDialogMusicSource !== source) return;
+        document.documentElement.dataset.dialogMusic = "fallback-buffer";
+        document.documentElement.dataset.dialogMusicError = error?.name || "MediaPlaybackError";
+      });
+    } else playDialogMusicBuffer(source);
   }
 
   function primeDialogMusic(source) {
     if (typeof source !== "string" || !source) return;
+    if (loadedDialogMusicMediaSource !== source) {
+      dialogMusicAudio.src = source;
+      dialogMusicAudio.load();
+      loadedDialogMusicMediaSource = source;
+    }
+    dialogMusicAudio.muted = false;
+    dialogMusicAudio.volume = 0;
+    try { dialogMusicAudio.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
+    const playback = dialogMusicAudio.play();
+    if (playback?.then) {
+      playback.then(() => {
+        if (!activeDialogMusicSource) document.documentElement.dataset.dialogMusic = "primed-media";
+      }).catch(() => {});
+    }
     prepareDialogMusic(source);
   }
 
   function stopDialogMusic(resumeBackground = true) {
     const hadDialogMusic = Boolean(activeDialogMusicSource);
     activeDialogMusicSource = null;
+    dialogMusicAudio.pause();
+    dialogMusicAudio.muted = false;
+    dialogMusicAudio.volume = .72;
+    try { dialogMusicAudio.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
     if (dialogMusicSourceNode) {
       try { dialogMusicSourceNode.stop(); } catch (error) { /* already stopped */ }
       dialogMusicSourceNode.disconnect();
@@ -2818,20 +3785,12 @@
   }
 
   function showDialog(messages, avatar = "!", callback = null, options = {}) {
-    const speakerAlias = typeof options.speaker === "string"
-      ? DIALOG_SPEAKER_ALIASES[options.speaker.trim().toLocaleLowerCase("es")]
-      : null;
-    const characterAlias = typeof options.characterAlias === "string"
-      ? options.characterAlias
-      : speakerAlias;
-    const preset = CHARACTER_DIALOG_PRESENTATIONS[characterAlias] || null;
-    const presentation = preset ? { ...preset, ...options } : options;
     dialogQueue = Array.isArray(messages) ? [...messages] : [String(messages)];
     dialogCallback = callback;
     inputLocked = true;
     clearDirectionalInput();
     elements.dialogAvatar.textContent = avatar;
-    applyDialogPresentation(presentation);
+    applyDialogPresentation(options);
     elements.dialogBox.classList.remove("hidden");
     advanceDialog();
   }
@@ -2848,6 +3807,215 @@
     const callback = dialogCallback;
     dialogCallback = null;
     if (callback) callback();
+  }
+
+  function mapEventMessages(event) {
+    const source = event?.message;
+    const messages = (Array.isArray(source) ? source : [source])
+      .filter((line) => typeof line === "string" && line.trim())
+      .map((line) => line.trim());
+    return messages.length ? messages : [event?.label || "Algo llama tu atención."];
+  }
+
+  function mapEventHasMessage(event) {
+    return Array.isArray(event?.message)
+      ? event.message.some((line) => typeof line === "string" && line.trim())
+      : typeof event?.message === "string" && Boolean(event.message.trim());
+  }
+
+  function showDialogAsync(messages, avatar = "!", options = {}) {
+    return new Promise((resolve) => showDialog(messages, avatar, resolve, options));
+  }
+
+  function playWorldVibration(duration = 440, intensity = 1) {
+    const safeDuration = Math.max(80, Math.min(5000, Number(duration) || 440));
+    const safeIntensity = Math.max(.1, Math.min(4, Number(intensity) || 1));
+    if (typeof navigator.vibrate === "function") {
+      const pulse = Math.max(20, Math.min(180, Math.round(45 * safeIntensity)));
+      const pause = Math.max(15, Math.round(pulse * .55));
+      const pattern = [];
+      let elapsed = 0;
+      while (elapsed < safeDuration && pattern.length < 15) {
+        pattern.push(pulse);
+        elapsed += pulse;
+        if (elapsed < safeDuration) { pattern.push(pause); elapsed += pause; }
+      }
+      try { navigator.vibrate(pattern); } catch (error) { /* La vibración física es opcional. */ }
+    }
+    if (typeof elements.canvas?.animate === "function") {
+      const amount = Math.max(1, Math.round(4 * safeIntensity));
+      elements.canvas.animate([
+        { transform: "translate(0,0)" },
+        { transform: `translate(${-amount}px,${Math.round(amount * .45)}px)` },
+        { transform: `translate(${amount}px,${-Math.round(amount * .35)}px)` },
+        { transform: `translate(${-Math.round(amount * .65)}px,${-Math.round(amount * .25)}px)` },
+        { transform: "translate(0,0)" },
+      ], { duration: safeDuration, iterations: 1, easing: "linear" });
+    }
+    return wait(safeDuration);
+  }
+
+  async function applyWorldTransitionEffect(effect, action) {
+    if (effect === "none") {
+      action();
+      return;
+    }
+    if (effect === "flash") {
+      const overlay = elements.flashOverlay;
+      overlay.classList.remove("encounter"); void overlay.offsetWidth;
+      overlay.classList.add("encounter");
+      await wait(180);
+      action();
+      await wait(620);
+      overlay.classList.remove("encounter");
+      return;
+    }
+    await fadeTransition(action);
+  }
+
+  function nearestOpenCityTarget(targetX, targetY) {
+    const x = clamp(Number(targetX), 16, WORLD_WIDTH - 16);
+    const y = clamp(Number(targetY), 16, WORLD_HEIGHT - 16);
+    if (cityMapCanOccupy(x, y) && !worldNpcBlocksPosition(x, y)) return { x, y };
+    const origin = worldToTile(x, y);
+    for (let radius = 1; radius <= 8; radius += 1) {
+      const candidates = [];
+      for (let rowOffset = -radius; rowOffset <= radius; rowOffset += 1) {
+        for (let colOffset = -radius; colOffset <= radius; colOffset += 1) {
+          if (Math.max(Math.abs(colOffset), Math.abs(rowOffset)) !== radius) continue;
+          const candidateX = (origin.col + colOffset + .5) * CITY_MAP.tileSize;
+          const candidateY = (origin.row + rowOffset + .5) * CITY_MAP.tileSize;
+          if (cityMapCanOccupy(candidateX, candidateY) && !worldNpcBlocksPosition(candidateX, candidateY)) {
+            candidates.push({ x: candidateX, y: candidateY, distance: Math.hypot(candidateX - x, candidateY - y) });
+          }
+        }
+      }
+      if (candidates.length) return candidates.sort((a, b) => a.distance - b.distance)[0];
+    }
+    return null;
+  }
+
+  function normalizedTargetMap(value) {
+    return String(value || "san-pablo").trim().toLowerCase().replace(/_/g, "-");
+  }
+
+  async function executeMapTransfer(event, { persist = true } = {}) {
+    const targetMap = normalizedTargetMap(event.targetMap);
+    if (!["san-pablo", "city", "current"].includes(targetMap)) {
+      const detail = { ...event, targetMap, handled: false };
+      window.dispatchEvent(new CustomEvent("pokemon-map-transition", { detail }));
+      if (detail.handled) return true;
+      await showDialogAsync([
+        `El destino «${event.targetMap || targetMap}» todavía no está registrado.`,
+        "La entrada conserva el destino para conectarlo cuando ese mapa exista.",
+      ], "◇");
+      return false;
+    }
+    const requestedX = Number.isFinite(Number(event.targetX)) ? Number(event.targetX) : NORMAL_START.x;
+    const requestedY = Number.isFinite(Number(event.targetY)) ? Number(event.targetY) : NORMAL_START.y;
+    const destination = nearestOpenCityTarget(requestedX, requestedY);
+    if (!destination) {
+      await showDialogAsync(["El destino está bloqueado y no hay una casilla segura cerca."], "!");
+      return false;
+    }
+    const direction = ["up", "down", "left", "right"].includes(event.targetDirection)
+      ? event.targetDirection
+      : "down";
+    await applyWorldTransitionEffect(event.effect || (event.type === "transition" ? "fade" : "none"), () => {
+      state.dimension = "san_pablo";
+      state.interior = null;
+      state.interiorData = null;
+      state.worldX = destination.x;
+      state.worldY = destination.y;
+      state.direction = direction;
+      camera.x = clamp(destination.x - VIEW_WIDTH / 2, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
+      camera.y = clamp(destination.y - VIEW_HEIGHT / 2, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      lastArea = "";
+      lastStepEventTile = tileKey(worldToTile(destination.x, destination.y).col, worldToTile(destination.x, destination.y).row);
+    });
+    updateAreaLabel();
+    updateInteractPrompt();
+    if (persist) saveGame();
+    return true;
+  }
+
+  async function runMapEvent(value, { preview = false } = {}) {
+    const event = normalizeRuntimeEvent(value, value?.id || "event-preview");
+    if (!event || mapEventRunning) return false;
+    if (!preview && event.once && state.triggeredEvents.includes(event.id)) return false;
+    mapEventRunning = true;
+    const previousInputLock = inputLocked;
+    const previewPosition = preview ? {
+      dimension: state.dimension,
+      interior: state.interior,
+      interiorData: state.interiorData ? cloneRuntimeRecord(state.interiorData) : null,
+      worldX: state.worldX,
+      worldY: state.worldY,
+      direction: state.direction,
+      cameraX: camera.x,
+      cameraY: camera.y,
+      lastArea,
+      lastStepEventTile,
+    } : null;
+    inputLocked = true;
+    clearDirectionalInput();
+    let completed = true;
+    try {
+      if (event.type === "thought" || event.type === "dialogue") {
+        const thought = event.type === "thought";
+        await showDialogAsync(mapEventMessages(event), thought ? "…" : (event.label || "N").charAt(0), thought ? {} : { speaker: event.label });
+      } else if (event.type === "vibration") {
+        await playWorldVibration(event.duration, event.intensity);
+        if (mapEventHasMessage(event)) {
+          await showDialogAsync(mapEventMessages(event), "!");
+        }
+      } else if (event.type === "teleport" || event.type === "transition") {
+        if (mapEventHasMessage(event)) {
+          await showDialogAsync(mapEventMessages(event), event.type === "transition" ? "◇" : "…");
+        }
+        inputLocked = true;
+        completed = await executeMapTransfer(event, { persist: !preview });
+        if (completed && previewPosition) {
+          await wait(420);
+          await applyWorldTransitionEffect(event.effect || (event.type === "transition" ? "fade" : "none"), () => {
+            state.dimension = previewPosition.dimension;
+            state.interior = previewPosition.interior;
+            state.interiorData = previewPosition.interiorData;
+            state.worldX = previewPosition.worldX;
+            state.worldY = previewPosition.worldY;
+            state.direction = previewPosition.direction;
+            camera.x = previewPosition.cameraX;
+            camera.y = previewPosition.cameraY;
+            lastArea = previewPosition.lastArea;
+            lastStepEventTile = previewPosition.lastStepEventTile;
+          });
+          updateAreaLabel();
+          updateInteractPrompt();
+        }
+      }
+      if (completed && !preview && event.once && !state.triggeredEvents.includes(event.id)) {
+        state.triggeredEvents.push(event.id);
+        saveGame();
+      }
+      return completed;
+    } finally {
+      mapEventRunning = false;
+      inputLocked = previousInputLock;
+      updateInteractPrompt();
+    }
+  }
+
+  function triggerStepMapEvent() {
+    if (state.dimension !== "san_pablo" || state.interior || mapEventRunning) return false;
+    const tile = worldToTile(state.worldX, state.worldY);
+    const key = tileKey(tile.col, tile.row);
+    if (key === lastStepEventTile) return false;
+    lastStepEventTile = key;
+    const event = mapEventsAt(tile.col, tile.row, "step")
+      .find((candidate) => !candidate.once || !state.triggeredEvents.includes(candidate.id));
+    if (!event) return false;
+    void runMapEvent(event);
+    return true;
   }
 
   function showOpeningTutorial() {
@@ -2928,8 +4096,9 @@
       showDialog([
         "¿QUÉ MIERDAS HACES AQUÍ, NIÑATO?!! ¡DAME UN POCO DE PELLOTE Y VETE!",
       ], "D", beginDoctorPotatoExit, {
-        characterAlias: "doctor-potato",
-        speaker: "Doctor Potato",
+        speaker: "Manolín · Doctor Potato",
+        portrait: DOCTOR_POTATO_PORTRAIT_URL,
+        portraitAlt: "Retrato del Doctor Potato",
         cinematic: true,
         music: DOCTOR_POTATO_THEME_URL,
       });
@@ -3007,7 +4176,7 @@
       if (x < 24 || y < 30 || x > PRISM_WIDTH - 24 || y > PRISM_HEIGHT - 22) return false;
       return prismWalkableAreas.some((area) => x >= area.x + 18 && x <= area.x + area.w - 18 && y >= area.y + 18 && y <= area.y + area.h - 18);
     }
-    return cityMapCanOccupy(x, y) && !worldNpcBlocksPosition(x, y);
+    return cityMapCanOccupy(x, y) && !worldNpcBlocksPosition(x, y) && !voiceNpcBlocksPosition(x, y);
   }
 
   function encounterAreaContains(area, x, y) {
@@ -3051,19 +4220,8 @@
     }
     if (state.interior === "building") {
       const player = { x: state.worldX, y: state.worldY };
-      if (state.interiorData?.type === "bedroom") {
-        const groundFloor = state.interiorData.floor === "ground";
-        const fixtures = groundFloor ? BEDROOM_GROUND_FIXTURES : BEDROOM_UPSTAIRS_FIXTURES;
-        const stairs = fixtures.find((fixture) => fixture.id === (groundFloor ? "bedroom_stairs_up" : "bedroom_stairs_down"));
-        if (!groundFloor) {
-          const computer = fixtures.find((fixture) => fixture.id === "bedroom_computer");
-          if (computer && distance(player, computer) <= computer.radius) return { id: "bedroom_computer" };
-        }
-        if (stairs && distance(player, stairs) <= stairs.radius) return { id: stairs.id };
-        if (groundFloor && distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
-      }
-      if (state.interiorData?.type !== "bedroom" && distance(player, INDOOR_NPC) <= INDOOR_NPC.radius) return { id: "interior_npc" };
-      if (state.interiorData?.type !== "bedroom" && distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
+      if (distance(player, INDOOR_NPC) <= INDOOR_NPC.radius) return { id: "interior_npc" };
+      if (distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
       return null;
     }
     if (state.interior === "route") {
@@ -3082,6 +4240,8 @@
         ? { id: "dimension_exit" }
         : null;
     }
+    const voiceManolin = nearbyVoiceNpc();
+    if (voiceManolin) return { id: "voice_npc" };
     const worldNpc = nearbyWorldNpc();
     if (worldNpc) return { id: "world_npc", npc: worldNpc.npc };
     const worldBlocker = nearbyWorldBlocker();
@@ -3108,18 +4268,23 @@
     if (!poi) return;
     const labels = {
       map_tile: "Interactuar",
+      map_entrance: "Entrar",
+      map_event: "Interactuar",
       building_door: "Entrar al edificio", maintenance_exit: "Volver al exterior",
       maintenance_terminal: "Usar terminal", dimension_portal: "Examinar portal",
       dimension_exit: "Regresar a San Pablo", black_market: "Entrar al mercado negro", health: "Hablar", cafe: "Hablar",
       uned: "Consultar", school: "Leer", field: "Examinar",
-      interior_npc: "Hablar", world_npc: "Hablar", interior_exit: "Salir", bedroom_computer: "Guardar partida",
-      bedroom_stairs_down: "Bajar", bedroom_stairs_up: "Subir",
+      interior_npc: "Hablar", world_npc: "Hablar", voice_npc: "Hablar con Manolín", interior_exit: "Salir",
       world_blocker: "Examinar obstáculo",
     };
-    const label = poi.id === "map_tile" && poi.event?.action === "prism"
-      ? "Examinar portal"
-      : labels[poi.id] || "Interactuar";
-    elements.interactPrompt.innerHTML = `<kbd>E</kbd> ${label}`;
+    const entranceAction = poi.entrance?.action;
+    const label = poi.entrance?.prompt
+      || (entranceAction === "prism" ? "Examinar portal" : null)
+      || (entranceAction === "closed" ? "Examinar entrada" : null)
+      || labels[poi.id]
+      || "Interactuar";
+    elements.interactPrompt.innerHTML = "<kbd>E</kbd> ";
+    elements.interactPrompt.append(document.createTextNode(String(label)));
   }
 
   function areaForPosition(x, y) {
@@ -3187,8 +4352,13 @@
     const poi = nearestPointOfInterest();
     if (!poi) return;
 
-    if (poi.id === "map_tile") {
-      const door = poi.event;
+    if (poi.id === "map_event") {
+      void runMapEvent(poi.event);
+      return;
+    }
+
+    if (poi.id === "map_tile" || poi.id === "map_entrance") {
+      const door = poi.entrance || poi.event;
       if (!door) { showDialog([`Evento en C${poi.col}, F${poi.row}.`], "!"); return; }
       if (door.action === "closed") {
         showDialog([`${door.label}: La puerta está cerrada por ahora.`], "!");
@@ -3198,8 +4368,23 @@
         } else {
           showDialog(["Los tres fragmentos encajan en el umbral. El aire empieza a doblarse…", "La dimensión reacciona al ruido y puede pedir acceso al micrófono."], "◇", enterPrismDimension);
         }
+      } else if (door.action === "transition" || door.action === "teleport") {
+        void runMapEvent({
+          id: `entrance-${door.id}`,
+          col: door.col,
+          row: door.row,
+          label: door.label,
+          type: door.action,
+          trigger: "interact",
+          message: door.message || "",
+          targetMap: door.targetMap,
+          targetX: door.targetX,
+          targetY: door.targetY,
+          targetDirection: door.targetDirection,
+          effect: door.effect,
+        });
       } else {
-        const typeMap = { heal: "center", shop: "mart", lab: "lab", house: "house", bedroom: "bedroom", route: "route" };
+        const typeMap = { heal: "center", shop: "mart", lab: "lab", house: "house", route: "route" };
         const type = typeMap[door.action];
         if (type) enterInterior(type, door);
         else showDialog([`${door.label}: aún no hay nada que hacer aquí.`], "!");
@@ -3210,14 +4395,15 @@
     if (poi.id === "world_npc") {
       const npc = poi.npc || {};
       const lines = Array.isArray(npc.lines) && npc.lines.length ? npc.lines : ["Hola, entrenador."];
-      const speaker = npc.name || CHARACTER_DIALOG_PRESENTATIONS[npc.sprite]?.speaker || "NPC";
-      const hasPresentation = Boolean(CHARACTER_DIALOG_PRESENTATIONS[npc.sprite]);
-      showDialog(
-        hasPresentation ? lines : lines.map((line) => `${speaker}: ${line}`),
-        speaker.charAt(0),
-        null,
-        hasPresentation ? { characterAlias: npc.sprite, speaker } : {},
-      );
+      showDialog(lines.map((line) => `${npc.name || "NPC"}: ${line}`), (npc.name || "N").charAt(0));
+      return;
+    }
+
+    if (poi.id === "voice_npc") {
+      showDialog([
+        "Manolín: ¿Qué miras, figura? Si quieres discutir, di mi nombre en voz alta.",
+        "Cuando te oiga decir «Manolín», te seguirá mientras hables. Si callas tres segundos, perderá el interés.",
+      ], "M", null, { speaker: "Manolín · Doctor Potato", portrait: DOCTOR_POTATO_PORTRAIT_URL, portraitAlt: "Retrato de Manolín" });
       return;
     }
 
@@ -3231,9 +4417,6 @@
     }
     if (poi.id === "interior_npc") { useInteriorNpc(); return; }
     if (poi.id === "interior_exit") { leaveInterior(); return; }
-    if (poi.id === "bedroom_computer") { saveAtBedroomComputer(); return; }
-    if (poi.id === "bedroom_stairs_down") { changeBedroomFloor("ground"); return; }
-    if (poi.id === "bedroom_stairs_up") { changeBedroomFloor("upstairs"); return; }
 
     if (poi.id === "building_door") {
       const building = buildings.find((item) => item.id === poi.buildingId);
@@ -3363,11 +4546,7 @@
       return !ROUTE_BLOCKED.some((b) => x >= b.x - 14 && x <= b.x + b.w + 14 && y >= b.y - 14 && y <= b.y + b.h + 14);
     }
     const r = INDOOR_ROOM;
-    if (!(x > r.x + r.wall && x < r.x + r.w - r.wall && y > r.y + r.wall && y < r.y + r.h - r.wall)) return false;
-    if (state.interiorData?.type !== "bedroom") return true;
-    const fixtures = state.interiorData.floor === "ground" ? BEDROOM_GROUND_FIXTURES : BEDROOM_UPSTAIRS_FIXTURES;
-    return !fixtures.some(({ hitbox }) => x >= hitbox.x - 12 && x <= hitbox.x + hitbox.w + 12
-      && y >= hitbox.y - 12 && y <= hitbox.y + hitbox.h + 12);
+    return x > r.x + r.wall && x < r.x + r.w - r.wall && y > r.y + r.wall && y < r.y + r.h - r.wall;
   }
 
   async function enterInterior(type, door) {
@@ -3377,7 +4556,6 @@
       state.interior = type === "route" ? "route" : "building";
       state.interiorData = {
         type, label: door?.label || INTERIOR_PALETTES[type]?.label || "Interior",
-        floor: type === "bedroom" ? "upstairs" : null,
         npc: door?.npc || null, returnX: state.worldX, returnY: state.worldY, returnDir: state.direction,
       };
       if (type === "route") { state.worldX = ROUTE_SPAWN.x; state.worldY = ROUTE_SPAWN.y; }
@@ -3427,29 +4605,6 @@
     else if (type === "lab") labDialog();
     else if (type === "house") houseDialog(state.interiorData?.npc);
     else showDialog(["Alguien está aquí…"], "?");
-  }
-
-  function saveAtBedroomComputer() {
-    saveGame();
-    playTone(660, .06, "square", .02);
-    showDialog(["El ordenador se conecta al sistema de San Pablo.", "Partida guardada en este navegador."], "PC");
-  }
-
-  async function changeBedroomFloor(floor) {
-    if (inputLocked || state.interiorData?.type !== "bedroom") return;
-    inputLocked = true; clearDirectionalInput();
-    await fadeTransition(() => {
-      state.interiorData.floor = floor;
-      state.interiorData.label = floor === "ground" ? "Casa del Entrenador · Planta baja" : "Habitación del Entrenador";
-      state.worldX = floor === "ground" ? 720 : 720;
-      state.worldY = floor === "ground" ? 208 : 470;
-      state.direction = floor === "ground" ? "right" : "left";
-      lastArea = "";
-    });
-    inputLocked = false;
-    playTone(floor === "ground" ? 370 : 470, .08, "square", .025);
-    updateAreaLabel(); updateInteractPrompt(); saveGame();
-    showAreaToast((state.interiorData?.label || "Interior").toUpperCase());
   }
 
   function clinicHeal() {
@@ -3643,7 +4798,7 @@
   function leavePrismDimension() {
     closeShop();
     stopMicrophone();
-    const destination = state.returnPosition || { x: PORTAL_POSITION.x, y: PORTAL_POSITION.y + field.h / 2 + 70 };
+    const destination = state.returnPosition || currentPortalReturn();
     state.dimension = "san_pablo";
     state.worldX = destination.x;
     state.worldY = destination.y;
@@ -4039,7 +5194,6 @@
 
   function updateMovement(deltaSeconds) {
     const drawerOpen = elements.teamDrawer.classList.contains("open")
-      || elements.buildingEditor.classList.contains("open")
       || elements.inventoryDrawer.classList.contains("open")
       || (elements.shopModal && !elements.shopModal.classList.contains("hidden"));
     if (state.dimension === "prism") {
@@ -4079,6 +5233,10 @@
       animationTime += deltaSeconds * 1000;
       animationFrame = Math.floor(animationTime / (running ? 82 : 145)) % 4;
       elements.runBadge.classList.toggle("hidden", !running);
+      if (triggerStepMapEvent()) {
+        updateAreaLabel(); updateInteractPrompt();
+        return;
+      }
       if (checkObjectPickup()) {
         updateAreaLabel(); updateInteractPrompt(); renderHud(); saveGame();
         return;
@@ -4455,14 +5613,14 @@
     const palette = INTERIOR_PALETTES[state.interiorData?.type] || INTERIOR_PALETTES.house;
     const r = INDOOR_ROOM;
     const type = state.interiorData?.type;
-    const tile = (type === "house" || type === "bedroom") ? 24 : 32;
+    const tile = type === "house" ? 24 : 32;
     for (let y = r.y; y < r.y + r.h; y += tile) {
       for (let x = r.x; x < r.x + r.w; x += tile) {
         const checker = (Math.floor((x - r.x) / tile) + Math.floor((y - r.y) / tile)) % 2;
         context.fillStyle = checker ? palette.floorAlt : palette.floor;
         context.fillRect(x, y, tile, tile);
         context.fillStyle = "rgba(255,255,255,.08)";
-        if (type === "house" || type === "bedroom") context.fillRect(x, y, tile - 1, 2);
+        if (type === "house") context.fillRect(x, y, tile - 1, 2);
         else context.fillRect(x + 2, y + 2, tile - 4, 2);
       }
     }
@@ -4476,15 +5634,12 @@
     context.strokeStyle = palette.accent; context.lineWidth = 3;
     context.strokeRect(r.x + 9.5, r.y + 9.5, r.w - 19, r.h - 19);
     drawInteriorFurniture(context, palette);
-    if (type !== "bedroom") drawInteriorNpc(context, palette);
-    const groundFloor = type === "bedroom" && state.interiorData?.floor === "ground";
-    if (type !== "bedroom" || groundFloor) {
-      const ex = INDOOR_EXIT;
-      context.fillStyle = "rgba(244,220,119,.32)"; context.beginPath(); context.ellipse(ex.x, ex.y, 44, 16, 0, 0, Math.PI * 2); context.fill();
-      context.fillStyle = "rgba(244,220,119,.5)"; context.beginPath(); context.ellipse(ex.x, ex.y, 22, 8, 0, 0, Math.PI * 2); context.fill();
-      drawMapLabel(context, ex.x, ex.y + 30, "SALIDA");
-    }
-    drawMapLabel(context, r.x + r.w / 2, r.y + 48, groundFloor ? "CASA DEL ENTRENADOR · PLANTA BAJA" : palette.label);
+    drawInteriorNpc(context, palette);
+    const ex = INDOOR_EXIT;
+    context.fillStyle = "rgba(244,220,119,.32)"; context.beginPath(); context.ellipse(ex.x, ex.y, 44, 16, 0, 0, Math.PI * 2); context.fill();
+    context.fillStyle = "rgba(244,220,119,.5)"; context.beginPath(); context.ellipse(ex.x, ex.y, 22, 8, 0, 0, Math.PI * 2); context.fill();
+    drawMapLabel(context, ex.x, ex.y + 30, "SALIDA");
+    drawMapLabel(context, r.x + r.w / 2, r.y + 48, palette.label);
   }
 
   function drawPixelFurniture(context, kind, x, y, color = "#8a6440") {
@@ -4551,9 +5706,6 @@
       drawPixelFurniture(context, "screen", r.x + r.w - 115, r.y + 115, "#75e2e8");
       drawPixelFurniture(context, "table", r.x + 200, r.y + 375, "#7c9d6e");
       drawPixelFurniture(context, "table", r.x + r.w - 200, r.y + 375, "#7c9d6e");
-    } else if (type === "bedroom") {
-      if (state.interiorData?.floor === "ground") drawBedroomGroundFloor(context, palette);
-      else drawBedroomFurniture(context, palette);
     } else {
       const npc = NPC_DEFS[state.interiorData?.npc] || {};
       const layout = npc.layout || "cozy";
@@ -4582,75 +5734,6 @@
         drawPixelFurniture(context, "plant", r.x + r.w - 95, r.y + 390, "#4e9a55");
       }
     }
-  }
-
-  function drawBedroomFurniture(context, palette) {
-    const r = INDOOR_ROOM;
-    /* Cama, escritorio y estantería: guiño a un dormitorio inicial clásico
-       sin abandonar la escala, paleta y trazos propios de San Pablo. */
-    drawPixelFurniture(context, "bed", r.x + 118, r.y + 162, "#5d93bc");
-    drawPixelFurniture(context, "shelf", r.x + r.w - 110, r.y + 136, "#856145");
-    drawPixelFurniture(context, "table", r.x + r.w - 202, r.y + 370, "#9d7048");
-    drawPixelFurniture(context, "screen", r.x + r.w - 202, r.y + 323, "#82d9dc");
-    drawPixelFurniture(context, "rug", r.x + 340, r.y + 382, "#b85e5b");
-    drawPixelFurniture(context, "plant", r.x + 118, r.y + 405, "#4e9a55");
-
-    context.save();
-    context.translate(r.x + 336, r.y + 120);
-    context.fillStyle = "#604331"; context.fillRect(-48, -28, 96, 56);
-    context.fillStyle = "#a97c50"; context.fillRect(-43, -23, 86, 46);
-    context.fillStyle = "#b9e0e3"; context.fillRect(-34, -15, 68, 30);
-    context.fillStyle = "rgba(255,255,255,.55)"; context.fillRect(-28, -11, 26, 5);
-    context.fillStyle = "#5b4533"; context.fillRect(-6, -23, 5, 46); context.fillRect(-43, -3, 86, 5);
-    context.restore();
-
-    context.save();
-    context.translate(r.x + 552, r.y + 126);
-    context.fillStyle = "rgba(29,45,51,.2)"; context.fillRect(-50, 25, 100, 10);
-    context.fillStyle = "#6a4935"; context.fillRect(-46, -28, 92, 58);
-    context.fillStyle = "#d9b56e"; context.fillRect(-40, -23, 80, 48);
-    context.fillStyle = "#f1e5bf"; context.fillRect(-32, -15, 64, 18);
-    context.fillStyle = "#c75d55"; context.fillRect(-26, 8, 52, 12);
-    context.restore();
-
-    drawBedroomStairs(context, 814, 468, "BAJAR");
-  }
-
-  function drawBedroomGroundFloor(context, palette) {
-    const r = INDOOR_ROOM;
-    /* Salón-cocina compacto: encimera arriba, mesa central, TV y sofá,
-       inspirado en la distribución clásica pero con los materiales de San Pablo. */
-    drawPixelFurniture(context, "counter", r.x + 218, r.y + 120, "#ae7a53");
-    drawPixelFurniture(context, "table", r.x + 390, r.y + 356, "#9d7048");
-    drawPixelFurniture(context, "screen", r.x + 150, r.y + 404, "#75d3d7");
-    drawPixelFurniture(context, "sofa", r.x + r.w - 190, r.y + 408, "#b56b72");
-    drawPixelFurniture(context, "plant", r.x + 104, r.y + 240, "#4e9a55");
-    drawPixelFurniture(context, "rug", r.x + 430, r.y + 490, "#b85e5b");
-
-    context.save();
-    context.translate(r.x + 218, r.y + 106);
-    context.fillStyle = "#6a4935"; context.fillRect(-116, -30, 232, 18);
-    context.fillStyle = "#d7e5df"; context.fillRect(-48, -24, 52, 11);
-    context.fillStyle = "#83a8a4"; context.fillRect(40, -25, 28, 12);
-    context.fillStyle = "#f0c55e"; context.fillRect(80, -24, 20, 12);
-    context.restore();
-    drawBedroomStairs(context, 814, 146, "SUBIR");
-  }
-
-  function drawBedroomStairs(context, x, y, label) {
-    context.save(); context.translate(x, y);
-    context.fillStyle = "rgba(28,40,35,.2)"; context.fillRect(-58, 34, 116, 15);
-    for (let step = 0; step < 5; step += 1) {
-      const inset = step * 8;
-      context.fillStyle = step % 2 ? "#b2815a" : "#d2a36d";
-      context.fillRect(-54 + inset, -44 + step * 18, 108 - inset * 2, 20);
-      context.fillStyle = "rgba(255,255,255,.18)";
-      context.fillRect(-50 + inset, -40 + step * 18, 100 - inset * 2, 3);
-    }
-    context.strokeStyle = "#5a3d2d"; context.lineWidth = 5;
-    context.beginPath(); context.moveTo(-56, -48); context.lineTo(-56, 40); context.lineTo(-42, 48); context.stroke();
-    context.restore();
-    drawMapLabel(context, x, y + 64, label);
   }
 
   function drawInteriorNpc(context, palette) {
@@ -4944,6 +6027,69 @@
     context.restore();
   }
 
+  function drawVoiceNpc(context) {
+    if (!VOICE_NPC_ENABLED) return;
+    if (!state.started || state.dimension !== "san_pablo" || state.interior || doctorPotatoScene || !voiceNpc.positionReady) return;
+    const record = npcRosterSheets.get("doctor-potato");
+    const sheet = record?.ready ? record.image : null;
+    const rows = { down: 0, left: 1, right: 2, up: 3 };
+    const frame = voiceNpc.moving ? Math.floor(voiceNpc.animationElapsed / 150) % 4 : 0;
+    context.save();
+    context.fillStyle = voiceNpc.active ? "rgba(142,31,45,.34)" : "rgba(22,43,34,.25)";
+    context.beginPath(); context.ellipse(Math.round(voiceNpc.x), Math.round(voiceNpc.y + 1), 19, 6, 0, 0, Math.PI * 2); context.fill();
+    if (voiceNpc.active) {
+      context.strokeStyle = "rgba(255,88,74,.8)";
+      context.lineWidth = 2;
+      context.beginPath(); context.arc(voiceNpc.x, voiceNpc.y - 28, 29 + Math.sin(performance.now() / 110) * 2, 0, Math.PI * 2); context.stroke();
+    }
+    if (sheet) {
+      context.drawImage(sheet, frame * SPRITE_CELL_SIZE, (rows[voiceNpc.direction] || 0) * SPRITE_CELL_SIZE,
+        SPRITE_CELL_SIZE, SPRITE_CELL_SIZE, Math.round(voiceNpc.x) - 34, Math.round(voiceNpc.y) - 64, 68, 68);
+    } else {
+      context.fillStyle = "#f1f4ed"; context.fillRect(voiceNpc.x - 18, voiceNpc.y - 36, 36, 34);
+      context.fillStyle = "#9b633c"; context.beginPath(); context.arc(voiceNpc.x, voiceNpc.y - 44, 21, 0, Math.PI * 2); context.fill();
+    }
+    context.font = "900 10px Trebuchet MS";
+    context.textAlign = "center";
+    const nameWidth = 72;
+    context.fillStyle = voiceNpc.active ? "#7c1725" : "#173c2f";
+    context.fillRect(voiceNpc.x - nameWidth / 2, voiceNpc.y + 7, nameWidth, 16);
+    context.fillStyle = "white";
+    context.fillText("MANOLÍN", voiceNpc.x, voiceNpc.y + 19);
+
+    if (voiceNpc.reply && performance.now() - voiceNpc.replyAt < 9000) {
+      const words = voiceNpc.reply.split(/\s+/);
+      const lines = [];
+      let line = "";
+      words.forEach((word) => {
+        const candidate = line ? `${line} ${word}` : word;
+        if (candidate.length > 35 && line) { lines.push(line); line = word; }
+        else line = candidate;
+      });
+      if (line) lines.push(line);
+      const visibleLines = lines.slice(0, 3);
+      const bubbleWidth = 252;
+      const bubbleHeight = 22 + visibleLines.length * 15;
+      const bubbleX = voiceNpc.x - bubbleWidth / 2;
+      const bubbleY = voiceNpc.y - 76 - bubbleHeight;
+      context.fillStyle = "rgba(255,252,235,.97)";
+      context.strokeStyle = "#481d21";
+      context.lineWidth = 3;
+      context.beginPath();
+      context.roundRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 10);
+      context.fill(); context.stroke();
+      context.beginPath();
+      context.moveTo(voiceNpc.x - 9, bubbleY + bubbleHeight);
+      context.lineTo(voiceNpc.x + 7, bubbleY + bubbleHeight);
+      context.lineTo(voiceNpc.x, bubbleY + bubbleHeight + 10);
+      context.closePath(); context.fill(); context.stroke();
+      context.fillStyle = "#31191b";
+      context.font = "800 11px Trebuchet MS";
+      visibleLines.forEach((text, index) => context.fillText(text, voiceNpc.x, bubbleY + 19 + index * 15));
+    }
+    context.restore();
+  }
+
   function worldAssetInView(asset, bounds, margin = 48) {
     if (Number(asset.rotation)) {
       const radius = Math.max(Number(asset.w), Number(asset.h)) / 2;
@@ -5001,6 +6147,19 @@
       context.fillText(`${asset.id} · depth ${asset.depthY ?? asset.y}`, asset.x - asset.w / 2, asset.y - asset.h - 4);
       context.fillStyle = "rgba(234, 42, 127, .28)";
     });
+    const selectedAsset = assets.find((asset) => asset.id === selectedEditorAssetId);
+    if (selectedAsset) {
+      context.strokeStyle = "#ffe56a";
+      context.lineWidth = 4;
+      context.setLineDash([10, 6]);
+      context.strokeRect(
+        selectedAsset.x - selectedAsset.w / 2 - 5,
+        selectedAsset.y - selectedAsset.h - 5,
+        selectedAsset.w + 10,
+        selectedAsset.h + 10,
+      );
+      context.setLineDash([]);
+    }
     context.restore();
   }
 
@@ -5095,14 +6254,15 @@
       priority: 0,
       draw: () => drawWorldAsset(context, asset),
     }));
-    if (entityInView(PORTAL_POSITION, bounds, 110)) {
+    const portalPosition = currentPortalPosition();
+    if (entityInView(portalPosition, bounds, 110)) {
       entities.push({
-        y: PORTAL_POSITION.y,
+        y: portalPosition.y,
         priority: 1,
-        draw: () => drawPortal(context, PORTAL_POSITION.x, PORTAL_POSITION.y, state.inventory.prismShards >= 3),
+        draw: () => drawPortal(context, portalPosition.x, portalPosition.y, state.inventory.prismShards >= 3),
       });
     }
-    (CITY_MAP.npcs || []).forEach((npc) => entities.push({
+    cityNpcs.forEach((npc) => entities.push({
       y: mapNpcPosition(npc).y,
       priority: 1,
       draw: () => drawWorldNpc(context, npc),
@@ -5112,6 +6272,13 @@
         y: doctorPotatoScene.y,
         priority: 1,
         draw: () => drawDoctorPotato(context),
+      });
+    }
+    if (VOICE_NPC_ENABLED && !doctorPotatoScene && voiceNpc.positionReady) {
+      entities.push({
+        y: voiceNpc.y,
+        priority: 1,
+        draw: () => drawVoiceNpc(context),
       });
     }
     worldObjects
@@ -5127,6 +6294,17 @@
       y: tile.y,
       priority: 3,
       draw: () => drawEncounterGrassTile(context, tile, encounterGrass.now, true),
+    }));
+    const visibleCollaboratorPlayers = collaboratorCursors
+      .filter((collaborator) => collaborator.player
+        && collaborator.player.dimension === state.dimension
+        && (collaborator.player.interior || null) === (state.interior || null)
+        && entityInView(collaborator.player, bounds, 70));
+    document.documentElement.dataset.collaboratorPlayerVisibleCount = String(visibleCollaboratorPlayers.length);
+    visibleCollaboratorPlayers.forEach((collaborator) => entities.push({
+      y: collaborator.player.y,
+      priority: 2,
+      draw: () => drawRemotePlayer(context, collaborator),
     }));
     entities.push({ y: state.worldY, priority: 2, draw: () => drawPlayer(context) });
     entities.sort((a, b) => (a.y - b.y) || (a.priority - b.priority)).forEach((entity) => entity.draw());
@@ -5168,6 +6346,44 @@
       context.fillStyle = "#f0c099"; context.fillRect(Math.round(x) - 9, Math.round(y) - 42, 18, 14);
       context.fillStyle = "#3f6f9c"; context.fillRect(Math.round(x) - 12, Math.round(y) - 28, 24, 28);
     }
+    context.restore();
+  }
+
+  function drawRemotePlayer(context, collaborator) {
+    const player = collaborator.player;
+    if (!player) return;
+    const targetX = Number(player.x); const targetY = Number(player.y);
+    const distance = Math.hypot(targetX - player.displayX, targetY - player.displayY);
+    const smoothing = distance > 220 ? 1 : .32;
+    player.displayX += (targetX - player.displayX) * smoothing;
+    player.displayY += (targetY - player.displayY) * smoothing;
+    const x = player.displayX; const y = player.displayY;
+
+    context.save();
+    context.fillStyle = "rgba(28,52,42,.24)";
+    context.beginPath(); context.ellipse(Math.round(x), Math.round(y + 1), 15, 5, 0, 0, Math.PI * 2); context.fill();
+    context.strokeStyle = collaborator.color;
+    context.lineWidth = 2;
+    context.beginPath(); context.ellipse(Math.round(x), Math.round(y + 1), 18, 8, 0, 0, Math.PI * 2); context.stroke();
+    if (playerSheetReady) {
+      const gait = player.running ? "run" : "walk";
+      const direction = ["up", "down", "left", "right"].includes(player.direction) ? player.direction : "down";
+      const frames = playerFrames.get(`${gait}-${direction}`) || [];
+      const frame = frames[player.moving ? Number(player.frame) % Math.max(1, frames.length) : 0];
+      if (frame) context.drawImage(frame, Math.round(x) - 32, Math.round(y) - 60, 64, 64);
+    } else {
+      context.fillStyle = collaborator.color; context.fillRect(Math.round(x) - 12, Math.round(y) - 54, 24, 12);
+      context.fillStyle = "#f0c099"; context.fillRect(Math.round(x) - 9, Math.round(y) - 42, 18, 14);
+      context.fillStyle = "#3f6f9c"; context.fillRect(Math.round(x) - 12, Math.round(y) - 28, 24, 28);
+    }
+    context.font = "700 11px monospace";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    const labelWidth = context.measureText(collaborator.name).width + 12;
+    context.fillStyle = "rgba(10,28,22,.88)";
+    context.fillRect(Math.round(x - labelWidth / 2), Math.round(y - 76), labelWidth, 18);
+    context.fillStyle = "#fff";
+    context.fillText(collaborator.name, Math.round(x), Math.round(y - 67));
     context.restore();
   }
 
@@ -5591,6 +6807,55 @@
     context.restore();
   }
 
+  function editorEntityWorldPosition(selection) {
+    if (!selection) return null;
+    if (selection.kind === "npc") {
+      const npc = cityNpcs.find((entry) => entry.id === selection.id);
+      return npc ? mapNpcPosition(npc) : null;
+    }
+    if (selection.kind === "entrance") {
+      const entrance = cityEntrances.find((entry) => entry.id === selection.id);
+      return entrance ? { x: (entrance.col + .5) * CITY_MAP.tileSize, y: (entrance.row + .5) * CITY_MAP.tileSize } : null;
+    }
+    if (selection.kind === "event") {
+      const event = cityEvents.find((entry) => entry.id === selection.id);
+      return event ? { x: (event.col + .5) * CITY_MAP.tileSize, y: (event.row + .5) * CITY_MAP.tileSize } : null;
+    }
+    if (selection.kind === "asset") {
+      const asset = cityWorldAssets.find((entry) => entry.id === selection.id);
+      return asset ? { x: Number(asset.x), y: Number(asset.y) } : null;
+    }
+    return null;
+  }
+
+  function drawEditorPresence(context) {
+    const selection = editorEntityWorldPosition(selectedEditorEntity);
+    if (selection) {
+      context.save();
+      context.strokeStyle = "#ffe56a";
+      context.fillStyle = "rgba(255,229,106,.2)";
+      context.lineWidth = 3;
+      context.beginPath(); context.arc(selection.x, selection.y, 23, 0, Math.PI * 2); context.fill(); context.stroke();
+      context.restore();
+    }
+    collaboratorCursors.forEach((collaborator) => {
+      if (!Number.isFinite(collaborator.x) || !Number.isFinite(collaborator.y)) return;
+      context.save();
+      context.translate(collaborator.x, collaborator.y);
+      context.fillStyle = collaborator.color;
+      context.strokeStyle = "rgba(10,28,22,.85)";
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(0, 0); context.lineTo(5, 18); context.lineTo(10, 11); context.lineTo(19, 9); context.closePath();
+      context.fill(); context.stroke();
+      context.font = "700 11px monospace";
+      const width = context.measureText(collaborator.name).width + 10;
+      context.fillStyle = "rgba(10,28,22,.88)"; context.fillRect(12, 13, width, 18);
+      context.fillStyle = "#fff"; context.textBaseline = "top"; context.fillText(collaborator.name, 17, 16);
+      context.restore();
+    });
+  }
+
   function drawTileGrid(context) {
     if (!elements.buildingEditor.classList.contains("open")) return;
     const size = CITY_MAP.tileSize;
@@ -5599,7 +6864,7 @@
     const startRow = Math.max(0, Math.floor(camera.y / size));
     const endRow = Math.min(Math.ceil(WORLD_HEIGHT / size) - 1, Math.ceil((camera.y + VIEW_HEIGHT) / size));
     const colors = { blocked: "rgba(214,59,52,.34)", door: "rgba(255,191,46,.48)", encounter: "rgba(52,183,91,.34)", event: "rgba(126,81,201,.42)" };
-    const npcTiles = new Set((CITY_MAP.npcs || []).map((npc) => tileKey(npc.col, npc.row)));
+    const npcTiles = new Set(cityNpcs.map((npc) => tileKey(npc.col, npc.row)));
     context.save();
     context.lineWidth = 1;
     context.font = "8px monospace";
@@ -5619,6 +6884,7 @@
       context.strokeStyle = "#fff"; context.lineWidth = 3;
       context.strokeRect(selectedMapTile.col * size + 1.5, selectedMapTile.row * size + 1.5, size - 3, size - 3);
     }
+    drawEditorPresence(context);
     context.restore();
   }
 
@@ -5697,21 +6963,8 @@
     context.clearRect(0, 0, width, height);
     if (cityMapPreviewReady) context.drawImage(cityMapPreview, 0, 0, width, height);
     else { context.fillStyle = "#79a85d"; context.fillRect(0, 0, width, height); }
-    context.save();
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
-    cityWorldAssets.forEach((asset) => {
-      const record = cityWorldAssetImages.get(worldAssetSource(asset));
-      if (!record?.ready) return;
-      context.drawImage(
-        record.drawable || record.image,
-        (asset.x - asset.w / 2) * scaleX,
-        (asset.y - asset.h) * scaleY,
-        asset.w * scaleX,
-        asset.h * scaleY,
-      );
-    });
-    context.restore();
+    /* La miniatura compilada ya contiene edificios y arbolado. Dibujar de
+       nuevo los assets aquí oscurecía y duplicaba la cartografía. */
     context.fillStyle = "rgba(13,35,27,.12)"; context.fillRect(0, 0, width, height);
     const size = CITY_MAP.tileSize;
     context.fillStyle = "rgba(52,183,91,.5)";
@@ -5732,17 +6985,21 @@
       context.fillRect(rect[0] * size * scaleX, rect[1] * size * scaleY,
         (rect[2] - rect[0] + 1) * size * scaleX, (rect[3] - rect[1] + 1) * size * scaleY);
     });
-    CITY_MAP.doors.forEach((door) => {
+    cityEntrances.forEach((door) => {
       context.fillStyle = door.action === "closed" ? "rgba(150,150,150,.8)" : "rgba(255,191,46,.95)";
       context.beginPath();
       context.arc(door.col * size * scaleX + size * scaleX / 2, door.row * size * scaleY + size * scaleY / 2, 2.4, 0, Math.PI * 2);
       context.fill();
     });
     context.fillStyle = "rgba(48,174,214,.98)";
-    (CITY_MAP.npcs || []).forEach((npc) => {
+    cityNpcs.forEach((npc) => {
       const position = mapNpcPosition(npc);
       context.beginPath(); context.arc(position.x * scaleX, position.y * scaleY, 2.7, 0, Math.PI * 2); context.fill();
     });
+    if (VOICE_NPC_ENABLED && voiceNpc.positionReady && !doctorPotatoScene) {
+      context.fillStyle = voiceNpc.active ? "#ff554e" : "#b74eb2";
+      context.beginPath(); context.arc(voiceNpc.x * scaleX, voiceNpc.y * scaleY, voiceNpc.active ? 4 : 3, 0, Math.PI * 2); context.fill();
+    }
     context.strokeStyle = "rgba(255,255,255,.58)";
     context.lineWidth = 1;
     context.strokeRect(camera.x * scaleX, camera.y * scaleY, VIEW_WIDTH * scaleX, VIEW_HEIGHT * scaleY);
@@ -5781,6 +7038,7 @@
     lastFrameTime = timestamp;
     if (!elements.worldScreen.classList.contains("hidden")) {
       updateDoctorPotatoCutscene(deltaSeconds);
+      updateVoiceNpc(deltaSeconds);
       updateMovement(deltaSeconds);
       updateNpcPatrols(deltaSeconds);
       updateCamera(deltaSeconds);
@@ -5862,14 +7120,14 @@
     elements.enemyLevel.textContent = `Nv. ${enemy.level}`;
     elements.enemySprite.src = frontSpriteUrl(enemy.id); attachSpriteFallback(elements.enemySprite, enemy.id);
     elements.enemySprite.classList.toggle("custom-pokemon-sprite", isCustomPokemon(enemy.id));
-    setBattlePokemonMotion(elements.enemySprite, enemy.id);
+    setBattlePokemonMotion(elements.enemySprite, enemy.id, "front");
     elements.enemySprite.classList.toggle("inverted-secret", Boolean(battle.secretBattle));
     elements.activeName.textContent = speciesOf(active).name.toUpperCase();
     elements.activeLevel.textContent = `Nv. ${active.level}`;
     elements.battleActiveName.textContent = speciesOf(active).name.toUpperCase();
     elements.activeSprite.src = backSpriteUrl(active.id); attachSpriteFallback(elements.activeSprite, active.id, true);
     elements.activeSprite.classList.toggle("custom-pokemon-sprite", isCustomPokemon(active.id));
-    setBattlePokemonMotion(elements.activeSprite, active.id);
+    setBattlePokemonMotion(elements.activeSprite, active.id, "back");
     updateBattleHealth(); renderMoves(); renderHud();
     setBattleBusy(Boolean(battle.busy));
   }
@@ -5914,14 +7172,16 @@
   function typeMultiplier(moveType, defenderSpecies) {
     const types = [defenderSpecies.type, defenderSpecies.secondaryType].filter(Boolean);
     const strong = {
-      Fuego: ["Planta", "Bicho"], Agua: ["Fuego", "Tierra", "Roca"], Planta: ["Agua", "Tierra", "Roca"],
-      Eléctrico: ["Agua", "Volador"], Volador: ["Planta", "Bicho"], Bicho: ["Planta", "Psíquico"],
-      Psíquico: ["Veneno"], Fantasma: ["Psíquico", "Fantasma"], Dragón: ["Dragón"], Tierra: ["Eléctrico", "Acero", "Roca"],
-      Roca: ["Fuego", "Volador", "Bicho"], Hada: ["Dragón", "Siniestro"], Siniestro: ["Psíquico", "Fantasma"],
+      Fuego: ["Planta", "Bicho", "Hielo"], Agua: ["Fuego", "Tierra", "Roca"], Planta: ["Agua", "Tierra", "Roca"],
+      Eléctrico: ["Agua", "Volador"], Volador: ["Planta", "Bicho", "Lucha"], Bicho: ["Planta", "Psíquico"],
+      Psíquico: ["Veneno", "Lucha"], Fantasma: ["Psíquico", "Fantasma"], Dragón: ["Dragón"], Tierra: ["Eléctrico", "Acero", "Roca"],
+      Roca: ["Fuego", "Volador", "Bicho", "Hielo"], Hada: ["Dragón", "Siniestro", "Lucha"], Siniestro: ["Psíquico", "Fantasma"],
+      Hielo: ["Planta", "Tierra", "Volador", "Dragón"], Lucha: ["Normal", "Hielo", "Roca", "Siniestro", "Acero"], Acero: ["Hielo", "Roca", "Hada"],
     };
     const weak = {
-      Fuego: ["Agua"], Agua: ["Planta"], Planta: ["Fuego", "Bicho", "Volador"],
-      Eléctrico: ["Planta", "Tierra"], Psíquico: ["Psíquico", "Acero"], Fantasma: ["Normal"], Roca: ["Tierra", "Acero"], Hada: ["Veneno", "Acero"], Siniestro: ["Hada", "Bicho"],
+      Fuego: ["Agua", "Roca"], Agua: ["Planta"], Planta: ["Fuego", "Bicho", "Volador", "Hielo"],
+      Eléctrico: ["Planta", "Tierra"], Psíquico: ["Psíquico", "Acero"], Fantasma: ["Normal"], Roca: ["Tierra", "Acero"], Hada: ["Veneno", "Acero"], Siniestro: ["Hada", "Bicho", "Lucha"],
+      Hielo: ["Fuego", "Agua", "Hielo", "Acero"], Lucha: ["Volador", "Psíquico", "Hada"], Acero: ["Fuego", "Agua", "Eléctrico"],
     };
     if (types.some((type) => strong[moveType]?.includes(type))) return 1.5;
     if (types.some((type) => weak[moveType]?.includes(type))) return .65;
@@ -5939,7 +7199,7 @@
     const classes = {
       Fuego: "fire", Agua: "water", Planta: "grass", Eléctrico: "electric",
       Psíquico: "psychic", Fantasma: "ghost", Siniestro: "ghost", Dragón: "dragon", Hada: "psychic", Volador: "wind",
-      Bicho: "bug", Veneno: "poison", Acero: "steel", Tierra: "ground", Roca: "ground", Normal: "normal",
+      Bicho: "bug", Veneno: "poison", Acero: "steel", Tierra: "ground", Roca: "ground", Hielo: "water", Lucha: "normal", Normal: "normal",
     };
     return classes[moveType] || "normal";
   }
@@ -5985,17 +7245,72 @@
     return nodes;
   }
 
+  function spawnAnatomyCue(attacker, profile) {
+    const origin = fxOrigin(attacker);
+    if (!origin || !profile) return null;
+    const cue = document.createElement("span");
+    cue.className = `fx-anatomy fx-anatomy-${profile.kind}`;
+    cue.style.left = `${origin.x}px`;
+    cue.style.top = `${origin.y}px`;
+    cue.style.setProperty("--cue-direction", attacker.dataset.view === "front" ? -1 : 1);
+    cue.setAttribute("aria-hidden", "true");
+    origin.scene.appendChild(cue);
+    return cue;
+  }
+
   async function animateMove(attacker, defender, moveType, intensity = 1) {
-    attacker.classList.remove("attacking"); defender.classList.remove("hit"); void attacker.offsetWidth;
-    attacker.classList.add("attacking");
-    const nodes = spawnMoveVisual(attacker, defender, moveType);
-    window.setTimeout(() => {
-      defender.classList.add("hit");
-      spawnHitParticles(defender, moveType, intensity);
-      if (["Eléctrico", "Dragón", "Tierra", "Acero"].includes(moveType)) shakeBattle(.65 * intensity);
-    }, 260);
-    await wait(560);
-    attacker.classList.remove("attacking"); defender.classList.remove("hit");
+    const pokemonId = Number(attacker.dataset.pokemonId);
+    const profile = customPokemonAttack(pokemonId);
+    const isFront = attacker.dataset.view === "front";
+    const attackPose = isFront ? customPokemonAsset(pokemonId, "attackFront") : null;
+    const originalSrc = attacker.getAttribute("src");
+    const nodes = [];
+    const timers = [];
+    let anatomyCue = null;
+    const later = (callback, delay) => {
+      const timer = window.setTimeout(callback, delay);
+      timers.push(timer);
+      return timer;
+    };
+
+    attacker.classList.remove("attacking", "anatomy-attacking", "attack-pose-active");
+    defender.classList.remove("hit");
+    void attacker.offsetWidth;
+
+    if (!profile) {
+      attacker.classList.add("attacking");
+      nodes.push(...spawnMoveVisual(attacker, defender, moveType));
+      later(() => {
+        defender.classList.add("hit");
+        spawnHitParticles(defender, moveType, intensity);
+        if (["Eléctrico", "Dragón", "Tierra", "Acero", "Hielo", "Lucha"].includes(moveType)) shakeBattle(.65 * intensity);
+      }, 260);
+      await wait(560);
+    } else {
+      attacker.classList.add("anatomy-attacking");
+      anatomyCue = spawnAnatomyCue(attacker, profile);
+      if (attackPose) later(() => {
+        attacker.classList.add("attack-pose-active");
+        attacker.src = attackPose;
+      }, 690);
+      later(() => nodes.push(...spawnMoveVisual(attacker, defender, moveType)), 880);
+      later(() => {
+        defender.classList.add("hit");
+        spawnHitParticles(defender, moveType, intensity);
+        if (["Eléctrico", "Dragón", "Tierra", "Acero", "Roca", "Hielo", "Lucha"].includes(moveType)) shakeBattle(.8 * intensity);
+      }, 1260);
+      if (attackPose) later(() => {
+        attacker.classList.remove("attack-pose-active");
+        if (originalSrc) attacker.src = originalSrc;
+      }, 1810);
+      await wait(CUSTOM_ATTACK_DURATION);
+    }
+
+    timers.forEach((timer) => window.clearTimeout(timer));
+    if (originalSrc && attacker.getAttribute("src") !== originalSrc) attacker.src = originalSrc;
+    attacker.classList.remove("attacking", "anatomy-attacking", "attack-pose-active");
+    defender.classList.remove("hit");
+    anatomyCue?.remove();
     nodes.forEach((node) => node.remove());
   }
 
@@ -6163,7 +7478,7 @@
     await wait(1250);
 
     stopMicrophone();
-    const destination = state.returnPosition || { x: PORTAL_POSITION.x, y: PORTAL_POSITION.y + field.h / 2 + 70 };
+    const destination = state.returnPosition || currentPortalReturn();
     state.dimension = "san_pablo";
     state.worldX = destination.x;
     state.worldY = destination.y;
@@ -6186,7 +7501,8 @@
     stopMicrophone();
     state.team.forEach((member) => { member.hp = member.maxHp; });
     state.dimension = "san_pablo"; state.returnPosition = null; state.interior = null; state.interiorData = null; state.maintenanceReturn = null;
-    state.worldX = 560; state.worldY = 765; state.direction = "down";
+    const healthReturn = currentHealthReturn();
+    state.worldX = healthReturn.x; state.worldY = healthReturn.y; state.direction = "down";
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
     elements.buildingEditorButton.disabled = false;
@@ -6250,7 +7566,7 @@
     battle = null; inputLocked = false;
     [elements.fightButton, elements.bagButton, elements.teamBattleButton, elements.runButton]
       .forEach((button) => { button.disabled = false; });
-    elements.enemySprite.classList.remove("caught", "hit", "attacking", "inverted-secret", "fainting"); elements.activeSprite.classList.remove("caught", "hit", "attacking", "fainting");
+    elements.enemySprite.classList.remove("caught", "hit", "attacking", "anatomy-attacking", "attack-pose-active", "inverted-secret", "fainting"); elements.activeSprite.classList.remove("caught", "hit", "attacking", "anatomy-attacking", "attack-pose-active", "fainting");
     elements.movesMenu.classList.add("hidden"); elements.battleMenu.classList.remove("hidden"); showWorld(); saveGame();
   }
 
@@ -6298,6 +7614,9 @@
     const family = sanpledexFamilyOf(selectedSanpledexId);
     const status = sanpledexStatus(selectedSanpledexId);
     const motion = CUSTOM_POKEMON_MOTIONS[selectedSanpledexId];
+    const attack = customPokemonAttack(selectedSanpledexId);
+    const attackFront = customPokemonAsset(selectedSanpledexId, "attackFront");
+    const attackStyle = customAttackStyle(attack);
     const entryNumber = SANPLEDEX_IDS.indexOf(selectedSanpledexId) + 1;
     const evolutionHtml = family.ids.map((id, index) => {
       const stage = POKEMON[id];
@@ -6313,18 +7632,49 @@
         <span class="sanpledex-status ${status.className}">${status.label}</span>
       </div>
       <div class="sanpledex-types" aria-label="Tipos de ${species.name}">${sanpledexTypeBadges(species)}</div>
-      <div class="sanpledex-sprites" aria-label="Animación frontal y trasera de ${species.name}">
-        <figure><div class="sanpledex-platform"><img class="sanpledex-sprite custom-pokemon-sprite" data-pokemon-motion="${motion}" data-view="front" src="${frontSpriteUrl(selectedSanpledexId)}" alt="${species.name} de frente" draggable="false" /></div><figcaption>Frontal · rival</figcaption></figure>
-        <figure><div class="sanpledex-platform"><img class="sanpledex-sprite custom-pokemon-sprite" data-pokemon-motion="${motion}" data-view="back" src="${backSpriteUrl(selectedSanpledexId)}" alt="${species.name} de espaldas" draggable="false" /></div><figcaption>Espalda · compañero</figcaption></figure>
+      <div class="sanpledex-sprites sanpledex-combat-preview ${attackFront ? "has-attack-pose" : ""}" data-attack-kind="${attack.kind}" style="${attackStyle}" aria-label="Animación frontal y trasera de ${species.name}">
+        <figure><div class="sanpledex-platform" data-view="front">
+          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite" data-pokemon-motion="${motion}" data-view="front" src="${frontSpriteUrl(selectedSanpledexId)}" alt="${species.name} de frente" draggable="false" />
+          ${attackFront ? `<img class="sanpledex-sprite sanpledex-attack-pose custom-pokemon-sprite" src="${attackFront}" alt="" aria-hidden="true" draggable="false" />` : ""}
+          <span class="sanpledex-anatomy-cue" aria-hidden="true"></span>
+        </div><figcaption>Frontal · rival</figcaption></figure>
+        <figure><div class="sanpledex-platform" data-view="back">
+          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite" data-pokemon-motion="${motion}" data-view="back" src="${backSpriteUrl(selectedSanpledexId)}" alt="${species.name} de espaldas" draggable="false" />
+          <span class="sanpledex-anatomy-cue" aria-hidden="true"></span>
+        </div><figcaption>Espalda · compañero</figcaption></figure>
+      </div>
+      <div class="sanpledex-attack-panel">
+        <button type="button" class="sanpledex-attack-button" data-sanpledex-attack aria-pressed="false">▶ Ver ataque · 3 s</button>
+        <p><strong>${attack.title}</strong><span>${attack.anatomy}</span></p>
       </div>
       <p class="sanpledex-description">${species.description}</p>
       <div class="sanpledex-evolution-title"><strong>CADENA EVOLUTIVA</strong><span>${family.name}</span></div>
       <div class="sanpledex-evolutions">${evolutionHtml}</div>`;
   }
 
+  function previewSanpledexAttack() {
+    const preview = elements.sanpledexDetail?.querySelector(".sanpledex-combat-preview");
+    const button = elements.sanpledexDetail?.querySelector("[data-sanpledex-attack]");
+    if (!preview || !button) return;
+    window.clearTimeout(sanpledexAttackTimer);
+    preview.classList.remove("previewing-attack");
+    void preview.offsetWidth;
+    preview.classList.add("previewing-attack");
+    button.setAttribute("aria-pressed", "true");
+    button.textContent = "Reproduciendo ataque…";
+    sanpledexAttackTimer = window.setTimeout(() => {
+      preview.classList.remove("previewing-attack");
+      button.setAttribute("aria-pressed", "false");
+      button.textContent = "▶ Ver ataque · 3 s";
+      sanpledexAttackTimer = 0;
+    }, CUSTOM_ATTACK_DURATION);
+  }
+
   function selectSanpledexEntry(id, focusSelected = false) {
     const numericId = Number(id);
     if (!SANPLEDEX_IDS.includes(numericId)) return;
+    window.clearTimeout(sanpledexAttackTimer);
+    sanpledexAttackTimer = 0;
     selectedSanpledexId = numericId;
     renderSanpledex();
     if (focusSelected) elements.sanpledexList.querySelector(`[data-sanpledex-id="${numericId}"]`)?.focus({ preventScroll: true });
@@ -6342,6 +7692,8 @@
 
   function closeSanpledex(restoreFocus = true) {
     if (!elements.sanpledexModal || elements.sanpledexModal.classList.contains("hidden")) return;
+    window.clearTimeout(sanpledexAttackTimer);
+    sanpledexAttackTimer = 0;
     elements.sanpledexModal.classList.add("hidden");
     elements.sanpledexModal.setAttribute("aria-hidden", "true");
     if (restoreFocus) (lastSanpledexFocus?.isConnected ? lastSanpledexFocus : elements.sanpledexButton)?.focus({ preventScroll: true });
@@ -6462,6 +7814,24 @@
       }
       return;
     }
+    if (elements.buildingEditor.classList.contains("open")) {
+      if (event.key === "Escape") {
+        closeBuildingEditorPanel();
+        return;
+      }
+      const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")
+        || document.activeElement?.isContentEditable;
+      const movementKey = ["w", "a", "s", "d", "shift"].includes(event.key.toLowerCase());
+      if (!typing && movementKey) {
+        const control = keyToControl(event.key);
+        if (control) {
+          event.preventDefault(); input[control] = true;
+          document.documentElement.dataset.editorMovementKey = event.key.toLowerCase();
+          document.documentElement.dataset.editorMovementAccepted = "true";
+        }
+      }
+      return;
+    }
     if (elements.sanpledexModal && !elements.sanpledexModal.classList.contains("hidden")) {
       if (event.key === "Escape") closeSanpledex();
       else if (event.key === "Tab") {
@@ -6541,6 +7911,8 @@
     elements.closeSanpledex.addEventListener("click", () => closeSanpledex());
     elements.sanpledexModal.addEventListener("click", (event) => {
       if (event.target === elements.sanpledexModal) { closeSanpledex(); return; }
+      const attackTrigger = event.target instanceof Element ? event.target.closest("[data-sanpledex-attack]") : null;
+      if (attackTrigger) { previewSanpledexAttack(); return; }
       const trigger = event.target instanceof Element ? event.target.closest("[data-sanpledex-id]") : null;
       if (trigger) selectSanpledexEntry(trigger.dataset.sanpledexId, true);
     });
@@ -6548,6 +7920,7 @@
     elements.resetButton.addEventListener("click", () => { if (window.confirm("¿Quieres borrar la partida guardada y empezar de nuevo?")) { window.localStorage.removeItem(SAVE_KEY); window.location.reload(); } });
     elements.soundButton.addEventListener("click", toggleSound);
     elements.fullscreenButton.addEventListener("click", toggleFullscreen);
+    if (VOICE_NPC_ENABLED) elements.voiceNpcRetry?.addEventListener("click", () => requestVoiceNpcAccess(true));
     document.addEventListener("fullscreenchange", updateFullscreenButton);
     elements.inventoryButton.addEventListener("click", () => openInventory(false));
     elements.closeInventory.addEventListener("click", closeInventoryPanel);
@@ -6583,12 +7956,18 @@
     if (elements.closeShop) elements.closeShop.addEventListener("click", closeShop);
     document.addEventListener("keydown", handleKeyDown); document.addEventListener("keyup", handleKeyUp); window.addEventListener("blur", clearDirectionalInput);
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) return;
+      if (!document.hidden) { scheduleVoiceRecognitionRestart(100); return; }
       clearDirectionalInput();
       releaseAllMapTiles();
       if (state.started) saveGame();
     });
-    window.addEventListener("pagehide", () => { if (state.started) saveGame(); });
+    window.addEventListener("pagehide", () => {
+      if (state.started) saveGame();
+      voiceNpc.shouldListen = false;
+      window.clearTimeout(voiceNpc.restartTimer);
+      try { voiceNpc.recognition?.stop(); } catch (error) { /* Recognition may already be stopped. */ }
+      stopMicrophone(true);
+    });
     $$('[data-control]').forEach(bindTouchControl); $$('[data-action]').forEach((button) => button.addEventListener("click", primaryAction));
   }
 
@@ -6596,6 +7975,7 @@
     if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return false;
     state = defaultState();
     state.started = true; state.starterChosen = true;
+    state.sound = false;
     state.team = [createPokemon(PETRILLO_ID, 8)]; state.caught = [PETRILLO_ID]; state.seen = [PETRILLO_ID];
     state.inventory.prismShards = 3;
     showWorld();
@@ -6610,7 +7990,7 @@
     state.team = [createPokemon(PETRILLO_ID, 12)]; state.caught = [PETRILLO_ID]; state.seen = [PETRILLO_ID];
     state.money = Math.max(0, Math.floor(Number(money) || 0));
     state.inventory.prismShards = 3;
-    state.returnPosition = { x: PORTAL_POSITION.x, y: PORTAL_POSITION.y + field.h / 2 + 70 };
+    state.returnPosition = currentPortalReturn();
     state.dimension = "prism"; state.dimensionVisited = true; state.secretPokemonId = chooseSecretPokemonId();
     const maze = ensureMazeState(true);
     const marketViewPath = target === "market_view"
@@ -6630,6 +8010,430 @@
     return true;
   }
 
+  function normalizedEditorEntityKind(kind) {
+    const value = String(kind || "").toLowerCase();
+    if (value === "npc" || value === "npcs") return "npc";
+    if (value === "entrance" || value === "entrances" || value === "door" || value === "doors") return "entrance";
+    if (value === "event" || value === "events") return "event";
+    if (value === "asset" || value === "assets" || value === "object" || value === "objects") return "asset";
+    return "";
+  }
+
+  function cloneRuntimeRecord(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function runtimeEntities(kind) {
+    const normalized = normalizedEditorEntityKind(kind);
+    const source = normalized === "npc" ? cityNpcs
+      : normalized === "entrance" ? cityEntrances
+        : normalized === "event" ? cityEvents
+          : normalized === "asset" ? cityWorldAssets
+            : [];
+    return source.map(cloneRuntimeRecord);
+  }
+
+  function runtimeAssetPrototype(sprite) {
+    const catalog = window.CITY_MAP_LAYOUT?.assetCatalog || {};
+    const prototype = catalog[String(sprite || "")];
+    return prototype && typeof prototype === "object" ? prototype : null;
+  }
+
+  function normalizeRuntimeAsset(existing, id, value = {}) {
+    const nextSprite = String(value.sprite || existing?.sprite || "");
+    const prototype = runtimeAssetPrototype(nextSprite);
+    const spriteChanged = Boolean(existing && nextSprite !== existing.sprite);
+    if (!nextSprite || (!existing && !prototype) || (spriteChanged && !prototype)) return null;
+
+    const previousScale = Math.max(.25, Math.min(4, Number(existing?.scale) || 1));
+    const source = spriteChanged || !existing ? prototype : existing;
+    const sourceScale = spriteChanged || !existing ? 1 : previousScale;
+    const baseWidth = Number(source?.w) / sourceScale;
+    const baseHeight = Number(source?.h) / sourceScale;
+    if (!Number.isFinite(baseWidth) || baseWidth <= 0 || !Number.isFinite(baseHeight) || baseHeight <= 0) return null;
+    const sourceColliders = Array.isArray(source?.colliders) ? source.colliders : (prototype?.colliders || []);
+    const baseColliders = sourceColliders.map((collider) => [
+      Number(collider[0]) / sourceScale,
+      Number(collider[1]) / sourceScale,
+      Number(collider[2]) / sourceScale,
+      Number(collider[3]) / sourceScale,
+    ]).filter((collider) => collider.every(Number.isFinite) && collider[2] > 0 && collider[3] > 0);
+
+    const hasScale = value.scale !== undefined && value.scale !== null && Number.isFinite(Number(value.scale));
+    const scale = hasScale ? Math.max(.25, Math.min(4, Number(value.scale))) : previousScale;
+    const x = Number(value.x ?? existing?.x);
+    const y = Number(value.y ?? existing?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const safeX = clamp(x, 0, WORLD_WIDTH);
+    const safeY = clamp(y, 0, WORLD_HEIGHT);
+    const kind = String((spriteChanged || !existing ? prototype?.kind : existing?.kind) || prototype?.kind || "prop");
+    const hasExplicitDepth = value.depthY !== undefined && value.depthY !== null && Number.isFinite(Number(value.depthY));
+    const explicitDepth = Number(value.depthY);
+    const previousDepth = Number(existing?.depthY);
+    const previousY = Number(existing?.y);
+    const yWasPatched = value.y !== undefined && value.y !== null && Number.isFinite(Number(value.y));
+    const depthY = hasExplicitDepth
+      ? explicitDepth
+      : (existing && yWasPatched && Number.isFinite(previousDepth) && Number.isFinite(previousY)
+        ? previousDepth + safeY - previousY
+        : (Number.isFinite(previousDepth) ? previousDepth : safeY - (kind === "building" ? 10 : 2)));
+    const rotationValue = Number(value.rotation ?? existing?.rotation ?? 0);
+    const rotation = Number.isFinite(rotationValue) ? Math.max(-360, Math.min(360, rotationValue)) : 0;
+    const label = value.label !== undefined
+      ? String(value.label || "").slice(0, 120)
+      : String(existing?.label || `Objeto ${nextSprite}`).slice(0, 120);
+
+    return {
+      ...(existing || {}),
+      ...cloneRuntimeRecord(value),
+      id,
+      sprite: nextSprite,
+      src: prototype?.src || existing?.src,
+      kind,
+      placement: value.placement || existing?.placement || "editor",
+      x: safeX,
+      y: safeY,
+      depthY,
+      w: Math.round(baseWidth * scale * 100) / 100,
+      h: Math.round(baseHeight * scale * 100) / 100,
+      scale,
+      rotation,
+      solid: typeof value.solid === "boolean" ? value.solid : existing?.solid !== false,
+      flipX: typeof value.flipX === "boolean" ? value.flipX : Boolean(existing?.flipX),
+      label,
+      colliders: baseColliders.map(([colliderX, colliderY, width, height]) => [
+        colliderX * scale, colliderY * scale, width * scale, height * scale,
+      ]),
+    };
+  }
+
+  function applyRuntimeAssetSnapshot(value = {}) {
+    const hasSnapshot = value.assetOverrides && typeof value.assetOverrides === "object"
+      || Array.isArray(value.addedAssets)
+      || Array.isArray(value.hiddenAssets);
+    if (!hasSnapshot) return null;
+    const overrides = value.assetOverrides && typeof value.assetOverrides === "object" ? value.assetOverrides : {};
+    const hidden = new Set((Array.isArray(value.hiddenAssets) ? value.hiddenAssets : []).map(String));
+    const nextAssets = new Map();
+
+    runtimeBaseWorldAssets.forEach((baseAsset, assetId) => {
+      if (hidden.has(assetId)) return;
+      const record = normalizeRuntimeAsset(cloneRuntimeRecord(baseAsset), assetId, overrides[assetId] || {});
+      if (record) nextAssets.set(assetId, record);
+    });
+    (Array.isArray(value.addedAssets) ? value.addedAssets : []).forEach((asset) => {
+      const assetId = runtimeEntityId(asset?.id);
+      if (!assetId || hidden.has(assetId)) return;
+      const record = normalizeRuntimeAsset(null, assetId, asset);
+      if (record) nextAssets.set(assetId, record);
+    });
+
+    const currentAssets = new Map(cityWorldAssets.map((asset) => [asset.id, asset]));
+    const liveAssets = [...nextAssets.values()].map((record) => {
+      const current = currentAssets.get(record.id);
+      if (!current) return record;
+      Object.assign(current, record);
+      current.colliders = record.colliders.map((collider) => [...collider]);
+      return current;
+    });
+    cityWorldAssets.splice(0, cityWorldAssets.length, ...liveAssets);
+    const nextIds = new Set(nextAssets.keys());
+    [...linkedAssetPositions.keys()].filter((assetId) => !nextIds.has(assetId))
+      .forEach((assetId) => linkedAssetPositions.delete(assetId));
+    cityWorldAssets.forEach((asset) => {
+      if (!linkedAssetPositions.has(asset.id)) linkedAssetPositions.set(asset.id, { x: Number(asset.x), y: Number(asset.y) });
+      ensureCityWorldAssetImage(asset);
+    });
+    worldAssetColliderIndex = null;
+    if (selectedEditorAssetId && !nextIds.has(selectedEditorAssetId)) selectedEditorAssetId = null;
+    if (selectedEditorEntity?.kind === "asset" && !nextIds.has(selectedEditorEntity.id)) selectedEditorEntity = null;
+    updateWorldAssetDataset();
+    return cityWorldAssets.length;
+  }
+
+  function setRuntimeEntity(kind, id, value) {
+    const normalizedKind = normalizedEditorEntityKind(kind);
+    const normalizedId = runtimeEntityId(id || value?.id);
+    if (!normalizedKind || !normalizedId || !value || typeof value !== "object") return false;
+    if (normalizedKind === "asset") {
+      const index = cityWorldAssets.findIndex((asset) => asset.id === normalizedId);
+      const record = normalizeRuntimeAsset(index >= 0 ? cityWorldAssets[index] : null, normalizedId, value);
+      if (!record) return false;
+      let liveRecord = record;
+      if (index >= 0) {
+        liveRecord = cityWorldAssets[index];
+        Object.assign(liveRecord, record);
+        liveRecord.colliders = record.colliders.map((collider) => [...collider]);
+      } else {
+        cityWorldAssets.push(liveRecord);
+        linkedAssetPositions.set(liveRecord.id, { x: Number(liveRecord.x), y: Number(liveRecord.y) });
+      }
+      ensureCityWorldAssetImage(liveRecord);
+      worldAssetColliderIndex = null;
+      syncLinkedEntrancesFromAssets();
+      updateWorldAssetDataset();
+      return cloneRuntimeRecord(liveRecord);
+    }
+    if (normalizedKind === "npc") {
+      const existing = cityNpcs.find((npc) => npc.id === normalizedId);
+      const record = normalizeRuntimeNpc({ ...(existing || {}), ...value, id: normalizedId }, normalizedId);
+      if (!record) return false;
+      const index = cityNpcs.findIndex((npc) => npc.id === normalizedId);
+      if (index >= 0) cityNpcs[index] = record;
+      else cityNpcs.push(record);
+      npcPatrolStates.delete(normalizedId);
+      updateNpcDeploymentDataset();
+      return cloneRuntimeRecord(record);
+    }
+    if (normalizedKind === "entrance") {
+      if (value.enabled === false) {
+        deleteRuntimeEntity("entrance", normalizedId);
+        return { id: normalizedId, enabled: false };
+      }
+      const existing = cityEntrances.find((entrance) => entrance.id === normalizedId);
+      const record = normalizeRuntimeEntrance({ ...(existing || {}), ...value, id: normalizedId }, normalizedId);
+      if (!record) return false;
+      const index = cityEntrances.findIndex((entrance) => entrance.id === normalizedId);
+      if (index >= 0) cityEntrances[index] = record;
+      else cityEntrances.push(record);
+      [...linkedEntrancePositions.keys()].filter((key) => key.endsWith(`:${normalizedId}`))
+        .forEach((key) => linkedEntrancePositions.delete(key));
+      rebuildDefaultMapTiles();
+      return cloneRuntimeRecord(record);
+    }
+    const existing = cityEvents.find((event) => event.id === normalizedId);
+    const record = normalizeRuntimeEvent({ ...(existing || {}), ...value, id: normalizedId }, normalizedId);
+    if (!record) return false;
+    const index = cityEvents.findIndex((event) => event.id === normalizedId);
+    if (index >= 0) cityEvents[index] = record;
+    else cityEvents.push(record);
+    rebuildDefaultMapTiles();
+    return cloneRuntimeRecord(record);
+  }
+
+  function deleteRuntimeEntity(kind, id) {
+    const normalizedKind = normalizedEditorEntityKind(kind);
+    const normalizedId = runtimeEntityId(id);
+    const collection = normalizedKind === "npc" ? cityNpcs
+      : normalizedKind === "entrance" ? cityEntrances
+        : normalizedKind === "event" ? cityEvents
+          : normalizedKind === "asset" ? cityWorldAssets
+            : null;
+    if (!collection || !normalizedId) return false;
+    const index = collection.findIndex((entry) => entry.id === normalizedId);
+    if (index < 0) return false;
+    collection.splice(index, 1);
+    if (normalizedKind === "npc") {
+      npcPatrolStates.delete(normalizedId);
+      updateNpcDeploymentDataset();
+    } else if (normalizedKind === "entrance" || normalizedKind === "event") {
+      if (normalizedKind === "entrance") {
+        [...linkedEntrancePositions.keys()].filter((key) => key.endsWith(`:${normalizedId}`))
+          .forEach((key) => linkedEntrancePositions.delete(key));
+      }
+      rebuildDefaultMapTiles();
+    }
+    else {
+      linkedAssetPositions.delete(normalizedId);
+      [...linkedEntrancePositions.keys()].filter((key) => key.startsWith(`${normalizedId}:`))
+        .forEach((key) => linkedEntrancePositions.delete(key));
+      worldAssetColliderIndex = null;
+      updateWorldAssetDataset();
+    }
+    if (selectedEditorEntity?.kind === normalizedKind && selectedEditorEntity.id === normalizedId) selectedEditorEntity = null;
+    if (normalizedKind === "asset" && selectedEditorAssetId === normalizedId) selectedEditorAssetId = null;
+    return true;
+  }
+
+  function applyRuntimeEditorData(value = {}) {
+    if (!value || typeof value !== "object") return false;
+    const nextNpcs = buildRuntimeNpcs(value);
+    const hiddenAssetIds = new Set((Array.isArray(value.hiddenAssets) ? value.hiddenAssets : []).map(String));
+    const nextEntrances = buildRuntimeEntrances(value)
+      .filter((entrance) => !entrance.linkedAssetId || !hiddenAssetIds.has(entrance.linkedAssetId));
+    const nextEvents = buildRuntimeEvents(value);
+    cityNpcs.splice(0, cityNpcs.length, ...nextNpcs);
+    cityEntrances.splice(0, cityEntrances.length, ...nextEntrances);
+    cityEvents.splice(0, cityEvents.length, ...nextEvents);
+    const assetCount = applyRuntimeAssetSnapshot(value);
+    npcPatrolStates.clear();
+    linkedEntrancePositions.clear();
+    applyRuntimeTileOverrides(value.tileOverrides || {});
+    rebuildDefaultMapTiles();
+    syncLinkedEntrancesFromAssets({ force: true, entrancesAreBaseline: true });
+    updateNpcDeploymentDataset();
+    updateAreaLabel();
+    updateInteractPrompt();
+    return {
+      npcs: cityNpcs.length,
+      entrances: cityEntrances.length,
+      events: cityEvents.length,
+      assets: assetCount ?? cityWorldAssets.length,
+      tiles: tileOverrides.size,
+    };
+  }
+
+  function setRuntimeCollaborators(users) {
+    const previousById = new Map(collaboratorCursors.map((collaborator) => [collaborator.id, collaborator]));
+    collaboratorCursors = (Array.isArray(users) ? users : [])
+      .map((user, index) => {
+        const id = runtimeEntityId(user?.id, `collaborator-${index + 1}`);
+        const previous = previousById.get(id);
+        const cursor = user?.cursor || user || {};
+        const cursorX = Number(cursor.worldX ?? cursor.x);
+        const cursorY = Number(cursor.worldY ?? cursor.y);
+        const hasCursor = Number.isFinite(cursorX) && Number.isFinite(cursorY);
+        const playerSource = user?.player || {};
+        const playerX = Number(playerSource.x);
+        const playerY = Number(playerSource.y);
+        const hasPlayer = Number.isFinite(playerX) && Number.isFinite(playerY);
+        if (!hasCursor && !hasPlayer) return null;
+        return {
+          id,
+          name: String(user?.name || user?.displayName || `Editor ${index + 1}`).slice(0, 40),
+          color: /^#[0-9a-f]{6}$/i.test(user?.color || "") ? user.color : "#52d7ff",
+          x: hasCursor ? clamp(cursorX, 0, WORLD_WIDTH) : null,
+          y: hasCursor ? clamp(cursorY, 0, WORLD_HEIGHT) : null,
+          player: hasPlayer ? {
+            x: clamp(playerX, 0, WORLD_WIDTH),
+            y: clamp(playerY, 0, WORLD_HEIGHT),
+            displayX: Number(previous?.player?.displayX ?? playerX),
+            displayY: Number(previous?.player?.displayY ?? playerY),
+            direction: ["up", "down", "left", "right"].includes(playerSource.direction) ? playerSource.direction : "down",
+            dimension: String(playerSource.dimension || "san_pablo"),
+            interior: playerSource.interior || null,
+            moving: Boolean(playerSource.moving),
+            running: Boolean(playerSource.running),
+            frame: Math.max(0, Math.min(3, Math.floor(Number(playerSource.frame) || 0))),
+          } : null,
+        };
+      })
+      .filter(Boolean);
+    const remotePlayers = collaboratorCursors.filter((collaborator) => collaborator.player);
+    document.documentElement.dataset.collaboratorPlayerCount = String(remotePlayers.length);
+    document.documentElement.dataset.collaboratorPlayers = remotePlayers
+      .map((collaborator) => `${collaborator.id}@${Math.round(collaborator.player.x)},${Math.round(collaborator.player.y)}`)
+      .join(";");
+    return collaboratorCursors.length;
+  }
+
+  window.__pokemonMapEditorBridge = Object.freeze({
+    enable() {
+      developerEditorEnabled = true;
+      elements.buildingEditorButton.hidden = false;
+      document.documentElement.dataset.mapEditor = "available";
+    },
+    disable() {
+      developerEditorEnabled = false;
+      elements.buildingEditorButton.hidden = true;
+      selectedEditorEntity = null;
+      collaboratorCursors = [];
+      closeBuildingEditorPanel();
+      document.documentElement.dataset.mapEditor = "disabled";
+    },
+    open: openBuildingEditor,
+    close: closeBuildingEditorPanel,
+    isOpen: () => elements.buildingEditor.classList.contains("open"),
+    assets: () => cityWorldAssets,
+    entities: runtimeEntities,
+    playerPresence: () => ({
+      x: Math.round(state.worldX * 100) / 100,
+      y: Math.round(state.worldY * 100) / 100,
+      direction: state.direction,
+      dimension: state.dimension,
+      interior: state.interior || null,
+      moving: animationTime > 0,
+      running: playerRunning,
+      frame: animationFrame,
+    }),
+    assetCatalog: () => window.CITY_MAP_LAYOUT?.assetCatalog || {},
+    canvasToWorld(clientX, clientY) {
+      const rect = elements.canvas.getBoundingClientRect();
+      return {
+        x: clamp(camera.x + (clientX - rect.left) * (VIEW_WIDTH / rect.width), 0, WORLD_WIDTH),
+        y: clamp(camera.y + (clientY - rect.top) * (VIEW_HEIGHT / rect.height), 0, WORLD_HEIGHT),
+      };
+    },
+    worldToCanvas(worldX, worldY) {
+      const rect = elements.canvas.getBoundingClientRect();
+      const x = (Number(worldX) - camera.x) * (rect.width / VIEW_WIDTH);
+      const y = (Number(worldY) - camera.y) * (rect.height / VIEW_HEIGHT);
+      return {
+        x,
+        y,
+        clientX: rect.left + x,
+        clientY: rect.top + y,
+        visible: x >= 0 && y >= 0 && x <= rect.width && y <= rect.height,
+      };
+    },
+    viewportCenter: () => ({
+      x: clamp(camera.x + VIEW_WIDTH / 2, 0, WORLD_WIDTH),
+      y: clamp(camera.y + VIEW_HEIGHT / 2, 0, WORLD_HEIGHT),
+    }),
+    grid: () => ({ tileSize: CITY_MAP.tileSize, cols: Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize), rows: Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize) }),
+    tileType: (col, row) => mapTileType(Number(col), Number(row)),
+    tileOverrides: () => Object.fromEntries(tileOverrides),
+    setTile(col, row, type) {
+      const normalizedCol = Math.floor(Number(col)); const normalizedRow = Math.floor(Number(row));
+      if (!Number.isInteger(normalizedCol) || !Number.isInteger(normalizedRow)) return false;
+      if (normalizedCol < 0 || normalizedRow < 0 || normalizedCol >= Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize) || normalizedRow >= Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize)) return false;
+      const key = tileKey(normalizedCol, normalizedRow);
+      if (type === "inherit") tileOverrides.delete(key);
+      else if (["walkable", "blocked", "door", "encounter", "event"].includes(type)) tileOverrides.set(key, type);
+      else return false;
+      selectedMapTile = { col: normalizedCol, row: normalizedRow };
+      selectedTileType = type;
+      updateTileEditorInfo();
+      return true;
+    },
+    clearTiles() {
+      tileOverrides.clear();
+      selectedMapTile = null;
+      updateTileEditorInfo();
+    },
+    setEntity: setRuntimeEntity,
+    deleteEntity: deleteRuntimeEntity,
+    selectEntity(kind, id) {
+      const normalizedKind = normalizedEditorEntityKind(kind);
+      selectedEditorEntity = normalizedKind && id ? { kind: normalizedKind, id: String(id) } : null;
+      if (normalizedKind === "asset") selectedEditorAssetId = id || null;
+      else selectedEditorAssetId = null;
+      return Boolean(selectedEditorEntity);
+    },
+    previewEvent(event) { return runMapEvent(event, { preview: true }); },
+    applyEditorData: applyRuntimeEditorData,
+    applyAssetSnapshot: applyRuntimeAssetSnapshot,
+    setCollaborators: setRuntimeCollaborators,
+    upsertEntity: setRuntimeEntity,
+    removeEntity: deleteRuntimeEntity,
+    applySnapshot: applyRuntimeEditorData,
+    addAsset(asset) {
+      const assetId = runtimeEntityId(asset?.id);
+      const record = assetId ? normalizeRuntimeAsset(null, assetId, asset) : null;
+      if (!record || cityWorldAssets.some((entry) => entry.id === assetId)) return false;
+      Object.assign(asset, record);
+      asset.colliders = record.colliders.map((collider) => [...collider]);
+      cityWorldAssets.push(asset);
+      linkedAssetPositions.set(asset.id, { x: Number(asset.x), y: Number(asset.y) });
+      ensureCityWorldAssetImage(asset);
+      worldAssetColliderIndex = null;
+      updateWorldAssetDataset();
+      return asset;
+    },
+    removeAsset(id) {
+      return deleteRuntimeEntity("asset", id);
+    },
+    selectAsset(id) {
+      selectedEditorAssetId = id || null;
+      selectedEditorEntity = id ? { kind: "asset", id: String(id) } : null;
+    },
+    invalidateAssets() {
+      worldAssetColliderIndex = null;
+      syncLinkedEntrancesFromAssets();
+      updateWorldAssetDataset();
+    },
+  });
+
   function initialize() {
     mazeDefinition = generateMaze();
     initializeMapTiles(); renderStarters(); bindEvents(); loadAssets();
@@ -6637,8 +8441,17 @@
     document.documentElement.dataset.fragmentCinematic = "idle";
     document.documentElement.dataset.cityMapReady = "loading";
     const hasSave = loadGame(); elements.continueButton.classList.toggle("hidden", !hasSave);
-    updateFullscreenButton(); renderHud(); updateAreaLabel(); updateInteractPrompt(); window.requestAnimationFrame(gameLoop);
-    if (LOCAL_DEBUG_FRAGMENT_CINEMATIC) {
+    updateFullscreenButton(); renderHud(); updateAreaLabel(); updateInteractPrompt(); updateVoiceNpcUi(); window.requestAnimationFrame(gameLoop);
+    if (VOICE_NPC_ENABLED) window.setTimeout(() => requestVoiceNpcAccess(), 0);
+    if (VOICE_NPC_ENABLED && LOCAL_DEBUG_VOICE) {
+      if (!hasSave) {
+        state = defaultState();
+        state.started = true; state.starterChosen = true;
+        state.team = [createPokemon(PETRILLO_ID, 5)]; state.caught = [PETRILLO_ID]; state.seen = [PETRILLO_ID];
+      }
+      showWorld();
+      window.setTimeout(() => handleVoiceNpcTranscript(LOCAL_DEBUG_VOICE, true), 120);
+    } else if (LOCAL_DEBUG_FRAGMENT_CINEMATIC) {
       startFragmentCinematicDebugSession();
     } else if (LOCAL_DEBUG_PRISM) {
       startPrismDebugSession(LOCAL_DEBUG_PRISM.money, LOCAL_DEBUG_PRISM.target);
@@ -6725,6 +8538,21 @@
           direction: doctorPotatoScene.direction,
         } : null,
       }),
+      voiceManolin: () => ({
+        permission: voiceNpc.permission,
+        listening: voiceNpc.listening,
+        active: voiceNpc.active,
+        silenceMs: VOICE_NPC_SILENCE_MS,
+        lastSpeechAgeMs: voiceNpc.lastSpeechAt ? Math.max(0, performance.now() - voiceNpc.lastSpeechAt) : null,
+        position: { x: voiceNpc.x, y: voiceNpc.y, direction: voiceNpc.direction, moving: voiceNpc.moving },
+        transcript: voiceNpc.transcript,
+        reply: voiceNpc.reply,
+        apiState: voiceNpc.apiState,
+        model: voiceNpc.model,
+        wakeCount: voiceNpc.wakeCount,
+      }),
+      simulateVoiceManolin: (text, isFinal = true) => handleVoiceNpcTranscript(String(text), Boolean(isFinal)),
+      voiceManolinTrigger: (text) => voiceNpcTriggerDetected(String(text)),
       prismLayout: () => {
         const { start, goal, monster, market } = mazeDefinition;
         const marketPath = findMazePath(start.x + .5, start.y + .5, market.x + .5, market.y + .5);
@@ -6770,8 +8598,9 @@
     document.documentElement.dataset.boundaryOpen = String(cityMapCanOccupy(16, 16));
     document.documentElement.dataset.backgroundCollisionProbesSolid = String((CITY_MAP.blockedProbes || [])
       .every(([x, y]) => !cityMapCanOccupy(Number(x), Number(y))));
-    document.documentElement.dataset.centerDoor = mapTileType(18, 21);
-    const prismDoor = (CITY_MAP.doors || []).find((door) => door.action === "prism");
+    const firstDoor = cityEntrances[0];
+    document.documentElement.dataset.centerDoor = firstDoor ? mapTileType(firstDoor.col, firstDoor.row) : "missing";
+    const prismDoor = cityEntrances.find((door) => door.action === "prism");
     document.documentElement.dataset.prismDoor = prismDoor ? mapTileType(prismDoor.col, prismDoor.row) : "missing";
     const prismMarketPath = findMazePath(
       mazeDefinition.start.x + .5, mazeDefinition.start.y + .5,
@@ -6795,7 +8624,7 @@
     document.documentElement.dataset.worldAssetApproachesOpen = String(cityWorldAssets
       .filter((asset) => Array.isArray(asset.approach))
       .every((asset) => cityMapCanOccupy(Number(asset.approach[0]), Number(asset.approach[1]))));
-    const configuredNpcs = CITY_MAP.npcs || [];
+    const configuredNpcs = cityNpcs;
     document.documentElement.dataset.mapNpcCount = String(configuredNpcs.length);
     document.documentElement.dataset.mapNpcIdsUnique = String(new Set(configuredNpcs.map((npc) => npc.id)).size === configuredNpcs.length);
     document.documentElement.dataset.mapNpcPositionsOpen = String(configuredNpcs.every((npc) => {

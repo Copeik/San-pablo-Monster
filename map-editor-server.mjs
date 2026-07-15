@@ -1,0 +1,561 @@
+import { randomUUID } from "node:crypto";
+import { open, readFile, rename, rm } from "node:fs/promises";
+import path from "node:path";
+
+const TILE_TYPES = new Set(["walkable", "blocked", "door", "encounter", "event"]);
+const DIRECTIONS = new Set(["up", "down", "left", "right"]);
+const EVENT_TYPES = new Set(["dialogue", "thought", "vibration", "teleport", "transition"]);
+const EVENT_TRIGGERS = new Set(["interact", "step"]);
+const ENTITY_COLLECTIONS = Object.freeze({
+  asset: new Set(["assetOverrides", "addedAssets"]),
+  npc: new Set(["npcOverrides", "addedNpcs"]),
+  entrance: new Set(["entrances"]),
+  event: new Set(["events"]),
+});
+const HIDDEN_LISTS = new Set(["hiddenAssets", "hiddenNpcs"]);
+const MAX_SSE_BUFFER_BYTES = 256 * 1024;
+const PRESENCE_TTL_MS = 45_000;
+
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const isPlainObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function clamp(value, minimum, maximum, fallback = minimum) {
+  return Math.max(minimum, Math.min(maximum, finiteNumber(value, fallback)));
+}
+
+function cleanText(value, maximum = 160) {
+  return typeof value === "string" ? value.trim().slice(0, maximum) : "";
+}
+
+export function cleanEditorId(value) {
+  const id = cleanText(value, 80);
+  return /^[a-z0-9][a-z0-9_-]{0,79}$/i.test(id) ? id : "";
+}
+
+function cleanToken(value, maximum = 64) {
+  const token = cleanText(value, maximum);
+  return /^[a-z0-9][a-z0-9_.:-]{0,63}$/i.test(token) ? token : "";
+}
+
+function cleanTileKey(value) {
+  const match = /^(\d{1,2}),(\d{1,2})$/.exec(String(value || ""));
+  if (!match) return "";
+  const col = Number(match[1]); const row = Number(match[2]);
+  return col <= 78 && row <= 78 ? `${col},${row}` : "";
+}
+
+function cleanStringList(value, { maximumItems = 12, maximumLength = 500 } = {}) {
+  return (Array.isArray(value) ? value : [])
+    .slice(0, maximumItems)
+    .map((entry) => cleanText(entry, maximumLength))
+    .filter(Boolean);
+}
+
+function cleanIdList(value, maximumItems = 1000) {
+  return [...new Set((Array.isArray(value) ? value : [])
+    .slice(0, maximumItems)
+    .map(cleanEditorId)
+    .filter(Boolean))];
+}
+
+function cleanAssetTransform(value, { id = "", requireIdentity = false } = {}) {
+  if (!isPlainObject(value)) return null;
+  const transform = {
+    x: clamp(value.x, 0, 2508),
+    y: clamp(value.y, 0, 2508),
+    scale: clamp(value.scale, .25, 4, 1),
+    rotation: clamp(value.rotation, -360, 360, 0),
+    solid: value.solid !== false,
+  };
+  if (Number.isFinite(Number(value.depthY))) transform.depthY = clamp(value.depthY, -2508, 5016);
+  if (typeof value.flipX === "boolean") transform.flipX = value.flipX;
+  const label = cleanText(value.label, 80);
+  if (label) transform.label = label;
+  if (requireIdentity) {
+    transform.id = cleanEditorId(id || value.id);
+    transform.sprite = cleanEditorId(value.sprite);
+    if (!transform.id || !transform.sprite) return null;
+  }
+  return transform;
+}
+
+function cleanNpc(value, { id = "", requireIdentity = false } = {}) {
+  if (!isPlainObject(value)) return null;
+  const npc = {};
+  const normalizedId = cleanEditorId(id || value.id);
+  if (requireIdentity) {
+    if (!normalizedId) return null;
+    npc.id = normalizedId;
+  }
+  if (value.col !== undefined) npc.col = Math.floor(clamp(value.col, 0, 78));
+  if (value.row !== undefined) npc.row = Math.floor(clamp(value.row, 0, 78));
+  if (DIRECTIONS.has(value.direction)) npc.direction = value.direction;
+  const name = cleanText(value.name, 80); if (name) npc.name = name;
+  const sprite = cleanEditorId(value.sprite); if (sprite) npc.sprite = sprite;
+  if (Array.isArray(value.lines)) npc.lines = cleanStringList(value.lines);
+  if (isPlainObject(value.patrol) && Array.isArray(value.patrol.to) && value.patrol.to.length >= 2) {
+    npc.patrol = {
+      to: [Math.floor(clamp(value.patrol.to[0], 0, 78)), Math.floor(clamp(value.patrol.to[1], 0, 78))],
+      tilesPerSecond: clamp(value.patrol.tilesPerSecond, .05, 10, .75),
+    };
+  }
+  if (typeof value.solid === "boolean") npc.solid = value.solid;
+  if (typeof value.enabled === "boolean") npc.enabled = value.enabled;
+  if (requireIdentity && (!Number.isInteger(npc.col) || !Number.isInteger(npc.row) || !npc.sprite)) return null;
+  return Object.keys(npc).length ? npc : null;
+}
+
+function cleanEntrance(value, id = "") {
+  if (!isPlainObject(value)) return null;
+  const entrance = {
+    id: cleanEditorId(id || value.id),
+    col: Math.floor(clamp(value.col, 0, 78)),
+    row: Math.floor(clamp(value.row, 0, 78)),
+  };
+  if (!entrance.id) return null;
+  const label = cleanText(value.label, 120); if (label) entrance.label = label;
+  const action = cleanToken(value.action); if (action) entrance.action = action;
+  const targetMap = cleanEditorId(value.targetMap); if (targetMap) entrance.targetMap = targetMap;
+  if (Number.isFinite(Number(value.targetX))) entrance.targetX = clamp(value.targetX, 0, 100000);
+  if (Number.isFinite(Number(value.targetY))) entrance.targetY = clamp(value.targetY, 0, 100000);
+  if (DIRECTIONS.has(value.targetDirection)) entrance.targetDirection = value.targetDirection;
+  const effect = cleanToken(value.effect); if (effect) entrance.effect = effect;
+  const linkedAssetId = cleanEditorId(value.linkedAssetId); if (linkedAssetId) entrance.linkedAssetId = linkedAssetId;
+  const npc = cleanEditorId(value.npc); if (npc) entrance.npc = npc;
+  if (typeof value.enabled === "boolean") entrance.enabled = value.enabled;
+  return entrance;
+}
+
+function cleanEvent(value, id = "") {
+  if (!isPlainObject(value)) return null;
+  const event = {
+    id: cleanEditorId(id || value.id),
+    col: Math.floor(clamp(value.col, 0, 78)),
+    row: Math.floor(clamp(value.row, 0, 78)),
+    type: EVENT_TYPES.has(value.type) ? value.type : "dialogue",
+    trigger: EVENT_TRIGGERS.has(value.trigger) ? value.trigger : "interact",
+  };
+  if (!event.id) return null;
+  const message = cleanText(value.message, 1000); if (message) event.message = message;
+  const targetMap = cleanEditorId(value.targetMap); if (targetMap) event.targetMap = targetMap;
+  if (Number.isFinite(Number(value.targetX))) event.targetX = clamp(value.targetX, 0, 100000);
+  if (Number.isFinite(Number(value.targetY))) event.targetY = clamp(value.targetY, 0, 100000);
+  if (DIRECTIONS.has(value.targetDirection)) event.targetDirection = value.targetDirection;
+  const effect = cleanToken(value.effect); if (effect) event.effect = effect;
+  if (Number.isFinite(Number(value.duration))) event.duration = clamp(value.duration, 0, 60_000);
+  if (Number.isFinite(Number(value.intensity))) event.intensity = clamp(value.intensity, 0, 10);
+  event.once = value.once === true;
+  event.enabled = value.enabled !== false;
+  return event;
+}
+
+function cleanRecord(value, cleaner, maximumItems) {
+  const result = {};
+  Object.entries(isPlainObject(value) ? value : {}).slice(0, maximumItems).forEach(([rawId, entry]) => {
+    const id = cleanEditorId(rawId);
+    const cleaned = id ? cleaner(entry, id) : null;
+    if (cleaned) result[id] = cleaned;
+  });
+  return result;
+}
+
+function cleanEntityArray(value, cleaner, maximumItems) {
+  const seen = new Set();
+  return (Array.isArray(value) ? value : [])
+    .slice(0, maximumItems)
+    .map((entry) => cleaner(entry, cleanEditorId(entry?.id)))
+    .filter((entry) => entry && !seen.has(entry.id) && seen.add(entry.id));
+}
+
+export function emptyMapEditorData() {
+  return {
+    version: 2,
+    tileOverrides: {},
+    assetOverrides: {},
+    addedAssets: [],
+    hiddenAssets: [],
+    npcOverrides: {},
+    addedNpcs: [],
+    hiddenNpcs: [],
+    entrances: [],
+    events: [],
+  };
+}
+
+export function sanitizeMapEditorData(value) {
+  const source = isPlainObject(value) ? value : {};
+  const result = emptyMapEditorData();
+  Object.entries(isPlainObject(source.tileOverrides) ? source.tileOverrides : {})
+    .slice(0, 7000)
+    .forEach(([rawKey, type]) => {
+      const key = cleanTileKey(rawKey);
+      if (key && TILE_TYPES.has(type)) result.tileOverrides[key] = type;
+    });
+  result.assetOverrides = cleanRecord(source.assetOverrides, (entry) => cleanAssetTransform(entry), 1000);
+  result.addedAssets = cleanEntityArray(source.addedAssets,
+    (entry, id) => cleanAssetTransform(entry, { id, requireIdentity: true }), 500);
+  result.hiddenAssets = cleanIdList(source.hiddenAssets);
+  result.npcOverrides = cleanRecord(source.npcOverrides, (entry) => cleanNpc(entry), 500);
+  result.addedNpcs = cleanEntityArray(source.addedNpcs,
+    (entry, id) => cleanNpc(entry, { id, requireIdentity: true }), 500);
+  result.hiddenNpcs = cleanIdList(source.hiddenNpcs);
+  result.entrances = cleanEntityArray(source.entrances, cleanEntrance, 500);
+  result.events = cleanEntityArray(source.events, cleanEvent, 1000);
+  return result;
+}
+
+export function mapEditorSource(data) {
+  return `/*\n * Cambios persistentes creados con el editor de desarrollo del mapa.\n * Este archivo forma parte de los datos del juego; editelo desde el modo dios.\n */\nwindow.CITY_MAP_EDITOR_DATA = ${JSON.stringify(sanitizeMapEditorData(data), null, 2)};\n`;
+}
+
+export function parseMapEditorSource(source) {
+  const match = /window\.CITY_MAP_EDITOR_DATA\s*=\s*([\s\S]*);\s*$/.exec(String(source || ""));
+  if (!match) throw Object.assign(new Error("El archivo del editor no tiene un formato válido"), { statusCode: 500 });
+  try {
+    return sanitizeMapEditorData(JSON.parse(match[1]));
+  } catch {
+    throw Object.assign(new Error("No se pudo leer el JSON del editor"), { statusCode: 500 });
+  }
+}
+
+export async function loadMapEditorData(filePath) {
+  try {
+    return parseMapEditorSource(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return emptyMapEditorData();
+    throw error;
+  }
+}
+
+export async function atomicWriteMapEditorData(filePath, data) {
+  const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
+  let handle = null;
+  try {
+    handle = await open(temporaryPath, "wx");
+    await handle.writeFile(mapEditorSource(data), "utf8");
+    await handle.sync();
+    await handle.close();
+    handle = null;
+    await rename(temporaryPath, filePath);
+  } catch (error) {
+    try { await handle?.close(); } catch { /* Ya estaba cerrado. */ }
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+export function mapEditorCounts(data) {
+  return {
+    tiles: Object.keys(data.tileOverrides).length,
+    objects: Object.keys(data.assetOverrides).length + data.addedAssets.length,
+    npcs: Object.keys(data.npcOverrides).length + data.addedNpcs.length,
+    entrances: data.entrances.length,
+    events: data.events.length,
+  };
+}
+
+function fail(message, statusCode = 400, details = {}) {
+  throw Object.assign(new Error(message), { statusCode, details });
+}
+
+function upsertById(collection, value) {
+  const index = collection.findIndex((entry) => entry.id === value.id);
+  if (index < 0) collection.push(value);
+  else collection[index] = value;
+}
+
+function removeById(collection, id) {
+  const index = collection.findIndex((entry) => entry.id === id);
+  if (index >= 0) collection.splice(index, 1);
+}
+
+function setHidden(data, list, id, present) {
+  const values = new Set(data[list]);
+  if (present) values.add(id); else values.delete(id);
+  data[list] = [...values];
+}
+
+function normalizeOperation(rawOperation) {
+  if (!isPlainObject(rawOperation)) fail("Operación del editor no válida");
+  if (rawOperation.type === "tile.set") {
+    const key = cleanTileKey(rawOperation.key);
+    if (!key || (rawOperation.value !== null && !TILE_TYPES.has(rawOperation.value))) fail("Casilla o tipo de terreno no válido");
+    return { type: "tile.set", key, value: rawOperation.value };
+  }
+  if (rawOperation.type === "list.set") {
+    if (!HIDDEN_LISTS.has(rawOperation.list)) fail("Lista del editor no válida");
+    if (!Array.isArray(rawOperation.value)) fail("El valor de la lista debe ser un array");
+    return { type: "list.set", list: rawOperation.list, value: cleanIdList(rawOperation.value) };
+  }
+  if (rawOperation.type !== "entity.set" && rawOperation.type !== "entity.delete") fail("Tipo de operación no permitido");
+  const entity = rawOperation.entity;
+  const collection = rawOperation.collection;
+  const id = cleanEditorId(rawOperation.id);
+  if (!ENTITY_COLLECTIONS[entity]?.has(collection) || !id) fail("Entidad o colección del editor no válida");
+  if (rawOperation.type === "entity.delete") {
+    return { type: "entity.delete", entity, collection, id, hide: rawOperation.hide !== false };
+  }
+  let value;
+  if (collection === "assetOverrides") value = cleanAssetTransform(rawOperation.value);
+  else if (collection === "addedAssets") value = cleanAssetTransform(rawOperation.value, { id, requireIdentity: true });
+  else if (collection === "npcOverrides") value = cleanNpc(rawOperation.value);
+  else if (collection === "addedNpcs") value = cleanNpc(rawOperation.value, { id, requireIdentity: true });
+  else if (collection === "entrances") value = cleanEntrance(rawOperation.value, id);
+  else value = cleanEvent(rawOperation.value, id);
+  if (!value) fail("Datos de entidad no válidos");
+  return { type: "entity.set", entity, collection, id, value };
+}
+
+function operationKey(operation) {
+  if (operation.type === "tile.set") return `tile:${operation.key}`;
+  if (operation.type === "list.set") return `list:${operation.list}`;
+  return `entity:${operation.entity}:${operation.id}`;
+}
+
+function operationTouchedKeys(operation) {
+  const keys = [operationKey(operation)];
+  if (operation.entity === "asset") keys.push("list:hiddenAssets");
+  if (operation.entity === "npc") keys.push("list:hiddenNpcs");
+  return keys;
+}
+
+function applyOperation(data, operation) {
+  if (operation.type === "tile.set") {
+    if (operation.value === null) delete data.tileOverrides[operation.key];
+    else data.tileOverrides[operation.key] = operation.value;
+    return;
+  }
+  if (operation.type === "list.set") {
+    data[operation.list] = [...operation.value];
+    return;
+  }
+  const { collection, id } = operation;
+  if (operation.type === "entity.set") {
+    if (collection === "assetOverrides") {
+      data.assetOverrides[id] = operation.value;
+      removeById(data.addedAssets, id);
+      setHidden(data, "hiddenAssets", id, false);
+    } else if (collection === "addedAssets") {
+      upsertById(data.addedAssets, operation.value);
+      delete data.assetOverrides[id];
+      setHidden(data, "hiddenAssets", id, false);
+    } else if (collection === "npcOverrides") {
+      data.npcOverrides[id] = operation.value;
+      removeById(data.addedNpcs, id);
+      setHidden(data, "hiddenNpcs", id, false);
+    } else if (collection === "addedNpcs") {
+      upsertById(data.addedNpcs, operation.value);
+      delete data.npcOverrides[id];
+      setHidden(data, "hiddenNpcs", id, false);
+    } else upsertById(data[collection], operation.value);
+    return;
+  }
+  if (collection === "addedAssets") {
+    removeById(data.addedAssets, id);
+    setHidden(data, "hiddenAssets", id, false);
+  } else if (collection === "assetOverrides") {
+    delete data.assetOverrides[id];
+    setHidden(data, "hiddenAssets", id, operation.hide);
+  } else if (collection === "addedNpcs") {
+    removeById(data.addedNpcs, id);
+    setHidden(data, "hiddenNpcs", id, false);
+  } else if (collection === "npcOverrides") {
+    delete data.npcOverrides[id];
+    setHidden(data, "hiddenNpcs", id, operation.hide);
+  } else removeById(data[collection], id);
+}
+
+function cleanPresence(value) {
+  if (!isPlainObject(value)) fail("Presencia no válida");
+  const actorId = cleanEditorId(value.actorId);
+  if (!actorId) fail("Falta actorId");
+  const user = {
+    actorId,
+    name: cleanText(value.name, 40) || "Editor",
+    color: /^#[0-9a-f]{6}$/i.test(value.color) ? value.color : "#55c2ff",
+    cursor: null,
+    player: null,
+    mode: cleanToken(value.mode, 32) || "objects",
+    selection: null,
+  };
+  if (isPlainObject(value.cursor) && Number.isFinite(Number(value.cursor.x)) && Number.isFinite(Number(value.cursor.y))) {
+    user.cursor = { x: clamp(value.cursor.x, 0, 100000), y: clamp(value.cursor.y, 0, 100000) };
+  }
+  if (isPlainObject(value.selection)) {
+    const entity = cleanToken(value.selection.entity, 32); const id = cleanEditorId(value.selection.id);
+    if (entity && id) user.selection = { entity, id };
+  } else if (typeof value.selection === "string") {
+    const id = cleanEditorId(value.selection); if (id) user.selection = { id };
+  }
+  if (isPlainObject(value.player)
+    && Number.isFinite(Number(value.player.x))
+    && Number.isFinite(Number(value.player.y))) {
+    const direction = ["up", "down", "left", "right"].includes(value.player.direction)
+      ? value.player.direction
+      : "down";
+    const interior = value.player.interior == null ? null : cleanToken(value.player.interior, 64) || null;
+    user.player = {
+      x: clamp(value.player.x, 0, 100000),
+      y: clamp(value.player.y, 0, 100000),
+      direction,
+      dimension: cleanToken(value.player.dimension, 32) || "san_pablo",
+      interior,
+      moving: Boolean(value.player.moving),
+      running: Boolean(value.player.running),
+      frame: Math.floor(clamp(value.player.frame, 0, 3)),
+    };
+  }
+  return user;
+}
+
+function writeSse(response, event, payload, id = null) {
+  if (response.destroyed || response.writableEnded) return false;
+  if (response.writableLength > MAX_SSE_BUFFER_BYTES) {
+    response.end();
+    return false;
+  }
+  const idLine = id === null ? "" : `id: ${id}\n`;
+  return response.write(`${idLine}event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+}
+
+export function createMapEditorHub({ editorDataPath, persist = atomicWriteMapEditorData, now = () => Date.now() }) {
+  let data = emptyMapEditorData();
+  let revision = 0;
+  let resetRevision = 0;
+  let mutationTail = Promise.resolve();
+  const keyVersions = new Map();
+  const connections = new Map();
+  const presence = new Map();
+  const readyPromise = loadMapEditorData(editorDataPath).then((loaded) => { data = loaded; });
+  readyPromise.catch(() => {});
+
+  const serializeMutation = (task) => {
+    const result = mutationTail.then(async () => { await readyPromise; return task(); });
+    mutationTail = result.catch(() => {});
+    return result;
+  };
+
+  const activeUsers = () => {
+    const activeActors = new Set([...connections.values()].map((entry) => entry.actorId));
+    const cutoff = now() - PRESENCE_TTL_MS;
+    return [...presence.values()]
+      .filter((entry) => activeActors.has(entry.actorId) || entry.updatedAt >= cutoff)
+      .map(({ updatedAt, ...entry }) => clone(entry));
+  };
+
+  const broadcast = (event, payload, id = null) => {
+    connections.forEach((entry, connectionId) => {
+      if (!writeSse(entry.response, event, payload, id)) {
+        if (entry.response.destroyed || entry.response.writableEnded) connections.delete(connectionId);
+      }
+    });
+  };
+  const broadcastPresence = () => broadcast("presence", { users: activeUsers() });
+
+  const sweepTimer = setInterval(() => {
+    const activeActors = new Set([...connections.values()].map((entry) => entry.actorId));
+    const cutoff = now() - PRESENCE_TTL_MS;
+    let changed = false;
+    presence.forEach((entry, actorId) => {
+      if (!activeActors.has(actorId) && entry.updatedAt < cutoff) { presence.delete(actorId); changed = true; }
+    });
+    if (changed) broadcastPresence();
+    connections.forEach((entry) => {
+      if (!entry.response.destroyed && !entry.response.writableEnded) entry.response.write(": ping\n\n");
+    });
+  }, 15_000);
+  sweepTimer.unref?.();
+
+  return {
+    async ready() { await readyPromise; },
+    async snapshot() {
+      await readyPromise;
+      return { data: clone(data), revision };
+    },
+    async replace(rawData) {
+      return serializeMutation(async () => {
+        const next = sanitizeMapEditorData(rawData);
+        await persist(editorDataPath, next);
+        data = next;
+        revision += 1;
+        resetRevision = revision;
+        keyVersions.clear();
+        const payload = { data: clone(data), revision };
+        broadcast("snapshot", payload, revision);
+        return { revision, counts: mapEditorCounts(data) };
+      });
+    },
+    async apply(body) {
+      return serializeMutation(async () => {
+        if (!isPlainObject(body)) fail("Petición de operaciones no válida");
+        const actorId = cleanEditorId(body.actorId);
+        const name = cleanText(body.name, 40) || "Editor";
+        const baseRevision = Number(body.baseRevision);
+        if (!actorId) fail("Falta actorId");
+        if (!Number.isInteger(baseRevision) || baseRevision < 0) fail("baseRevision no válida");
+        if (baseRevision > revision) fail("La revisión del cliente está por delante", 409, { revision, code: "revision_ahead" });
+        if (!Array.isArray(body.operations) || body.operations.length < 1 || body.operations.length > 256) fail("Se requieren entre 1 y 256 operaciones");
+        const operations = body.operations.map(normalizeOperation);
+        const conflictKeys = [...new Set(operations.map(operationKey))];
+        const touchedKeys = [...new Set(operations.flatMap(operationTouchedKeys))];
+        const conflicts = conflictKeys.filter((key) => Math.max(resetRevision, keyVersions.get(key) || 0) > baseRevision);
+        if (conflicts.length) fail("Hay cambios más recientes en las mismas entidades", 409, { revision, code: "conflict", conflicts });
+        const next = clone(data);
+        operations.forEach((operation) => applyOperation(next, operation));
+        const sanitized = sanitizeMapEditorData(next);
+        if (JSON.stringify(sanitized) === JSON.stringify(data)) {
+          return { revision, counts: mapEditorCounts(data), operations: [] };
+        }
+        await persist(editorDataPath, sanitized);
+        data = sanitized;
+        revision += 1;
+        touchedKeys.forEach((key) => keyVersions.set(key, revision));
+        const event = { actorId, name, revision, operations: clone(operations) };
+        broadcast("operations", event, revision);
+        return { revision, counts: mapEditorCounts(data), operations };
+      });
+    },
+    updatePresence(rawPresence) {
+      const user = cleanPresence(rawPresence);
+      presence.set(user.actorId, { ...user, updatedAt: now() });
+      broadcastPresence();
+      return { users: activeUsers() };
+    },
+    async subscribe(request, response, rawPresence) {
+      await readyPromise;
+      const user = cleanPresence(rawPresence);
+      presence.set(user.actorId, { ...user, updatedAt: now() });
+      response.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+        "X-Content-Type-Options": "nosniff",
+      });
+      response.flushHeaders?.();
+      response.write("retry: 1500\n\n");
+      const connectionId = randomUUID();
+      connections.set(connectionId, { actorId: user.actorId, response });
+      writeSse(response, "snapshot", { data: clone(data), revision }, revision);
+      broadcastPresence();
+      const close = () => {
+        if (!connections.delete(connectionId)) return;
+        const stillConnected = [...connections.values()].some((entry) => entry.actorId === user.actorId);
+        if (!stillConnected) presence.delete(user.actorId);
+        broadcastPresence();
+      };
+      request.once("close", close);
+      response.once("close", close);
+    },
+    close() {
+      clearInterval(sweepTimer);
+      connections.forEach((entry) => entry.response.end());
+      connections.clear(); presence.clear();
+    },
+  };
+}
