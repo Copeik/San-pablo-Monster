@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { open, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
+import { isEditorId, MAP_EDITOR_RULES, validateEditorOperation, validateMapEditorData } from "./map-editor-contract.js";
 
-const TILE_TYPES = new Set(["walkable", "blocked", "door", "encounter", "event"]);
-const DIRECTIONS = new Set(["up", "down", "left", "right"]);
-const EVENT_TYPES = new Set(["dialogue", "thought", "vibration", "teleport", "transition"]);
-const EVENT_TRIGGERS = new Set(["interact", "step"]);
+const TILE_TYPES = new Set(MAP_EDITOR_RULES.types.terrain);
+const DIRECTIONS = new Set(MAP_EDITOR_RULES.types.direction);
+const EVENT_TYPES = new Set(MAP_EDITOR_RULES.types.event);
+const EVENT_TRIGGERS = new Set(MAP_EDITOR_RULES.types.trigger);
 const ENTITY_COLLECTIONS = Object.freeze({
   asset: new Set(["assetOverrides", "addedAssets"]),
   npc: new Set(["npcOverrides", "addedNpcs"]),
@@ -29,12 +30,12 @@ function clamp(value, minimum, maximum, fallback = minimum) {
 }
 
 function cleanText(value, maximum = 160) {
-  return typeof value === "string" ? value.trim().slice(0, maximum) : "";
+  return typeof value === "string" ? value.slice(0, maximum) : "";
 }
 
 export function cleanEditorId(value) {
-  const id = cleanText(value, 80);
-  return /^[a-z0-9][a-z0-9_-]{0,79}$/i.test(id) ? id : "";
+  const id = cleanText(value, MAP_EDITOR_RULES.lengths.id);
+  return isEditorId(id) ? id : "";
 }
 
 function cleanToken(value, maximum = 64) {
@@ -43,20 +44,19 @@ function cleanToken(value, maximum = 64) {
 }
 
 function cleanTileKey(value) {
-  const match = /^(\d{1,2}),(\d{1,2})$/.exec(String(value || ""));
+  const match = /^(\d+),(\d+)$/.exec(String(value || ""));
   if (!match) return "";
   const col = Number(match[1]); const row = Number(match[2]);
-  return col <= 78 && row <= 78 ? `${col},${row}` : "";
+  return col < MAP_EDITOR_RULES.world.cols && row < MAP_EDITOR_RULES.world.rows ? `${col},${row}` : "";
 }
 
 function cleanStringList(value, { maximumItems = 12, maximumLength = 500 } = {}) {
   return (Array.isArray(value) ? value : [])
     .slice(0, maximumItems)
-    .map((entry) => cleanText(entry, maximumLength))
-    .filter(Boolean);
+    .map((entry) => cleanText(entry, maximumLength));
 }
 
-function cleanIdList(value, maximumItems = 1000) {
+function cleanIdList(value, maximumItems = MAP_EDITOR_RULES.limits.hiddenAssets) {
   return [...new Set((Array.isArray(value) ? value : [])
     .slice(0, maximumItems)
     .map(cleanEditorId)
@@ -66,15 +66,15 @@ function cleanIdList(value, maximumItems = 1000) {
 function cleanAssetTransform(value, { id = "", requireIdentity = false } = {}) {
   if (!isPlainObject(value)) return null;
   const transform = {
-    x: clamp(value.x, 0, 2508),
-    y: clamp(value.y, 0, 2508),
-    scale: clamp(value.scale, .25, 4, 1),
-    rotation: clamp(value.rotation, -360, 360, 0),
+    x: clamp(value.x, 0, MAP_EDITOR_RULES.world.width),
+    y: clamp(value.y, 0, MAP_EDITOR_RULES.world.height),
+    scale: clamp(value.scale, ...MAP_EDITOR_RULES.ranges.scale, 1),
+    rotation: clamp(value.rotation, ...MAP_EDITOR_RULES.ranges.rotation, 0),
     solid: value.solid !== false,
   };
-  if (Number.isFinite(Number(value.depthY))) transform.depthY = clamp(value.depthY, -2508, 5016);
+  if (Number.isFinite(Number(value.depthY))) transform.depthY = clamp(value.depthY, ...MAP_EDITOR_RULES.ranges.depthY);
   if (typeof value.flipX === "boolean") transform.flipX = value.flipX;
-  const label = cleanText(value.label, 80);
+  const label = cleanText(value.label, MAP_EDITOR_RULES.lengths.assetLabel);
   if (label) transform.label = label;
   if (requireIdentity) {
     transform.id = cleanEditorId(id || value.id);
@@ -92,16 +92,16 @@ function cleanNpc(value, { id = "", requireIdentity = false } = {}) {
     if (!normalizedId) return null;
     npc.id = normalizedId;
   }
-  if (value.col !== undefined) npc.col = Math.floor(clamp(value.col, 0, 78));
-  if (value.row !== undefined) npc.row = Math.floor(clamp(value.row, 0, 78));
+  if (value.col !== undefined) npc.col = Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.cols - 1));
+  if (value.row !== undefined) npc.row = Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.rows - 1));
   if (DIRECTIONS.has(value.direction)) npc.direction = value.direction;
-  const name = cleanText(value.name, 80); if (name) npc.name = name;
+  const name = cleanText(value.name, MAP_EDITOR_RULES.lengths.npcName); if (name) npc.name = name;
   const sprite = cleanEditorId(value.sprite); if (sprite) npc.sprite = sprite;
   if (Array.isArray(value.lines)) npc.lines = cleanStringList(value.lines);
   if (isPlainObject(value.patrol) && Array.isArray(value.patrol.to) && value.patrol.to.length >= 2) {
     npc.patrol = {
-      to: [Math.floor(clamp(value.patrol.to[0], 0, 78)), Math.floor(clamp(value.patrol.to[1], 0, 78))],
-      tilesPerSecond: clamp(value.patrol.tilesPerSecond, .05, 10, .75),
+      to: [Math.floor(clamp(value.patrol.to[0], 0, MAP_EDITOR_RULES.world.cols - 1)), Math.floor(clamp(value.patrol.to[1], 0, MAP_EDITOR_RULES.world.rows - 1))],
+      tilesPerSecond: clamp(value.patrol.tilesPerSecond, ...MAP_EDITOR_RULES.ranges.patrolSpeed, .75),
     };
   }
   if (typeof value.solid === "boolean") npc.solid = value.solid;
@@ -114,15 +114,15 @@ function cleanEntrance(value, id = "") {
   if (!isPlainObject(value)) return null;
   const entrance = {
     id: cleanEditorId(id || value.id),
-    col: Math.floor(clamp(value.col, 0, 78)),
-    row: Math.floor(clamp(value.row, 0, 78)),
+    col: Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.cols - 1)),
+    row: Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.rows - 1)),
   };
   if (!entrance.id) return null;
-  const label = cleanText(value.label, 120); if (label) entrance.label = label;
+  const label = cleanText(value.label, MAP_EDITOR_RULES.lengths.label); if (label) entrance.label = label;
   const action = cleanToken(value.action); if (action) entrance.action = action;
   const targetMap = cleanEditorId(value.targetMap); if (targetMap) entrance.targetMap = targetMap;
-  if (Number.isFinite(Number(value.targetX))) entrance.targetX = clamp(value.targetX, 0, 100000);
-  if (Number.isFinite(Number(value.targetY))) entrance.targetY = clamp(value.targetY, 0, 100000);
+  if (Number.isFinite(Number(value.targetX))) entrance.targetX = clamp(value.targetX, ...MAP_EDITOR_RULES.ranges.targetCoordinate);
+  if (Number.isFinite(Number(value.targetY))) entrance.targetY = clamp(value.targetY, ...MAP_EDITOR_RULES.ranges.targetCoordinate);
   if (DIRECTIONS.has(value.targetDirection)) entrance.targetDirection = value.targetDirection;
   const effect = cleanToken(value.effect); if (effect) entrance.effect = effect;
   const linkedAssetId = cleanEditorId(value.linkedAssetId); if (linkedAssetId) entrance.linkedAssetId = linkedAssetId;
@@ -135,20 +135,20 @@ function cleanEvent(value, id = "") {
   if (!isPlainObject(value)) return null;
   const event = {
     id: cleanEditorId(id || value.id),
-    col: Math.floor(clamp(value.col, 0, 78)),
-    row: Math.floor(clamp(value.row, 0, 78)),
+    col: Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.cols - 1)),
+    row: Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.rows - 1)),
     type: EVENT_TYPES.has(value.type) ? value.type : "dialogue",
     trigger: EVENT_TRIGGERS.has(value.trigger) ? value.trigger : "interact",
   };
   if (!event.id) return null;
-  const message = cleanText(value.message, 1000); if (message) event.message = message;
+  const message = cleanText(value.message, MAP_EDITOR_RULES.lengths.eventMessage); if (message) event.message = message;
   const targetMap = cleanEditorId(value.targetMap); if (targetMap) event.targetMap = targetMap;
-  if (Number.isFinite(Number(value.targetX))) event.targetX = clamp(value.targetX, 0, 100000);
-  if (Number.isFinite(Number(value.targetY))) event.targetY = clamp(value.targetY, 0, 100000);
+  if (Number.isFinite(Number(value.targetX))) event.targetX = clamp(value.targetX, ...MAP_EDITOR_RULES.ranges.targetCoordinate);
+  if (Number.isFinite(Number(value.targetY))) event.targetY = clamp(value.targetY, ...MAP_EDITOR_RULES.ranges.targetCoordinate);
   if (DIRECTIONS.has(value.targetDirection)) event.targetDirection = value.targetDirection;
   const effect = cleanToken(value.effect); if (effect) event.effect = effect;
-  if (Number.isFinite(Number(value.duration))) event.duration = clamp(value.duration, 0, 60_000);
-  if (Number.isFinite(Number(value.intensity))) event.intensity = clamp(value.intensity, 0, 10);
+  if (Number.isFinite(Number(value.duration))) event.duration = clamp(value.duration, ...MAP_EDITOR_RULES.ranges.duration);
+  if (Number.isFinite(Number(value.intensity))) event.intensity = clamp(value.intensity, ...MAP_EDITOR_RULES.ranges.intensity);
   event.once = value.once === true;
   event.enabled = value.enabled !== false;
   return event;
@@ -191,21 +191,21 @@ export function sanitizeMapEditorData(value) {
   const source = isPlainObject(value) ? value : {};
   const result = emptyMapEditorData();
   Object.entries(isPlainObject(source.tileOverrides) ? source.tileOverrides : {})
-    .slice(0, 7000)
+    .slice(0, MAP_EDITOR_RULES.limits.tileOverrides)
     .forEach(([rawKey, type]) => {
       const key = cleanTileKey(rawKey);
       if (key && TILE_TYPES.has(type)) result.tileOverrides[key] = type;
     });
-  result.assetOverrides = cleanRecord(source.assetOverrides, (entry) => cleanAssetTransform(entry), 1000);
+  result.assetOverrides = cleanRecord(source.assetOverrides, (entry) => cleanAssetTransform(entry), MAP_EDITOR_RULES.limits.assetOverrides);
   result.addedAssets = cleanEntityArray(source.addedAssets,
-    (entry, id) => cleanAssetTransform(entry, { id, requireIdentity: true }), 500);
+    (entry, id) => cleanAssetTransform(entry, { id, requireIdentity: true }), MAP_EDITOR_RULES.limits.addedAssets);
   result.hiddenAssets = cleanIdList(source.hiddenAssets);
-  result.npcOverrides = cleanRecord(source.npcOverrides, (entry) => cleanNpc(entry), 500);
+  result.npcOverrides = cleanRecord(source.npcOverrides, (entry) => cleanNpc(entry), MAP_EDITOR_RULES.limits.npcOverrides);
   result.addedNpcs = cleanEntityArray(source.addedNpcs,
-    (entry, id) => cleanNpc(entry, { id, requireIdentity: true }), 500);
+    (entry, id) => cleanNpc(entry, { id, requireIdentity: true }), MAP_EDITOR_RULES.limits.addedNpcs);
   result.hiddenNpcs = cleanIdList(source.hiddenNpcs);
-  result.entrances = cleanEntityArray(source.entrances, cleanEntrance, 500);
-  result.events = cleanEntityArray(source.events, cleanEvent, 1000);
+  result.entrances = cleanEntityArray(source.entrances, cleanEntrance, MAP_EDITOR_RULES.limits.entrances);
+  result.events = cleanEntityArray(source.events, cleanEvent, MAP_EDITOR_RULES.limits.events);
   return result;
 }
 
@@ -282,6 +282,8 @@ function setHidden(data, list, id, present) {
 
 function normalizeOperation(rawOperation) {
   if (!isPlainObject(rawOperation)) fail("Operación del editor no válida");
+  const validation = validateEditorOperation(rawOperation);
+  if (!validation.valid) fail(validation.errors[0] || "Operación del editor no válida", 400, { code: "validation", errors: validation.errors });
   if (rawOperation.type === "tile.set") {
     const key = cleanTileKey(rawOperation.key);
     if (!key || (rawOperation.value !== null && !TILE_TYPES.has(rawOperation.value))) fail("Casilla o tipo de terreno no válido");
@@ -322,6 +324,18 @@ function operationTouchedKeys(operation) {
   if (operation.entity === "asset") keys.push("list:hiddenAssets");
   if (operation.entity === "npc") keys.push("list:hiddenNpcs");
   return keys;
+}
+
+function currentValueForKey(data, key) {
+  if (key.startsWith("tile:")) return data.tileOverrides[key.slice(5)] ?? null;
+  if (key === "list:hiddenAssets" || key === "list:hiddenNpcs") return clone(data[key.slice(5)] || []);
+  const match = /^entity:(asset|npc|entrance|event):(.+)$/.exec(key);
+  if (!match) return null;
+  const [, entity, id] = match;
+  if (entity === "asset") return clone(data.assetOverrides[id] || data.addedAssets.find((entry) => entry.id === id) || null);
+  if (entity === "npc") return clone(data.npcOverrides[id] || data.addedNpcs.find((entry) => entry.id === id) || null);
+  const collection = entity === "entrance" ? data.entrances : data.events;
+  return clone(collection.find((entry) => entry.id === id) || null);
 }
 
 function applyOperation(data, operation) {
@@ -376,7 +390,7 @@ function cleanPresence(value) {
   if (!actorId) fail("Falta actorId");
   const user = {
     actorId,
-    name: cleanText(value.name, 40) || "Editor",
+    name: cleanText(value.name, MAP_EDITOR_RULES.lengths.actorName) || "Editor",
     color: /^#[0-9a-f]{6}$/i.test(value.color) ? value.color : "#55c2ff",
     cursor: null,
     player: null,
@@ -384,7 +398,7 @@ function cleanPresence(value) {
     selection: null,
   };
   if (isPlainObject(value.cursor) && Number.isFinite(Number(value.cursor.x)) && Number.isFinite(Number(value.cursor.y))) {
-    user.cursor = { x: clamp(value.cursor.x, 0, 100000), y: clamp(value.cursor.y, 0, 100000) };
+    user.cursor = { x: clamp(value.cursor.x, 0, MAP_EDITOR_RULES.world.width), y: clamp(value.cursor.y, 0, MAP_EDITOR_RULES.world.height) };
   }
   if (isPlainObject(value.selection)) {
     const entity = cleanToken(value.selection.entity, 32); const id = cleanEditorId(value.selection.id);
@@ -400,8 +414,8 @@ function cleanPresence(value) {
       : "down";
     const interior = value.player.interior == null ? null : cleanToken(value.player.interior, 64) || null;
     user.player = {
-      x: clamp(value.player.x, 0, 100000),
-      y: clamp(value.player.y, 0, 100000),
+      x: clamp(value.player.x, 0, MAP_EDITOR_RULES.world.width),
+      y: clamp(value.player.y, 0, MAP_EDITOR_RULES.world.height),
       direction,
       dimension: cleanToken(value.player.dimension, 32) || "san_pablo",
       interior,
@@ -431,6 +445,7 @@ export function createMapEditorHub({ editorDataPath, persist = atomicWriteMapEdi
   const keyVersions = new Map();
   const connections = new Map();
   const presence = new Map();
+  const processedTransactions = new Map();
   const readyPromise = loadMapEditorData(editorDataPath).then((loaded) => { data = loaded; });
   readyPromise.catch(() => {});
 
@@ -494,36 +509,68 @@ export function createMapEditorHub({ editorDataPath, persist = atomicWriteMapEdi
       return serializeMutation(async () => {
         if (!isPlainObject(body)) fail("Petición de operaciones no válida");
         const actorId = cleanEditorId(body.actorId);
-        const name = cleanText(body.name, 40) || "Editor";
+        const name = cleanText(body.name, MAP_EDITOR_RULES.lengths.actorName) || "Editor";
         const baseRevision = Number(body.baseRevision);
         if (!actorId) fail("Falta actorId");
         if (!Number.isInteger(baseRevision) || baseRevision < 0) fail("baseRevision no válida");
         if (baseRevision > revision) fail("La revisión del cliente está por delante", 409, { revision, code: "revision_ahead" });
         if (!Array.isArray(body.operations) || body.operations.length < 1 || body.operations.length > 256) fail("Se requieren entre 1 y 256 operaciones");
         const operations = body.operations.map(normalizeOperation);
+        const transactionId = cleanEditorId(body.transactionId);
+        const transactionKey = transactionId ? `${actorId}:${transactionId}` : "";
+        const operationSignature = JSON.stringify(operations);
+        const processed = transactionKey ? processedTransactions.get(transactionKey) : null;
+        if (processed) {
+          if (processed.signature !== operationSignature) fail("El identificador de transacción ya se usó para otro cambio", 409, { revision, code: "transaction_reused", transactionId });
+          return clone(processed.result);
+        }
         const conflictKeys = [...new Set(operations.map(operationKey))];
         const touchedKeys = [...new Set(operations.flatMap(operationTouchedKeys))];
         const conflicts = conflictKeys.filter((key) => Math.max(resetRevision, keyVersions.get(key) || 0) > baseRevision);
-        if (conflicts.length) fail("Hay cambios más recientes en las mismas entidades", 409, { revision, code: "conflict", conflicts });
+        if (conflicts.length) fail("Hay cambios más recientes en las mismas entidades", 409, {
+          revision,
+          code: "conflict",
+          conflicts,
+          current: Object.fromEntries(conflicts.map((key) => [key, currentValueForKey(data, key)])),
+          transactionId: cleanEditorId(body.transactionId),
+        });
         const next = clone(data);
         operations.forEach((operation) => applyOperation(next, operation));
         const sanitized = sanitizeMapEditorData(next);
         if (JSON.stringify(sanitized) === JSON.stringify(data)) {
-          return { revision, counts: mapEditorCounts(data), operations: [] };
+          const result = { revision, counts: mapEditorCounts(data), operations: [] };
+          if (transactionKey) processedTransactions.set(transactionKey, { signature: operationSignature, result });
+          return result;
         }
         await persist(editorDataPath, sanitized);
         data = sanitized;
         revision += 1;
         touchedKeys.forEach((key) => keyVersions.set(key, revision));
-        const event = { actorId, name, revision, operations: clone(operations) };
+        const event = {
+          actorId,
+          name,
+          revision,
+          operations: clone(operations),
+          transactionId: cleanEditorId(body.transactionId),
+          groupId: cleanEditorId(body.groupId),
+          label: cleanText(body.label, MAP_EDITOR_RULES.lengths.label),
+        };
         broadcast("operations", event, revision);
-        return { revision, counts: mapEditorCounts(data), operations };
+        const result = { revision, counts: mapEditorCounts(data), operations };
+        if (transactionKey) {
+          processedTransactions.set(transactionKey, { signature: operationSignature, result: clone(result) });
+          if (processedTransactions.size > 2000) processedTransactions.delete(processedTransactions.keys().next().value);
+        }
+        return result;
       });
     },
     updatePresence(rawPresence) {
       const user = cleanPresence(rawPresence);
+      const previous = presence.get(user.actorId);
+      const { updatedAt: _updatedAt, ...previousUser } = previous || {};
+      const unchanged = Boolean(previous) && JSON.stringify(previousUser) === JSON.stringify(user);
       presence.set(user.actorId, { ...user, updatedAt: now() });
-      broadcastPresence();
+      if (!unchanged) broadcastPresence();
       return { users: activeUsers() };
     },
     async subscribe(request, response, rawPresence) {
@@ -555,7 +602,7 @@ export function createMapEditorHub({ editorDataPath, persist = atomicWriteMapEdi
     close() {
       clearInterval(sweepTimer);
       connections.forEach((entry) => entry.response.end());
-      connections.clear(); presence.clear();
+      connections.clear(); presence.clear(); processedTransactions.clear();
     },
   };
 }

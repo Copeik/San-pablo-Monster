@@ -146,12 +146,85 @@ test("operaciones concurrentes fusionan claves distintas y rechazan la misma cla
   const conflict = await collision.find((entry) => entry.status === 409).json();
   assert.equal(conflict.code, "conflict");
   assert.deepEqual(conflict.conflicts, ["tile:3,3"]);
+  assert.equal(conflict.current["tile:3,3"] === "blocked" || conflict.current["tile:3,3"] === "walkable", true);
   snapshot = await (await fetch(`${app.origin}/api/dev/map-editor`)).json();
   assert.equal(snapshot.revision, 3);
   assert.equal(Object.keys(snapshot.data.tileOverrides).length, 3);
 
   const persisted = parseMapEditorSource(await readFile(app.editorDataPath, "utf8"));
   assert.deepEqual(persisted.tileOverrides, snapshot.data.tileOverrides);
+});
+
+test("valida operaciones estrictamente, no trunca y mantiene el archivo anterior", async (t) => {
+  const app = await startEditorServer(); t.after(() => app.close());
+  const valid = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId: "strict", baseRevision: 0, transactionId: "valid-1",
+    operations: [{ type: "tile.set", key: "1,1", value: "walkable" }],
+  });
+  assert.equal(valid.status, 200);
+  const before = await readFile(app.editorDataPath, "utf8");
+  const message = "x".repeat(1001);
+  const invalid = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId: "strict", baseRevision: 1, transactionId: "invalid-1",
+    operations: [{ type: "entity.set", entity: "event", collection: "events", id: "too-long", value: {
+      id: "too-long", col: 2, row: 2, type: "dialogue", trigger: "step", message,
+    } }],
+  });
+  assert.equal(invalid.status, 400);
+  const body = await invalid.json();
+  assert.equal(body.code, "validation");
+  assert.match(body.errors.join(" "), /1000/);
+  assert.equal(await readFile(app.editorDataPath, "utf8"), before);
+
+  const outside = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId: "strict", baseRevision: 1, transactionId: "invalid-2",
+    operations: [{ type: "entity.set", entity: "entrance", collection: "entrances", id: "outside", value: {
+      id: "outside", col: 2, row: 2, action: "transition", targetMap: "current", targetX: 2600, targetY: 20,
+    } }],
+  });
+  assert.equal(outside.status, 400);
+});
+
+test("una transacción repetida es idempotente y no duplica revisión", async (t) => {
+  const app = await startEditorServer(); t.after(() => app.close());
+  const body = {
+    actorId: "alice", name: "Alice", baseRevision: 0, transactionId: "keepalive-1", label: "Trazo",
+    operations: [{ type: "tile.set", key: "7,7", value: "blocked" }],
+  };
+  const first = await postJson(`${app.origin}/api/dev/map-editor/operations`, body);
+  const firstResult = await first.json();
+  assert.equal(first.status, 200);
+  const retry = await postJson(`${app.origin}/api/dev/map-editor/operations`, body);
+  const retryResult = await retry.json();
+  assert.equal(retry.status, 200);
+  assert.equal(retryResult.revision, firstResult.revision);
+  const snapshot = await (await fetch(`${app.origin}/api/dev/map-editor`)).json();
+  assert.equal(snapshot.revision, 1);
+  assert.deepEqual(snapshot.data.tileOverrides, { "7,7": "blocked" });
+});
+
+test("dos editores sobre la misma entidad reciben copia autoritativa recuperable", async (t) => {
+  const app = await startEditorServer(); t.after(() => app.close());
+  const create = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId: "owner", baseRevision: 0, transactionId: "create-house",
+    operations: [{ type: "entity.set", entity: "asset", collection: "addedAssets", id: "shared-house", value: {
+      id: "shared-house", sprite: "institutional", x: 100, y: 200, scale: 1,
+    } }],
+  });
+  assert.equal(create.status, 200);
+  const baseRevision = (await create.json()).revision;
+  const operation = (actorId, transactionId, x) => postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId, baseRevision, transactionId,
+    operations: [{ type: "entity.set", entity: "asset", collection: "addedAssets", id: "shared-house", value: {
+      id: "shared-house", sprite: "institutional", x, y: 200, scale: 1,
+    } }],
+  });
+  const results = await Promise.all([operation("alice", "move-alice", 300), operation("bob", "move-bob", 500)]);
+  assert.deepEqual(results.map(({ status }) => status).sort(), [200, 409]);
+  const conflict = await results.find(({ status }) => status === 409).json();
+  assert.deepEqual(conflict.conflicts, ["entity:asset:shared-house"]);
+  assert.equal(conflict.current["entity:asset:shared-house"].id, "shared-house");
+  assert.equal([300, 500].includes(conflict.current["entity:asset:shared-house"].x), true);
 });
 
 test("entity.set/delete usa colecciones explícitas y mantiene arrays por id", async (t) => {

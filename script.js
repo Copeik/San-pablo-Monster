@@ -1,3 +1,5 @@
+import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
+
 (() => {
   "use strict";
 
@@ -5,13 +7,17 @@
   const MAP_EDIT_KEY = "pokemon-city-tile-overrides-v5";
   const MAP_REVISION = 14;
   const CITY_MAP = window.CITY_MAP_CONFIG;
+  const CITY_GRID_COLS = Math.ceil(Number(CITY_MAP.width) / Number(CITY_MAP.tileSize));
+  const CITY_GRID_ROWS = Math.ceil(Number(CITY_MAP.height) / Number(CITY_MAP.tileSize));
+  const CITY_MAX_COL = CITY_GRID_COLS - 1;
+  const CITY_MAX_ROW = CITY_GRID_ROWS - 1;
   const BASE_CITY_NPCS = Array.isArray(CITY_MAP.npcs) ? CITY_MAP.npcs.map((npc) => ({ ...npc })) : [];
   const BASE_CITY_ENTRANCES = Array.isArray(CITY_MAP.entrances)
     ? CITY_MAP.entrances.map((entrance) => ({ ...entrance }))
     : (Array.isArray(CITY_MAP.doors) ? CITY_MAP.doors.map((entrance) => ({ ...entrance })) : []);
 
   function runtimeEntityId(value, fallback = "") {
-    const normalized = String(value || fallback).trim().replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80);
+    const normalized = String(value || fallback).trim().replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, MAP_EDITOR_RULES.lengths.id);
     return normalized || fallback;
   }
 
@@ -25,15 +31,15 @@
     const npc = {
       ...value,
       id,
-      col: Math.max(0, Math.min(78, col)),
-      row: Math.max(0, Math.min(78, row)),
+      col: Math.max(0, Math.min(CITY_MAX_COL, col)),
+      row: Math.max(0, Math.min(CITY_MAX_ROW, row)),
       direction,
-      name: String(value.name || "NPC").slice(0, 80),
-      sprite: String(value.sprite || "guide").slice(0, 80),
+      name: String(value.name || "NPC").slice(0, MAP_EDITOR_RULES.lengths.npcName),
+      sprite: String(value.sprite || "guide").slice(0, MAP_EDITOR_RULES.lengths.id),
       lines: (Array.isArray(value.lines) ? value.lines : [value.lines])
         .filter((line) => typeof line === "string" && line.trim())
-        .slice(0, 12)
-        .map((line) => line.slice(0, 500)),
+        .slice(0, MAP_EDITOR_RULES.lengths.npcLines)
+        .map((line) => line.slice(0, MAP_EDITOR_RULES.lengths.npcLine)),
     };
     const destination = value.patrol?.to;
     const patrolSpeed = Number(value.patrol?.tilesPerSecond);
@@ -41,10 +47,10 @@
     if (patrolDestination.length === 2 && patrolDestination.every(Number.isFinite) && Number.isFinite(patrolSpeed) && patrolSpeed > 0) {
       npc.patrol = {
         to: [
-          Math.max(0, Math.min(78, Math.floor(patrolDestination[0]))),
-          Math.max(0, Math.min(78, Math.floor(patrolDestination[1]))),
+          Math.max(0, Math.min(CITY_MAX_COL, Math.floor(patrolDestination[0]))),
+          Math.max(0, Math.min(CITY_MAX_ROW, Math.floor(patrolDestination[1]))),
         ],
-        tilesPerSecond: Math.max(.1, Math.min(6, patrolSpeed)),
+        tilesPerSecond: Math.max(MAP_EDITOR_RULES.ranges.patrolSpeed[0], Math.min(MAP_EDITOR_RULES.ranges.patrolSpeed[1], patrolSpeed)),
       };
     } else delete npc.patrol;
     return npc;
@@ -66,11 +72,11 @@
     return {
       ...value,
       id,
-      col: Math.max(0, Math.min(78, col)),
-      row: Math.max(0, Math.min(78, row)),
-      label: String(value.label || "Entrada").slice(0, 100),
+      col: Math.max(0, Math.min(CITY_MAX_COL, col)),
+      row: Math.max(0, Math.min(CITY_MAX_ROW, row)),
+      label: String(value.label || "Entrada").slice(0, MAP_EDITOR_RULES.lengths.label),
       action: String(value.action || (value.targetMap ? "transition" : "closed")).toLowerCase(),
-      targetMap: value.targetMap == null ? null : String(value.targetMap).slice(0, 80),
+      targetMap: value.targetMap == null ? null : String(value.targetMap).slice(0, MAP_EDITOR_RULES.lengths.id),
       targetX: Number.isFinite(targetX) ? targetX : null,
       targetY: Number.isFinite(targetY) ? targetY : null,
       targetDirection: ["up", "down", "left", "right"].includes(value.targetDirection) ? value.targetDirection : "down",
@@ -93,20 +99,20 @@
     return {
       ...value,
       id,
-      col: Math.max(0, Math.min(78, col)),
-      row: Math.max(0, Math.min(78, row)),
-      label: String(value.label || "Evento").slice(0, 100),
+      col: Math.max(0, Math.min(CITY_MAX_COL, col)),
+      row: Math.max(0, Math.min(CITY_MAX_ROW, row)),
+      label: String(value.label || "Evento").slice(0, MAP_EDITOR_RULES.lengths.label),
       type,
       trigger: value.trigger === "step" ? "step" : "interact",
       message: Array.isArray(value.message)
-        ? value.message.filter((line) => typeof line === "string").slice(0, 12).map((line) => line.slice(0, 500))
-        : String(value.message || "").slice(0, 1000),
-      targetMap: value.targetMap == null ? null : String(value.targetMap).slice(0, 80),
+        ? value.message.filter((line) => typeof line === "string").slice(0, MAP_EDITOR_RULES.lengths.npcLines).map((line) => line.slice(0, MAP_EDITOR_RULES.lengths.npcLine))
+        : String(value.message || "").slice(0, MAP_EDITOR_RULES.lengths.eventMessage),
+      targetMap: value.targetMap == null ? null : String(value.targetMap).slice(0, MAP_EDITOR_RULES.lengths.id),
       targetX: Number.isFinite(targetX) ? targetX : null,
       targetY: Number.isFinite(targetY) ? targetY : null,
       targetDirection: ["up", "down", "left", "right"].includes(value.targetDirection) ? value.targetDirection : "down",
-      duration: Math.max(80, Math.min(5000, Number(value.duration) || 440)),
-      intensity: Math.max(.1, Math.min(4, Number(value.intensity) || 1)),
+      duration: Math.max(MAP_EDITOR_RULES.ranges.duration[0], Math.min(MAP_EDITOR_RULES.ranges.duration[1], Number(value.duration) || 440)),
+      intensity: Math.max(MAP_EDITOR_RULES.ranges.intensity[0], Math.min(MAP_EDITOR_RULES.ranges.intensity[1], Number(value.intensity) || 1)),
       effect: ["fade", "flash", "none"].includes(value.effect) ? value.effect : (type === "transition" ? "fade" : "none"),
       once: Boolean(value.once),
     };
@@ -849,8 +855,23 @@
   let lastStepEventTile = "";
   let entranceTileIndex = new Map();
   let eventTileIndex = new Map();
+  let npcTileIndex = new Map();
   let selectedEditorEntity = null;
+  let selectedEditorEntities = [];
   let collaboratorCursors = [];
+  let editorCameraActive = false;
+  let editorZoom = 1;
+  let editorMode = "objects";
+  let editorReturnFocus = null;
+  let editorTerrainPreview = [];
+  let editorMarquee = null;
+  const editorHiddenEntities = new Set();
+  let editorOverlays = { grid: true, coordinates: false, collisions: false, npcs: false, entrances: false, events: false, routes: false };
+  const editorOverlayCanvas = document.createElement("canvas");
+  editorOverlayCanvas.width = WORLD_WIDTH;
+  editorOverlayCanvas.height = WORLD_HEIGHT;
+  let editorOverlayDirty = true;
+  let editorOverlayCacheHits = 0;
   const voiceNpc = {
     x: NORMAL_START.x + 150, y: NORMAL_START.y, direction: "left",
     moving: false, animationElapsed: 0, positionReady: false,
@@ -1820,8 +1841,8 @@
         linkedEntrancePositions.set(trackingKey, tracked);
         const centerX = tracked.x + totalDeltaX;
         const centerY = tracked.y + totalDeltaY;
-        entrance.col = Math.max(0, Math.min(78, Math.round(centerX / CITY_MAP.tileSize - .5)));
-        entrance.row = Math.max(0, Math.min(78, Math.round(centerY / CITY_MAP.tileSize - .5)));
+        entrance.col = Math.max(0, Math.min(CITY_MAX_COL, Math.round(centerX / CITY_MAP.tileSize - .5)));
+        entrance.row = Math.max(0, Math.min(CITY_MAX_ROW, Math.round(centerY / CITY_MAP.tileSize - .5)));
         if (Number.isFinite(tracked.approachX) && Number.isFinite(tracked.approachY)) {
           entrance.approach = [
             tracked.approachX + totalDeltaX,
@@ -2409,6 +2430,12 @@
   }
 
   function rebuildRuntimeEntityIndexes() {
+    npcTileIndex = new Map();
+    cityNpcs.filter((npc) => npc.enabled !== false).forEach((npc) => {
+      const key = tileKey(npc.col, npc.row);
+      if (!npcTileIndex.has(key)) npcTileIndex.set(key, []);
+      npcTileIndex.get(key).push(npc);
+    });
     entranceTileIndex = new Map();
     cityEntrances.forEach((entrance) => entranceTileIndex.set(tileKey(entrance.col, entrance.row), entrance));
     eventTileIndex = new Map();
@@ -2417,6 +2444,7 @@
       if (!eventTileIndex.has(key)) eventTileIndex.set(key, []);
       eventTileIndex.get(key).push(event);
     });
+    editorOverlayDirty = true;
   }
 
   function rebuildDefaultMapTiles() {
@@ -3062,6 +3090,7 @@
 
   function openBuildingEditor() {
     if (!developerEditorEnabled) return;
+    editorReturnFocus = document.activeElement;
     enterWorldForBuildingEditor();
     if (!elements.battleScreen.classList.contains("hidden")) {
       setBattleMessage("Termina el combate para abrir el modo dios.");
@@ -3077,12 +3106,24 @@
     elements.buildingEditor.setAttribute("aria-hidden", "false");
     elements.editorScrim.classList.remove("hidden");
     updateTileEditorInfo();
+    editorCameraActive = true;
+    editorOverlayDirty = true;
+    document.dispatchEvent(new CustomEvent("map-editor-open"));
   }
 
   function closeBuildingEditorPanel() {
+    const wasOpen = elements.buildingEditor.classList.contains("open");
     elements.buildingEditor.classList.remove("open");
     elements.buildingEditor.setAttribute("aria-hidden", "true");
     elements.editorScrim.classList.add("hidden");
+    editorCameraActive = false;
+    editorTerrainPreview = [];
+    editorMarquee = null;
+    if (wasOpen) {
+      document.dispatchEvent(new CustomEvent("map-editor-close"));
+      const target = editorReturnFocus?.isConnected ? editorReturnFocus : elements.buildingEditorButton;
+      window.setTimeout(() => target?.focus(), 0);
+    }
   }
 
   function updateTileEditorInfo() {
@@ -6131,7 +6172,7 @@
   }
 
   function drawWorldAssetColliders(context, assets) {
-    if (!elements.buildingEditor.classList.contains("open")) return;
+    if (!elements.buildingEditor.classList.contains("open") || !editorOverlays.collisions) return;
     context.save();
     context.fillStyle = "rgba(234, 42, 127, .28)";
     context.strokeStyle = "rgba(255, 255, 255, .92)";
@@ -6143,8 +6184,10 @@
         context.fillRect(rect.x, rect.y, rect.w, rect.h);
         context.strokeRect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2);
       });
-      context.fillStyle = "rgba(12, 31, 24, .88)";
-      context.fillText(`${asset.id} · depth ${asset.depthY ?? asset.y}`, asset.x - asset.w / 2, asset.y - asset.h - 4);
+      if (editorZoom >= 1.1) {
+        context.fillStyle = "rgba(12, 31, 24, .88)";
+        context.fillText(`${asset.id} · depth ${asset.depthY ?? asset.y}`, asset.x - asset.w / 2, asset.y - asset.h - 4);
+      }
       context.fillStyle = "rgba(234, 42, 127, .28)";
     });
     const selectedAsset = assets.find((asset) => asset.id === selectedEditorAssetId);
@@ -6248,7 +6291,7 @@
 
   function drawWorldEntities(context, encounterGrass = { tiles: [], now: performance.now() }) {
     const bounds = visibleBounds(96);
-    const visibleAssets = cityWorldAssets.filter((asset) => worldAssetInView(asset, bounds));
+    const visibleAssets = cityWorldAssets.filter((asset) => !editorHiddenEntities.has(`asset:${asset.id}`) && worldAssetInView(asset, bounds));
     const entities = visibleAssets.map((asset) => ({
       y: Number(asset.depthY ?? asset.y),
       priority: 0,
@@ -6262,7 +6305,7 @@
         draw: () => drawPortal(context, portalPosition.x, portalPosition.y, state.inventory.prismShards >= 3),
       });
     }
-    cityNpcs.forEach((npc) => entities.push({
+    cityNpcs.filter((npc) => !editorHiddenEntities.has(`npc:${npc.id}`)).forEach((npc) => entities.push({
       y: mapNpcPosition(npc).y,
       priority: 1,
       draw: () => drawWorldNpc(context, npc),
@@ -6829,69 +6872,136 @@
   }
 
   function drawEditorPresence(context) {
-    const selection = editorEntityWorldPosition(selectedEditorEntity);
-    if (selection) {
+    const localSelections = selectedEditorEntities.length ? selectedEditorEntities : (selectedEditorEntity ? [selectedEditorEntity] : []);
+    localSelections.forEach((entry) => {
+      const selection = editorEntityWorldPosition(entry);
+      if (!selection) return;
       context.save();
       context.strokeStyle = "#ffe56a";
       context.fillStyle = "rgba(255,229,106,.2)";
       context.lineWidth = 3;
-      context.beginPath(); context.arc(selection.x, selection.y, 23, 0, Math.PI * 2); context.fill(); context.stroke();
-      context.restore();
-    }
-    collaboratorCursors.forEach((collaborator) => {
-      if (!Number.isFinite(collaborator.x) || !Number.isFinite(collaborator.y)) return;
-      context.save();
-      context.translate(collaborator.x, collaborator.y);
-      context.fillStyle = collaborator.color;
-      context.strokeStyle = "rgba(10,28,22,.85)";
-      context.lineWidth = 2;
-      context.beginPath();
-      context.moveTo(0, 0); context.lineTo(5, 18); context.lineTo(10, 11); context.lineTo(19, 9); context.closePath();
-      context.fill(); context.stroke();
-      context.font = "700 11px monospace";
-      const width = context.measureText(collaborator.name).width + 10;
-      context.fillStyle = "rgba(10,28,22,.88)"; context.fillRect(12, 13, width, 18);
-      context.fillStyle = "#fff"; context.textBaseline = "top"; context.fillText(collaborator.name, 17, 16);
+      if (entry.kind === "asset") {
+        const asset = cityWorldAssets.find((candidate) => candidate.id === entry.id);
+        if (asset) {
+          const left = asset.x - asset.w / 2; const top = asset.y - asset.h;
+          context.fillRect(left, top, asset.w, asset.h); context.strokeRect(left, top, asset.w, asset.h);
+          [[left, top], [left + asset.w, top], [left, top + asset.h], [left + asset.w, top + asset.h]].forEach(([x, y]) => { context.fillStyle = "#fff"; context.fillRect(x - 4, y - 4, 8, 8); context.strokeRect(x - 4, y - 4, 8, 8); });
+          context.beginPath(); context.moveTo(asset.x, top); context.lineTo(asset.x, top - 24); context.stroke(); context.beginPath(); context.arc(asset.x, top - 28, 5, 0, Math.PI * 2); context.fill(); context.stroke();
+        }
+      } else { context.beginPath(); context.arc(selection.x, selection.y, 23, 0, Math.PI * 2); context.fill(); context.stroke(); }
       context.restore();
     });
+    collaboratorCursors.forEach((collaborator) => {
+      const lockedPosition = editorEntityWorldPosition(collaborator.selection);
+      if (lockedPosition) {
+        context.save(); context.strokeStyle = collaborator.color; context.lineWidth = 4; context.setLineDash([6, 5]);
+        context.beginPath(); context.arc(lockedPosition.x, lockedPosition.y, 28, 0, Math.PI * 2); context.stroke(); context.setLineDash([]); context.restore();
+      }
+      if (Number.isFinite(collaborator.x) && Number.isFinite(collaborator.y)) {
+        context.save();
+        context.translate(collaborator.x, collaborator.y);
+        context.fillStyle = collaborator.color;
+        context.strokeStyle = "rgba(10,28,22,.85)";
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(0, 0); context.lineTo(5, 18); context.lineTo(10, 11); context.lineTo(19, 9); context.closePath();
+        context.fill(); context.stroke();
+        context.font = "700 11px monospace";
+        const width = context.measureText(collaborator.name).width + 10;
+        context.fillStyle = "rgba(10,28,22,.88)"; context.fillRect(12, 13, width, 18);
+        context.fillStyle = "#fff"; context.textBaseline = "top"; context.fillText(collaborator.name, 17, 16);
+        context.restore();
+      }
+    });
+  }
+
+  function drawEditorOverlayCell(context, col, row) {
+    const size = CITY_MAP.tileSize; const x = col * size; const y = row * size; const key = tileKey(col, row);
+    const colors = { blocked: "rgba(214,59,52,.34)", door: "rgba(255,191,46,.48)", encounter: "rgba(52,183,91,.34)", event: "rgba(126,81,201,.42)" };
+    const type = mapTileType(col, row);
+    if ((editorMode === "terrain" || editorOverlays.collisions) && colors[type]) { context.fillStyle = colors[type]; context.fillRect(x, y, size, size); }
+    if (editorOverlays.npcs && npcTileIndex.has(key)) { context.fillStyle = "rgba(48,174,214,.55)"; context.fillRect(x, y, size, size); }
+    if (editorOverlays.entrances && entranceTileIndex.has(key)) {
+      context.fillStyle = "rgba(255,191,46,.62)"; context.fillRect(x, y, size, size);
+      context.strokeStyle = "rgba(74,45,0,.92)"; context.lineWidth = 3; context.beginPath();
+      context.moveTo(x + 8, y + size / 2); context.lineTo(x + size - 8, y + size / 2);
+      context.lineTo(x + size - 14, y + size / 2 - 6); context.moveTo(x + size - 8, y + size / 2); context.lineTo(x + size - 14, y + size / 2 + 6); context.stroke();
+    }
+    if (editorOverlays.events && eventTileIndex.has(key)) {
+      const events = eventTileIndex.get(key); const step = events.some((event) => event.trigger === "step");
+      context.fillStyle = "rgba(126,81,201,.56)"; context.fillRect(x, y, size, size);
+      context.strokeStyle = "rgba(255,255,255,.9)"; context.lineWidth = 2; context.setLineDash(step ? [4, 3] : []);
+      context.beginPath(); context.arc(x + size / 2, y + size / 2, step ? 11 : 7, 0, Math.PI * 2); context.stroke(); context.setLineDash([]);
+    }
+    if (editorOverlays.grid) { context.strokeStyle = "rgba(255,255,255,.46)"; context.lineWidth = 1; context.strokeRect(x + .5, y + .5, size - 1, size - 1); }
+    if (editorOverlays.coordinates && editorZoom >= 1.2) {
+      context.fillStyle = "rgba(15,45,32,.82)"; context.font = "10px monospace"; context.textAlign = "left"; context.textBaseline = "top"; context.fillText(`${col},${row}`, x + 2, y + 2);
+    }
+  }
+
+  function rebuildEditorOverlayCache() {
+    const startedAt = performance.now(); const context = editorOverlayCanvas.getContext("2d");
+    context.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const cols = Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize); const rows = Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize);
+    for (let row = 0; row < rows; row += 1) for (let col = 0; col < cols; col += 1) drawEditorOverlayCell(context, col, row);
+    if (editorOverlays.routes) {
+      context.save(); context.strokeStyle = "rgba(47,149,201,.78)"; context.lineWidth = 3; context.setLineDash([8, 5]);
+      cityNpcs.filter((npc) => npc.patrol?.to).forEach((npc) => {
+        context.beginPath(); context.moveTo((npc.col + .5) * CITY_MAP.tileSize, (npc.row + .5) * CITY_MAP.tileSize);
+        context.lineTo((npc.patrol.to[0] + .5) * CITY_MAP.tileSize, (npc.patrol.to[1] + .5) * CITY_MAP.tileSize); context.stroke();
+      });
+      context.restore();
+    }
+    if (editorOverlays.entrances) {
+      context.save(); context.strokeStyle = "rgba(255,191,46,.75)"; context.fillStyle = "rgba(255,191,46,.9)"; context.lineWidth = 3; context.setLineDash([7, 6]);
+      cityEntrances.filter((entrance) => ["san-pablo", "city", "current"].includes(String(entrance.targetMap || "").toLowerCase()) && Number.isFinite(entrance.targetX) && Number.isFinite(entrance.targetY)).forEach((entrance) => {
+        const fromX = (entrance.col + .5) * CITY_MAP.tileSize; const fromY = (entrance.row + .5) * CITY_MAP.tileSize;
+        context.beginPath(); context.moveTo(fromX, fromY); context.lineTo(entrance.targetX, entrance.targetY); context.stroke();
+        const angle = Math.atan2(entrance.targetY - fromY, entrance.targetX - fromX);
+        context.setLineDash([]); context.beginPath(); context.moveTo(entrance.targetX, entrance.targetY);
+        context.lineTo(entrance.targetX - Math.cos(angle - .45) * 13, entrance.targetY - Math.sin(angle - .45) * 13);
+        context.lineTo(entrance.targetX - Math.cos(angle + .45) * 13, entrance.targetY - Math.sin(angle + .45) * 13); context.closePath(); context.fill(); context.setLineDash([7, 6]);
+      });
+      context.restore();
+    }
+    editorOverlayDirty = false; editorOverlayCacheHits = 0;
+    document.documentElement.dataset.editorOverlayBuildMs = (performance.now() - startedAt).toFixed(2);
+  }
+
+  function redrawEditorOverlayTile(col, row) {
+    if (editorOverlayDirty) return;
+    const context = editorOverlayCanvas.getContext("2d"); const size = CITY_MAP.tileSize;
+    context.clearRect(col * size, row * size, size, size); drawEditorOverlayCell(context, col, row);
   }
 
   function drawTileGrid(context) {
     if (!elements.buildingEditor.classList.contains("open")) return;
-    const size = CITY_MAP.tileSize;
-    const startCol = Math.max(0, Math.floor(camera.x / size));
-    const endCol = Math.min(Math.ceil(WORLD_WIDTH / size) - 1, Math.ceil((camera.x + VIEW_WIDTH) / size));
-    const startRow = Math.max(0, Math.floor(camera.y / size));
-    const endRow = Math.min(Math.ceil(WORLD_HEIGHT / size) - 1, Math.ceil((camera.y + VIEW_HEIGHT) / size));
-    const colors = { blocked: "rgba(214,59,52,.34)", door: "rgba(255,191,46,.48)", encounter: "rgba(52,183,91,.34)", event: "rgba(126,81,201,.42)" };
-    const npcTiles = new Set(cityNpcs.map((npc) => tileKey(npc.col, npc.row)));
-    context.save();
-    context.lineWidth = 1;
-    context.font = "8px monospace";
-    context.textAlign = "left";
-    context.textBaseline = "top";
-    for (let row = startRow; row <= endRow; row += 1) {
-      for (let col = startCol; col <= endCol; col += 1) {
-        const x = col * size; const y = row * size; const type = mapTileType(col, row);
-        if (colors[type]) { context.fillStyle = colors[type]; context.fillRect(x, y, size, size); }
-        const npcHere = npcTiles.has(tileKey(col, row));
-        if (npcHere) { context.fillStyle = "rgba(48,174,214,.5)"; context.fillRect(x, y, size, size); }
-        context.strokeStyle = "rgba(255,255,255,.48)"; context.strokeRect(x + .5, y + .5, size - 1, size - 1);
-        context.fillStyle = "rgba(15,45,32,.82)"; context.fillText(npcHere ? "NPC" : `${col},${row}`, x + 2, y + 2);
-      }
-    }
+    if (editorOverlayDirty) rebuildEditorOverlayCache();
+    else { editorOverlayCacheHits += 1; document.documentElement.dataset.editorOverlayCacheHits = String(editorOverlayCacheHits); }
+    context.save(); context.drawImage(editorOverlayCanvas, 0, 0);
     if (selectedMapTile) {
       context.strokeStyle = "#fff"; context.lineWidth = 3;
-      context.strokeRect(selectedMapTile.col * size + 1.5, selectedMapTile.row * size + 1.5, size - 3, size - 3);
+      context.strokeRect(selectedMapTile.col * CITY_MAP.tileSize + 1.5, selectedMapTile.row * CITY_MAP.tileSize + 1.5, CITY_MAP.tileSize - 3, CITY_MAP.tileSize - 3);
     }
-    drawEditorPresence(context);
-    context.restore();
+    editorTerrainPreview.forEach((cell) => {
+      context.fillStyle = cell.type === "inherit" ? "rgba(255,255,255,.35)" : "rgba(255,229,106,.36)";
+      context.strokeStyle = "rgba(255,229,106,.95)"; context.lineWidth = 2;
+      context.fillRect(cell.col * CITY_MAP.tileSize, cell.row * CITY_MAP.tileSize, CITY_MAP.tileSize, CITY_MAP.tileSize);
+      context.strokeRect(cell.col * CITY_MAP.tileSize + 1, cell.row * CITY_MAP.tileSize + 1, CITY_MAP.tileSize - 2, CITY_MAP.tileSize - 2);
+    });
+    if (editorMarquee) {
+      const left = Math.min(editorMarquee.start.x, editorMarquee.end.x); const top = Math.min(editorMarquee.start.y, editorMarquee.end.y);
+      context.fillStyle = "rgba(83,169,220,.18)"; context.strokeStyle = "rgba(83,169,220,.95)"; context.lineWidth = 2; context.setLineDash([7, 4]);
+      context.fillRect(left, top, Math.abs(editorMarquee.end.x - editorMarquee.start.x), Math.abs(editorMarquee.end.y - editorMarquee.start.y));
+      context.strokeRect(left, top, Math.abs(editorMarquee.end.x - editorMarquee.start.x), Math.abs(editorMarquee.end.y - editorMarquee.start.y)); context.setLineDash([]);
+    }
+    drawEditorPresence(context); context.restore();
   }
 
   function syncWorldCanvasResolution() {
     const rect = elements.canvas.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return { scaleX: 1, scaleY: 1 };
-    VIEW_HEIGHT = BASE_VIEW_HEIGHT;
+    VIEW_HEIGHT = BASE_VIEW_HEIGHT / (elements.buildingEditor.classList.contains("open") ? editorZoom : 1);
     VIEW_WIDTH = Math.max(1, Math.round(BASE_VIEW_HEIGHT * rect.width / rect.height));
     const deviceRatio = Math.max(1, Number(window.devicePixelRatio) || 1);
     const fourKCap = Math.min(MAX_RENDER_WIDTH / rect.width, MAX_RENDER_HEIGHT / rect.height);
@@ -7026,6 +7136,11 @@
 
   function updateCamera(deltaSeconds) {
     if (state.dimension === "prism" || state.interior) return;
+    if (elements.buildingEditor.classList.contains("open") && editorCameraActive) {
+      camera.x = clamp(camera.x, 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
+      camera.y = clamp(camera.y, 0, Math.max(0, currentWorldHeight() - VIEW_HEIGHT));
+      return;
+    }
     const targetX = clamp(state.worldX - VIEW_WIDTH / 2, 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
     const targetY = clamp(state.worldY - VIEW_HEIGHT / 2, 0, Math.max(0, currentWorldHeight() - VIEW_HEIGHT));
     const smoothing = 1 - Math.pow(.0008, deltaSeconds);
@@ -8183,6 +8298,7 @@
       else cityNpcs.push(record);
       npcPatrolStates.delete(normalizedId);
       updateNpcDeploymentDataset();
+      rebuildRuntimeEntityIndexes();
       return cloneRuntimeRecord(record);
     }
     if (normalizedKind === "entrance") {
@@ -8226,6 +8342,7 @@
     if (normalizedKind === "npc") {
       npcPatrolStates.delete(normalizedId);
       updateNpcDeploymentDataset();
+      rebuildRuntimeEntityIndexes();
     } else if (normalizedKind === "entrance" || normalizedKind === "event") {
       if (normalizedKind === "entrance") {
         [...linkedEntrancePositions.keys()].filter((key) => key.endsWith(`:${normalizedId}`))
@@ -8292,6 +8409,7 @@
           id,
           name: String(user?.name || user?.displayName || `Editor ${index + 1}`).slice(0, 40),
           color: /^#[0-9a-f]{6}$/i.test(user?.color || "") ? user.color : "#52d7ff",
+          selection: user?.selection?.entity && user?.selection?.id ? { kind: String(user.selection.entity), id: String(user.selection.id) } : null,
           x: hasCursor ? clamp(cursorX, 0, WORLD_WIDTH) : null,
           y: hasCursor ? clamp(cursorY, 0, WORLD_HEIGHT) : null,
           player: hasPlayer ? {
@@ -8347,6 +8465,7 @@
       frame: animationFrame,
     }),
     assetCatalog: () => window.CITY_MAP_LAYOUT?.assetCatalog || {},
+    npcSpriteUrl: (sprite) => sprite === "guide" ? GUIDE_NPC_SHEET_URL : (NPC_ROSTER_SHEET_URLS[sprite] || ""),
     canvasToWorld(clientX, clientY) {
       const rect = elements.canvas.getBoundingClientRect();
       return {
@@ -8383,22 +8502,70 @@
       else return false;
       selectedMapTile = { col: normalizedCol, row: normalizedRow };
       selectedTileType = type;
+      redrawEditorOverlayTile(normalizedCol, normalizedRow);
       updateTileEditorInfo();
       return true;
     },
     clearTiles() {
       tileOverrides.clear();
       selectedMapTile = null;
+      editorOverlayDirty = true;
       updateTileEditorInfo();
     },
-    setEntity: setRuntimeEntity,
-    deleteEntity: deleteRuntimeEntity,
+    setEntity(kind, id, value) { return setRuntimeEntity(kind, id, value); },
+    deleteEntity(kind, id) { return deleteRuntimeEntity(kind, id); },
     selectEntity(kind, id) {
       const normalizedKind = normalizedEditorEntityKind(kind);
       selectedEditorEntity = normalizedKind && id ? { kind: normalizedKind, id: String(id) } : null;
       if (normalizedKind === "asset") selectedEditorAssetId = id || null;
       else selectedEditorAssetId = null;
       return Boolean(selectedEditorEntity);
+    },
+    setSelections(selections) {
+      selectedEditorEntities = (Array.isArray(selections) ? selections : []).map((entry) => ({ kind: normalizedEditorEntityKind(entry?.kind), id: runtimeEntityId(entry?.id) })).filter((entry) => entry.kind && entry.id);
+      return selectedEditorEntities.length;
+    },
+    setMarquee(value) { editorMarquee = value?.start && value?.end ? { start: { ...value.start }, end: { ...value.end } } : null; },
+    setTerrainPreview(cells) { editorTerrainPreview = (Array.isArray(cells) ? cells : []).slice(0, 7000).filter((cell) => Number.isInteger(cell.col) && Number.isInteger(cell.row)); },
+    setEditorMode(value) { editorMode = String(value || "objects"); editorOverlayDirty = true; },
+    setEditorOverlays(value = {}) { editorOverlays = { ...editorOverlays, ...value }; editorOverlayDirty = true; },
+    setEntityVisibility(kind, id, visible) {
+      const key = `${normalizedEditorEntityKind(kind)}:${runtimeEntityId(id)}`;
+      if (visible) editorHiddenEntities.delete(key); else editorHiddenEntities.add(key);
+      return !editorHiddenEntities.has(key);
+    },
+    panBy(clientDeltaX, clientDeltaY) {
+      const rect = elements.canvas.getBoundingClientRect();
+      camera.x = clamp(camera.x + Number(clientDeltaX) * (VIEW_WIDTH / rect.width), 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
+      camera.y = clamp(camera.y + Number(clientDeltaY) * (VIEW_HEIGHT / rect.height), 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      editorCameraActive = true; return { ...camera };
+    },
+    centerAt(worldX, worldY) {
+      camera.x = clamp(Number(worldX) - VIEW_WIDTH / 2, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
+      camera.y = clamp(Number(worldY) - VIEW_HEIGHT / 2, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      editorCameraActive = true; return { ...camera };
+    },
+    focusEntity(kind, id) {
+      const position = editorEntityWorldPosition({ kind: normalizedEditorEntityKind(kind), id: runtimeEntityId(id) });
+      if (!position) return false;
+      camera.x = clamp(position.x - VIEW_WIDTH / 2, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
+      camera.y = clamp(position.y - VIEW_HEIGHT / 2, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      editorCameraActive = true; return true;
+    },
+    zoom: () => editorZoom,
+    setZoom(value, anchor = null) {
+      const nextZoom = clamp(Number(value), .25, 3); const oldWidth = VIEW_WIDTH; const oldHeight = VIEW_HEIGHT;
+      const point = anchor && Number.isFinite(Number(anchor.x)) && Number.isFinite(Number(anchor.y)) ? anchor : { x: camera.x + oldWidth / 2, y: camera.y + oldHeight / 2 };
+      const ratioX = oldWidth ? (point.x - camera.x) / oldWidth : .5; const ratioY = oldHeight ? (point.y - camera.y) / oldHeight : .5;
+      editorZoom = nextZoom; syncWorldCanvasResolution();
+      camera.x = clamp(point.x - ratioX * VIEW_WIDTH, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
+      camera.y = clamp(point.y - ratioY * VIEW_HEIGHT, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      editorCameraActive = true; editorOverlayDirty = true; return editorZoom;
+    },
+    fitWorld() {
+      const rect = elements.canvas.getBoundingClientRect(); const aspect = rect.width / Math.max(1, rect.height);
+      editorZoom = Math.max(.25, Math.min(1, BASE_VIEW_HEIGHT / WORLD_HEIGHT, (BASE_VIEW_HEIGHT * aspect) / WORLD_WIDTH));
+      syncWorldCanvasResolution(); camera.x = 0; camera.y = 0; editorCameraActive = true; editorOverlayDirty = true; return editorZoom;
     },
     previewEvent(event) { return runMapEvent(event, { preview: true }); },
     applyEditorData: applyRuntimeEditorData,

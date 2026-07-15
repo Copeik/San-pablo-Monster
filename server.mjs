@@ -6,6 +6,7 @@ import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createMapEditorHub, sanitizeMapEditorData } from "./map-editor-server.mjs";
+import { MAP_EDITOR_RULES, validateMapEditorData } from "./map-editor-contract.js";
 
 export { sanitizeMapEditorData } from "./map-editor-server.mjs";
 
@@ -387,6 +388,7 @@ export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR
           enabled: true,
           file: path.basename(editorDataPath),
           ...snapshot,
+          rules: MAP_EDITOR_RULES,
           collaboration: {
             enabled: collaborationEnabled,
             requireToken: collaborationEnabled,
@@ -423,6 +425,8 @@ export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR
       if (request.method === "POST" && url.pathname === "/api/dev/map-editor") {
         const body = await readJson(request, MAX_EDITOR_BODY_BYTES);
         requireMapEditorAccess(request, url, env, collaborationToken, body);
+        const validation = validateMapEditorData(body);
+        if (!validation.valid) throw Object.assign(new Error(validation.errors[0]), { statusCode: 400, details: { code: "validation", errors: validation.errors } });
         const data = sanitizeMapEditorData(body);
         const result = await editorHub.replace(data);
         json(response, 200, {
@@ -473,7 +477,8 @@ if (isEntryPoint) {
   if (collaborationEnabled && !runtimeEnv.GAME_EDITOR_TOKEN) runtimeEnv.GAME_EDITOR_TOKEN = randomBytes(24).toString("base64url");
   const port = Number(runtimeEnv.PORT) || DEFAULT_PORT;
   const host = collaborationEnabled ? runtimeEnv.HOST || "0.0.0.0" : "127.0.0.1";
-  const server = createAppServer({ env: runtimeEnv });
+  const editorDataPath = runtimeEnv.GAME_EDITOR_DATA_PATH ? path.resolve(runtimeEnv.GAME_EDITOR_DATA_PATH) : MAP_EDITOR_DATA_PATH;
+  const server = createAppServer({ env: runtimeEnv, editorDataPath });
   server.listen(port, host, () => {
     if (collaborationEnabled) {
       privateIpv4Addresses().forEach((address) => {
