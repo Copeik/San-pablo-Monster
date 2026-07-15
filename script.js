@@ -86,6 +86,20 @@
   const INDOOR_SPAWN = { x: INDOOR_ROOM.x + INDOOR_ROOM.w / 2, y: INDOOR_ROOM.y + INDOOR_ROOM.h - 54 };
   const INDOOR_NPC = { x: INDOOR_ROOM.x + INDOOR_ROOM.w / 2, y: INDOOR_ROOM.y + 120, radius: 46 };
   const INDOOR_EXIT = { x: INDOOR_SPAWN.x, y: INDOOR_SPAWN.y, radius: 42 };
+  /* Muebles sólidos del dormitorio. Solo el ordenador ofrece una acción. */
+  const BEDROOM_UPSTAIRS_FIXTURES = Object.freeze([
+    { id: "bedroom_bed", x: 158, y: 192, hitbox: { x: 108, y: 120, w: 100, h: 142 } },
+    { id: "bedroom_computer", x: 718, y: 382, radius: 80, hitbox: { x: 650, y: 300, w: 140, h: 126 } },
+    { id: "bedroom_shelf", x: 810, y: 166, hitbox: { x: 756, y: 100, w: 108, h: 130 } },
+    { id: "bedroom_stairs_down", x: 814, y: 468, radius: 88, hitbox: { x: 756, y: 414, w: 118, h: 106 } },
+  ]);
+  const BEDROOM_GROUND_FIXTURES = Object.freeze([
+    { id: "bedroom_stairs_up", x: 814, y: 146, radius: 88, hitbox: { x: 756, y: 90, w: 118, h: 110 } },
+    { id: "ground_kitchen", hitbox: { x: 100, y: 78, w: 310, h: 112 } },
+    { id: "ground_table", hitbox: { x: 356, y: 306, w: 150, h: 104 } },
+    { id: "ground_tv", hitbox: { x: 104, y: 360, w: 126, h: 102 } },
+    { id: "ground_sofa", hitbox: { x: 660, y: 356, w: 148, h: 100 } },
+  ]);
 
   const ROUTE_ROOM = { x: 20, y: 20, w: 920, h: 584, wall: 22 };
   const ROUTE_SPAWN = { x: 460, y: ROUTE_ROOM.y + ROUTE_ROOM.h - 54 };
@@ -116,6 +130,7 @@
     mart: { floor: "#cfe0ea", floorAlt: "#bfd3e0", wall: "#3f6f9c", accent: "#f4d35e", label: "POKÉ MART" },
     lab: { floor: "#e4ead6", floorAlt: "#d6dec4", wall: "#5a8a52", accent: "#9ad1f0", label: "LABORATORIO POKÉMON" },
     house: { floor: "#d9c39c", floorAlt: "#cdb088", wall: "#7a5230", accent: "#e7c86a", label: "CASA" },
+    bedroom: { floor: "#d7c39f", floorAlt: "#c8ad82", wall: "#6d4b38", accent: "#8ab8d1", label: "HABITACIÓN DEL ENTRENADOR" },
   };
 
   const NPC_DEFS = {
@@ -139,7 +154,33 @@
   const NPC_SHEET_URL = "assets/sprites/hgss-npc-idle.png";
   const GUIDE_NPC_SHEET_URL = "assets/sprites/npc-guide-walk.png";
   const DOCTOR_POTATO_PORTRAIT_URL = "assets/portraits/doctor-potato.png";
+  const PROTAGONIST_PORTRAIT_URL = "assets/portraits/protagonista.png";
+  const RIVAL_PORTRAIT_URL = "assets/portraits/rival.png";
   const DOCTOR_POTATO_THEME_URL = "assets/audio/patata-de-barrio.mp3";
+  const CHARACTER_DIALOG_PRESENTATIONS = Object.freeze({
+    "doctor-potato": Object.freeze({
+      speaker: "Doctor Potato",
+      portrait: DOCTOR_POTATO_PORTRAIT_URL,
+      portraitAlt: "Retrato del Doctor Potato",
+    }),
+    protagonista: Object.freeze({
+      speaker: "Ethan",
+      portrait: PROTAGONIST_PORTRAIT_URL,
+      portraitAlt: "Retrato del protagonista",
+    }),
+    rival: Object.freeze({
+      speaker: "Rival",
+      portrait: RIVAL_PORTRAIT_URL,
+      portraitAlt: "Retrato del Rival",
+    }),
+  });
+  const DIALOG_SPEAKER_ALIASES = Object.freeze({
+    "doctor-potato": "doctor-potato",
+    "doctor potato": "doctor-potato",
+    protagonista: "protagonista",
+    ethan: "protagonista",
+    rival: "rival",
+  });
   const NPC_IMPORTED_SPRITE_URLS = Object.freeze({
     "nino-sol": "assets/sprites/npcs/nino-sol-walk.png",
     "chica-lazo": "assets/sprites/npcs/chica-lazo-walk.png",
@@ -156,6 +197,7 @@
     bailaora: "assets/sprites/npcs/bailaora-walk.png",
     "abuelo-cana": "assets/sprites/npcs/abuelo-cana-walk.png",
     "abuela-morada": "assets/sprites/npcs/abuela-morada-walk.png",
+    rival: "assets/sprites/npcs/rival-walk.png",
   });
   const NPC_ROSTER_SHEET_URLS = Object.freeze({
     ...Object.fromEntries([
@@ -2776,12 +2818,20 @@
   }
 
   function showDialog(messages, avatar = "!", callback = null, options = {}) {
+    const speakerAlias = typeof options.speaker === "string"
+      ? DIALOG_SPEAKER_ALIASES[options.speaker.trim().toLocaleLowerCase("es")]
+      : null;
+    const characterAlias = typeof options.characterAlias === "string"
+      ? options.characterAlias
+      : speakerAlias;
+    const preset = CHARACTER_DIALOG_PRESENTATIONS[characterAlias] || null;
+    const presentation = preset ? { ...preset, ...options } : options;
     dialogQueue = Array.isArray(messages) ? [...messages] : [String(messages)];
     dialogCallback = callback;
     inputLocked = true;
     clearDirectionalInput();
     elements.dialogAvatar.textContent = avatar;
-    applyDialogPresentation(options);
+    applyDialogPresentation(presentation);
     elements.dialogBox.classList.remove("hidden");
     advanceDialog();
   }
@@ -2878,9 +2928,8 @@
       showDialog([
         "¿QUÉ MIERDAS HACES AQUÍ, NIÑATO?!! ¡DAME UN POCO DE PELLOTE Y VETE!",
       ], "D", beginDoctorPotatoExit, {
+        characterAlias: "doctor-potato",
         speaker: "Doctor Potato",
-        portrait: DOCTOR_POTATO_PORTRAIT_URL,
-        portraitAlt: "Retrato del Doctor Potato",
         cinematic: true,
         music: DOCTOR_POTATO_THEME_URL,
       });
@@ -3002,8 +3051,19 @@
     }
     if (state.interior === "building") {
       const player = { x: state.worldX, y: state.worldY };
-      if (distance(player, INDOOR_NPC) <= INDOOR_NPC.radius) return { id: "interior_npc" };
-      if (distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
+      if (state.interiorData?.type === "bedroom") {
+        const groundFloor = state.interiorData.floor === "ground";
+        const fixtures = groundFloor ? BEDROOM_GROUND_FIXTURES : BEDROOM_UPSTAIRS_FIXTURES;
+        const stairs = fixtures.find((fixture) => fixture.id === (groundFloor ? "bedroom_stairs_up" : "bedroom_stairs_down"));
+        if (!groundFloor) {
+          const computer = fixtures.find((fixture) => fixture.id === "bedroom_computer");
+          if (computer && distance(player, computer) <= computer.radius) return { id: "bedroom_computer" };
+        }
+        if (stairs && distance(player, stairs) <= stairs.radius) return { id: stairs.id };
+        if (groundFloor && distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
+      }
+      if (state.interiorData?.type !== "bedroom" && distance(player, INDOOR_NPC) <= INDOOR_NPC.radius) return { id: "interior_npc" };
+      if (state.interiorData?.type !== "bedroom" && distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
       return null;
     }
     if (state.interior === "route") {
@@ -3052,7 +3112,8 @@
       maintenance_terminal: "Usar terminal", dimension_portal: "Examinar portal",
       dimension_exit: "Regresar a San Pablo", black_market: "Entrar al mercado negro", health: "Hablar", cafe: "Hablar",
       uned: "Consultar", school: "Leer", field: "Examinar",
-      interior_npc: "Hablar", world_npc: "Hablar", interior_exit: "Salir",
+      interior_npc: "Hablar", world_npc: "Hablar", interior_exit: "Salir", bedroom_computer: "Guardar partida",
+      bedroom_stairs_down: "Bajar", bedroom_stairs_up: "Subir",
       world_blocker: "Examinar obstáculo",
     };
     const label = poi.id === "map_tile" && poi.event?.action === "prism"
@@ -3138,7 +3199,7 @@
           showDialog(["Los tres fragmentos encajan en el umbral. El aire empieza a doblarse…", "La dimensión reacciona al ruido y puede pedir acceso al micrófono."], "◇", enterPrismDimension);
         }
       } else {
-        const typeMap = { heal: "center", shop: "mart", lab: "lab", house: "house", route: "route" };
+        const typeMap = { heal: "center", shop: "mart", lab: "lab", house: "house", bedroom: "bedroom", route: "route" };
         const type = typeMap[door.action];
         if (type) enterInterior(type, door);
         else showDialog([`${door.label}: aún no hay nada que hacer aquí.`], "!");
@@ -3149,7 +3210,14 @@
     if (poi.id === "world_npc") {
       const npc = poi.npc || {};
       const lines = Array.isArray(npc.lines) && npc.lines.length ? npc.lines : ["Hola, entrenador."];
-      showDialog(lines.map((line) => `${npc.name || "NPC"}: ${line}`), (npc.name || "N").charAt(0));
+      const speaker = npc.name || CHARACTER_DIALOG_PRESENTATIONS[npc.sprite]?.speaker || "NPC";
+      const hasPresentation = Boolean(CHARACTER_DIALOG_PRESENTATIONS[npc.sprite]);
+      showDialog(
+        hasPresentation ? lines : lines.map((line) => `${speaker}: ${line}`),
+        speaker.charAt(0),
+        null,
+        hasPresentation ? { characterAlias: npc.sprite, speaker } : {},
+      );
       return;
     }
 
@@ -3163,6 +3231,9 @@
     }
     if (poi.id === "interior_npc") { useInteriorNpc(); return; }
     if (poi.id === "interior_exit") { leaveInterior(); return; }
+    if (poi.id === "bedroom_computer") { saveAtBedroomComputer(); return; }
+    if (poi.id === "bedroom_stairs_down") { changeBedroomFloor("ground"); return; }
+    if (poi.id === "bedroom_stairs_up") { changeBedroomFloor("upstairs"); return; }
 
     if (poi.id === "building_door") {
       const building = buildings.find((item) => item.id === poi.buildingId);
@@ -3292,7 +3363,11 @@
       return !ROUTE_BLOCKED.some((b) => x >= b.x - 14 && x <= b.x + b.w + 14 && y >= b.y - 14 && y <= b.y + b.h + 14);
     }
     const r = INDOOR_ROOM;
-    return x > r.x + r.wall && x < r.x + r.w - r.wall && y > r.y + r.wall && y < r.y + r.h - r.wall;
+    if (!(x > r.x + r.wall && x < r.x + r.w - r.wall && y > r.y + r.wall && y < r.y + r.h - r.wall)) return false;
+    if (state.interiorData?.type !== "bedroom") return true;
+    const fixtures = state.interiorData.floor === "ground" ? BEDROOM_GROUND_FIXTURES : BEDROOM_UPSTAIRS_FIXTURES;
+    return !fixtures.some(({ hitbox }) => x >= hitbox.x - 12 && x <= hitbox.x + hitbox.w + 12
+      && y >= hitbox.y - 12 && y <= hitbox.y + hitbox.h + 12);
   }
 
   async function enterInterior(type, door) {
@@ -3302,6 +3377,7 @@
       state.interior = type === "route" ? "route" : "building";
       state.interiorData = {
         type, label: door?.label || INTERIOR_PALETTES[type]?.label || "Interior",
+        floor: type === "bedroom" ? "upstairs" : null,
         npc: door?.npc || null, returnX: state.worldX, returnY: state.worldY, returnDir: state.direction,
       };
       if (type === "route") { state.worldX = ROUTE_SPAWN.x; state.worldY = ROUTE_SPAWN.y; }
@@ -3351,6 +3427,29 @@
     else if (type === "lab") labDialog();
     else if (type === "house") houseDialog(state.interiorData?.npc);
     else showDialog(["Alguien está aquí…"], "?");
+  }
+
+  function saveAtBedroomComputer() {
+    saveGame();
+    playTone(660, .06, "square", .02);
+    showDialog(["El ordenador se conecta al sistema de San Pablo.", "Partida guardada en este navegador."], "PC");
+  }
+
+  async function changeBedroomFloor(floor) {
+    if (inputLocked || state.interiorData?.type !== "bedroom") return;
+    inputLocked = true; clearDirectionalInput();
+    await fadeTransition(() => {
+      state.interiorData.floor = floor;
+      state.interiorData.label = floor === "ground" ? "Casa del Entrenador · Planta baja" : "Habitación del Entrenador";
+      state.worldX = floor === "ground" ? 720 : 720;
+      state.worldY = floor === "ground" ? 208 : 470;
+      state.direction = floor === "ground" ? "right" : "left";
+      lastArea = "";
+    });
+    inputLocked = false;
+    playTone(floor === "ground" ? 370 : 470, .08, "square", .025);
+    updateAreaLabel(); updateInteractPrompt(); saveGame();
+    showAreaToast((state.interiorData?.label || "Interior").toUpperCase());
   }
 
   function clinicHeal() {
@@ -4356,14 +4455,14 @@
     const palette = INTERIOR_PALETTES[state.interiorData?.type] || INTERIOR_PALETTES.house;
     const r = INDOOR_ROOM;
     const type = state.interiorData?.type;
-    const tile = type === "house" ? 24 : 32;
+    const tile = (type === "house" || type === "bedroom") ? 24 : 32;
     for (let y = r.y; y < r.y + r.h; y += tile) {
       for (let x = r.x; x < r.x + r.w; x += tile) {
         const checker = (Math.floor((x - r.x) / tile) + Math.floor((y - r.y) / tile)) % 2;
         context.fillStyle = checker ? palette.floorAlt : palette.floor;
         context.fillRect(x, y, tile, tile);
         context.fillStyle = "rgba(255,255,255,.08)";
-        if (type === "house") context.fillRect(x, y, tile - 1, 2);
+        if (type === "house" || type === "bedroom") context.fillRect(x, y, tile - 1, 2);
         else context.fillRect(x + 2, y + 2, tile - 4, 2);
       }
     }
@@ -4377,12 +4476,15 @@
     context.strokeStyle = palette.accent; context.lineWidth = 3;
     context.strokeRect(r.x + 9.5, r.y + 9.5, r.w - 19, r.h - 19);
     drawInteriorFurniture(context, palette);
-    drawInteriorNpc(context, palette);
-    const ex = INDOOR_EXIT;
-    context.fillStyle = "rgba(244,220,119,.32)"; context.beginPath(); context.ellipse(ex.x, ex.y, 44, 16, 0, 0, Math.PI * 2); context.fill();
-    context.fillStyle = "rgba(244,220,119,.5)"; context.beginPath(); context.ellipse(ex.x, ex.y, 22, 8, 0, 0, Math.PI * 2); context.fill();
-    drawMapLabel(context, ex.x, ex.y + 30, "SALIDA");
-    drawMapLabel(context, r.x + r.w / 2, r.y + 48, palette.label);
+    if (type !== "bedroom") drawInteriorNpc(context, palette);
+    const groundFloor = type === "bedroom" && state.interiorData?.floor === "ground";
+    if (type !== "bedroom" || groundFloor) {
+      const ex = INDOOR_EXIT;
+      context.fillStyle = "rgba(244,220,119,.32)"; context.beginPath(); context.ellipse(ex.x, ex.y, 44, 16, 0, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "rgba(244,220,119,.5)"; context.beginPath(); context.ellipse(ex.x, ex.y, 22, 8, 0, 0, Math.PI * 2); context.fill();
+      drawMapLabel(context, ex.x, ex.y + 30, "SALIDA");
+    }
+    drawMapLabel(context, r.x + r.w / 2, r.y + 48, groundFloor ? "CASA DEL ENTRENADOR · PLANTA BAJA" : palette.label);
   }
 
   function drawPixelFurniture(context, kind, x, y, color = "#8a6440") {
@@ -4449,6 +4551,9 @@
       drawPixelFurniture(context, "screen", r.x + r.w - 115, r.y + 115, "#75e2e8");
       drawPixelFurniture(context, "table", r.x + 200, r.y + 375, "#7c9d6e");
       drawPixelFurniture(context, "table", r.x + r.w - 200, r.y + 375, "#7c9d6e");
+    } else if (type === "bedroom") {
+      if (state.interiorData?.floor === "ground") drawBedroomGroundFloor(context, palette);
+      else drawBedroomFurniture(context, palette);
     } else {
       const npc = NPC_DEFS[state.interiorData?.npc] || {};
       const layout = npc.layout || "cozy";
@@ -4477,6 +4582,75 @@
         drawPixelFurniture(context, "plant", r.x + r.w - 95, r.y + 390, "#4e9a55");
       }
     }
+  }
+
+  function drawBedroomFurniture(context, palette) {
+    const r = INDOOR_ROOM;
+    /* Cama, escritorio y estantería: guiño a un dormitorio inicial clásico
+       sin abandonar la escala, paleta y trazos propios de San Pablo. */
+    drawPixelFurniture(context, "bed", r.x + 118, r.y + 162, "#5d93bc");
+    drawPixelFurniture(context, "shelf", r.x + r.w - 110, r.y + 136, "#856145");
+    drawPixelFurniture(context, "table", r.x + r.w - 202, r.y + 370, "#9d7048");
+    drawPixelFurniture(context, "screen", r.x + r.w - 202, r.y + 323, "#82d9dc");
+    drawPixelFurniture(context, "rug", r.x + 340, r.y + 382, "#b85e5b");
+    drawPixelFurniture(context, "plant", r.x + 118, r.y + 405, "#4e9a55");
+
+    context.save();
+    context.translate(r.x + 336, r.y + 120);
+    context.fillStyle = "#604331"; context.fillRect(-48, -28, 96, 56);
+    context.fillStyle = "#a97c50"; context.fillRect(-43, -23, 86, 46);
+    context.fillStyle = "#b9e0e3"; context.fillRect(-34, -15, 68, 30);
+    context.fillStyle = "rgba(255,255,255,.55)"; context.fillRect(-28, -11, 26, 5);
+    context.fillStyle = "#5b4533"; context.fillRect(-6, -23, 5, 46); context.fillRect(-43, -3, 86, 5);
+    context.restore();
+
+    context.save();
+    context.translate(r.x + 552, r.y + 126);
+    context.fillStyle = "rgba(29,45,51,.2)"; context.fillRect(-50, 25, 100, 10);
+    context.fillStyle = "#6a4935"; context.fillRect(-46, -28, 92, 58);
+    context.fillStyle = "#d9b56e"; context.fillRect(-40, -23, 80, 48);
+    context.fillStyle = "#f1e5bf"; context.fillRect(-32, -15, 64, 18);
+    context.fillStyle = "#c75d55"; context.fillRect(-26, 8, 52, 12);
+    context.restore();
+
+    drawBedroomStairs(context, 814, 468, "BAJAR");
+  }
+
+  function drawBedroomGroundFloor(context, palette) {
+    const r = INDOOR_ROOM;
+    /* Salón-cocina compacto: encimera arriba, mesa central, TV y sofá,
+       inspirado en la distribución clásica pero con los materiales de San Pablo. */
+    drawPixelFurniture(context, "counter", r.x + 218, r.y + 120, "#ae7a53");
+    drawPixelFurniture(context, "table", r.x + 390, r.y + 356, "#9d7048");
+    drawPixelFurniture(context, "screen", r.x + 150, r.y + 404, "#75d3d7");
+    drawPixelFurniture(context, "sofa", r.x + r.w - 190, r.y + 408, "#b56b72");
+    drawPixelFurniture(context, "plant", r.x + 104, r.y + 240, "#4e9a55");
+    drawPixelFurniture(context, "rug", r.x + 430, r.y + 490, "#b85e5b");
+
+    context.save();
+    context.translate(r.x + 218, r.y + 106);
+    context.fillStyle = "#6a4935"; context.fillRect(-116, -30, 232, 18);
+    context.fillStyle = "#d7e5df"; context.fillRect(-48, -24, 52, 11);
+    context.fillStyle = "#83a8a4"; context.fillRect(40, -25, 28, 12);
+    context.fillStyle = "#f0c55e"; context.fillRect(80, -24, 20, 12);
+    context.restore();
+    drawBedroomStairs(context, 814, 146, "SUBIR");
+  }
+
+  function drawBedroomStairs(context, x, y, label) {
+    context.save(); context.translate(x, y);
+    context.fillStyle = "rgba(28,40,35,.2)"; context.fillRect(-58, 34, 116, 15);
+    for (let step = 0; step < 5; step += 1) {
+      const inset = step * 8;
+      context.fillStyle = step % 2 ? "#b2815a" : "#d2a36d";
+      context.fillRect(-54 + inset, -44 + step * 18, 108 - inset * 2, 20);
+      context.fillStyle = "rgba(255,255,255,.18)";
+      context.fillRect(-50 + inset, -40 + step * 18, 100 - inset * 2, 3);
+    }
+    context.strokeStyle = "#5a3d2d"; context.lineWidth = 5;
+    context.beginPath(); context.moveTo(-56, -48); context.lineTo(-56, 40); context.lineTo(-42, 48); context.stroke();
+    context.restore();
+    drawMapLabel(context, x, y + 64, label);
   }
 
   function drawInteriorNpc(context, palette) {

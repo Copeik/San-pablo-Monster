@@ -186,7 +186,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
     { col: 61, row: 28, label: "Casa", action: "house", npc: "estudiante" },
     { col: 71, row: 40, label: "Casa", action: "house", npc: "comerciante" },
     { col: 61, row: 51, label: "Casa", action: "house", npc: "artista" },
-    { col: 39, row: 69, label: "Casa del parque", action: "house", npc: "guarderia" },
+    { col: 39, row: 69, label: "Habitación del Entrenador", action: "bedroom" },
     { col: 53, row: 71, label: "Jardín Tesalónica", action: "route" },
     { col: 45, row: 13, label: "UNED Sevilla", action: "lab", npc: "professor" },
     { col: 42, row: 54, label: "Campus Cívico", action: "lab", npc: "professor" },

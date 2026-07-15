@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the permanent 4x4 Doctor Potato walking atlas from its 6x3 source."""
+"""Build the permanent 4x4 Doctor Potato walking atlas from its 4x4 source."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ from PIL import Image, ImageChops, ImageDraw
 CELL = 64
 ROWS = ("down", "left", "right", "up")
 SOURCE_FRAMES = (
-    ((2, 0), (0, 0), (2, 0), (1, 0)),
-    ((3, 2), (4, 2), (3, 2), (5, 2)),
-    ((3, 1), (4, 1), (3, 1), (5, 1)),
-    ((3, 0), (4, 0), (3, 0), (5, 0)),
+    ((0, 0), (1, 0), (0, 0), (3, 0)),
+    ((0, 1), (1, 1), (0, 1), (3, 1)),
+    ((0, 2), (1, 2), (0, 2), (3, 2)),
+    ((0, 3), (1, 3), (0, 3), (3, 3)),
 )
 
 
@@ -27,10 +27,9 @@ def source_edges(length: int, cells: int) -> list[int]:
 
 def is_background(pixel: tuple[int, int, int, int]) -> bool:
     red, green, blue, _alpha = pixel
-    brightest = max(red, green, blue)
-    darkest = min(red, green, blue)
-    luminance = (red + green + blue) / 3
-    return brightest - darkest <= 24 and 75 <= luminance <= 176
+    balanced_magenta = abs(red - blue) < 66
+    magenta_dominance = min(red, blue) - green
+    return (red > 205 and blue > 205 and green < 115) or (balanced_magenta and magenta_dominance > 94)
 
 
 def remove_connected_background(image: Image.Image) -> Image.Image:
@@ -75,8 +74,8 @@ def remove_connected_background(image: Image.Image) -> Image.Image:
 
 
 def extract_frame(source: Image.Image, col: int, row: int) -> Image.Image:
-    x_edges = source_edges(source.width, 6)
-    y_edges = source_edges(source.height, 3)
+    x_edges = source_edges(source.width, 4)
+    y_edges = source_edges(source.height, 4)
     inset = 3
     box = (
         x_edges[col] + inset,
@@ -179,7 +178,7 @@ def main() -> None:
     parser.add_argument("--source", type=Path, default=Path("assets/sprites/doctor-potato-source.png"))
     parser.add_argument("--output", type=Path, default=Path("assets/sprites/npcs/doctor-potato-walk.png"))
     parser.add_argument("--report", type=Path, default=Path("assets/sprites/npcs/doctor-potato-report.json"))
-    parser.add_argument("--preview", type=Path, default=Path("tmp/doctor-potato-preview.png"))
+    parser.add_argument("--preview", type=Path, default=Path("assets/sprites/npcs/doctor-potato-preview.png"))
     args = parser.parse_args()
 
     source = Image.open(args.source).convert("RGBA")

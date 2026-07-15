@@ -71,6 +71,7 @@ adding an NPC; no numeric `npc-` prefix is required:
 - `bailaora` — bailaora con vestido negro y rojo.
 - `abuelo-cana` — abuelo con bastón.
 - `abuela-morada` — abuela con mantón morado.
+- `rival` — joven rival con pañuelo y bandolera.
 
 Example: `{ id: "vecino", col: 12, row: 20, direction: "down", name: "Pepe", sprite: "bailaora", lines: ["Hola", "Adiós"] }`.
 
