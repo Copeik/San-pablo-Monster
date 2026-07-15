@@ -1,0 +1,24 @@
+Superpowers battle effects
+==========================
+
+Source repository: https://github.com/sparklinlabs/superpowers-asset-packs
+Source directory: https://github.com/sparklinlabs/superpowers-asset-packs/tree/master/ninja-adventure/fx
+Creators: Sparklin Labs / Pixel-boy
+License: Creative Commons Zero v1.0 Universal (CC0-1.0)
+License text: https://creativecommons.org/publicdomain/zero/1.0/
+
+The upstream repository explicitly permits use in commercial and
+non-commercial games without required attribution. This notice is retained so
+the origin and license of every imported effect remain auditable.
+
+Imported files:
+- normal-impact.png: upstream fx/1.png, 5 frames of 32x32 pixels.
+- fire-ring.png: upstream fx/2.png, 5 frames of 32x32 pixels.
+- water-swirl.png: upstream fx/14.png, 6 frames of 32x32 pixels.
+- electric-bolt.png: upstream fx/19.png, 6 frames of 32x32 pixels.
+
+Modifications:
+- Already-transparent background pixels were normalized to clean alpha. The
+  magenta background appears only in the upstream animated GIF previews.
+- Files were renamed according to their role in this game's battle system.
+- The original pixel colors and animation frames were otherwise preserved.

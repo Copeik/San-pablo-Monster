@@ -2303,6 +2303,34 @@ body { overflow: hidden; }
 .fx-normal { color: #fff; background: radial-gradient(circle,#fff,#bfc6be 45%,transparent 68%); box-shadow: 0 0 13px #fff; }
 .fx-normal.fx-move-trail,.fx-steel.fx-move-trail,.fx-ground.fx-move-trail,.fx-bug.fx-move-trail,.fx-poison.fx-move-trail { background: linear-gradient(90deg,transparent,currentColor,transparent); }
 
+/* CC0 pixel-art accents layered over the procedural hit particles. */
+.fx-sprite-hit {
+  position: absolute;
+  z-index: 34;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform-origin: center;
+  animation-name: fx-sprite-frames,fx-sprite-pop;
+  animation-duration: var(--fx-duration),var(--fx-duration);
+  animation-timing-function: steps(4,end),ease-out;
+  animation-fill-mode: both;
+}
+.fx-sprite-hit-normal { background-image: url("assets/effects/battle/superpowers/normal-impact.png"); background-size: 500% 100%; }
+.fx-sprite-hit-fire { background-image: url("assets/effects/battle/superpowers/fire-ring.png"); background-size: 500% 100%; filter: drop-shadow(0 0 6px #ff8a32); }
+.fx-sprite-hit-water { background-image: url("assets/effects/battle/superpowers/water-swirl.png"); background-size: 600% 100%; filter: drop-shadow(0 0 6px #56ccea); animation-timing-function: steps(5,end),ease-out; }
+.fx-sprite-hit-electric { background-image: url("assets/effects/battle/superpowers/electric-bolt.png"); background-size: 600% 100%; filter: drop-shadow(0 0 7px #ffe34d); animation-timing-function: steps(5,end),ease-out; }
+@keyframes fx-sprite-frames { from { background-position: 0 0; } to { background-position: 100% 0; } }
+@keyframes fx-sprite-pop {
+  0% { opacity: 0; transform: scale(calc(var(--fx-scale) * .55)); }
+  14% { opacity: 1; }
+  72% { opacity: 1; transform: scale(var(--fx-scale)); }
+  100% { opacity: 0; transform: scale(calc(var(--fx-scale) * 1.08)); }
+}
+
 /* Tienda */
 .shop-modal { position: relative; width: min(560px, 96%); max-height: min(88vh, 720px); overflow-y: auto; overscroll-behavior: contain; padding: 30px 30px 26px; border: 5px solid #fffef7; border-radius: 21px; background: #f6f3e6; box-shadow: 0 0 0 3px #1d4f3d, 0 25px 60px rgba(4,24,16,.36); text-align: center; }
 .shop-modal h2 { margin: 8px 0 6px; color: #194534; font-family: Georgia, serif; font-size: clamp(1.5rem, 3.5vw, 2.2rem); }

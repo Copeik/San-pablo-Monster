@@ -7319,6 +7319,13 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     return classes[moveType] || "normal";
   }
 
+  const BATTLE_SPRITE_HIT_FX = Object.freeze({
+    Normal: { className: "normal", duration: 420, frames: 5 },
+    Fuego: { className: "fire", duration: 440, frames: 5 },
+    Agua: { className: "water", duration: 500, frames: 6 },
+    Eléctrico: { className: "electric", duration: 460, frames: 6 },
+  });
+
   function spawnMoveVisual(attacker, defender, moveType) {
     const scene = elements.battleScene; if (!scene) return [];
     const sceneRect = scene.getBoundingClientRect();
@@ -7454,6 +7461,24 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       scene.appendChild(p);
       window.setTimeout(() => p.remove(), 640);
     }
+    spawnSpriteHitEffect(defender, moveType, intensity);
+  }
+
+  function spawnSpriteHitEffect(defender, moveType, intensity = 1) {
+    const effect = BATTLE_SPRITE_HIT_FX[moveType];
+    const origin = fxOrigin(defender);
+    if (!effect || !origin) return null;
+    const element = document.createElement("span");
+    element.className = `fx-sprite-hit fx-sprite-hit-${effect.className}`;
+    element.setAttribute("aria-hidden", "true");
+    element.style.left = `${origin.x}px`;
+    element.style.top = `${origin.y}px`;
+    element.style.setProperty("--fx-duration", `${effect.duration}ms`);
+    element.style.setProperty("--fx-scale", String((2.8 + Math.min(1.4, intensity) * .65).toFixed(2)));
+    element.dataset.frames = String(effect.frames);
+    origin.scene.appendChild(element);
+    window.setTimeout(() => element.remove(), effect.duration + 80);
+    return element;
   }
 
   function spawnDamageNumber(defender, amount, color) {
