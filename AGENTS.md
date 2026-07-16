@@ -1,9 +1,9 @@
 # Project instructions
 
-## Required skill
+## Required skill system
 
-For every task in this repository, use the `luna-reasoning-agent` skill. Before acting, read and follow:
+For every task in this repository, invoke `superpowers:using-superpowers` before any response or action. Read and follow its current instructions, then invoke every other applicable Superpowers skill before continuing.
 
-`skills/luna-reasoning-agent/SKILL.md`
+If `superpowers:using-superpowers` is unavailable, report the missing skill dependency and do not claim the Superpowers workflow was followed.
 
-Apply its workflow, verification requirements, token-economy guidance, and stated limits throughout the task.
+Dispatched subagents must follow the exception defined by `superpowers:using-superpowers`.
