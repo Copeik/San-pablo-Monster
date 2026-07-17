@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "cellSize": 64,
+  "grid": {
+    "columns": 4,
+    "rows": 4
+  },
+  "rowOrder": [
+    "down-left",
+    "down-right",
+    "up-left",
+    "up-right"
+  ],
+  "cycle": [
+    "neutral",
+    "stride-a",
+    "neutral",
+    "stride-b"
+  ],
+  "anchors": {
+    "headCenterX": 32,
+    "feetRow": 59
+  },
+  "scale": {
+    "maximumVisibleHeight": 56,
+    "minimumVisibleHeight": 50,
+    "maximumDirectionScaleDriftPercent": 5
+  },
+  "oppositeDirectionPolicy": "exact-horizontal-pixel-mirror",
+  "rendering": {
+    "imageSmoothingEnabled": false,
+    "runtimeScale": 1
+  }
+}

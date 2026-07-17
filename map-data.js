@@ -10,6 +10,14 @@ const CITY_MAP_SIZE = 2508;
 const CITY_MAP_CHUNK_SIZE = 512;
 const CITY_LAYOUT = window.CITY_MAP_LAYOUT || {};
 const CITY_LAYOUT_TILE_SIZE = Number(CITY_LAYOUT.tileSize) || 32;
+const CITY_BASE_GRID_SIZE = Math.ceil(CITY_MAP_SIZE / CITY_LAYOUT_TILE_SIZE);
+const CITY_EDITOR_MAP_SIZE = window.CITY_MAP_EDITOR_DATA?.mapSize || {};
+const CITY_MAP_WIDTH = Number(CITY_EDITOR_MAP_SIZE.cols) > CITY_BASE_GRID_SIZE
+  ? Math.min(4096, Math.floor(Number(CITY_EDITOR_MAP_SIZE.cols)) * CITY_LAYOUT_TILE_SIZE)
+  : CITY_MAP_SIZE;
+const CITY_MAP_HEIGHT = Number(CITY_EDITOR_MAP_SIZE.rows) > CITY_BASE_GRID_SIZE
+  ? Math.min(4096, Math.floor(Number(CITY_EDITOR_MAP_SIZE.rows)) * CITY_LAYOUT_TILE_SIZE)
+  : CITY_MAP_SIZE;
 const CITY_LAYOUT_ASSET_SPRITES = Object.freeze(Object.fromEntries(
   Object.entries(CITY_LAYOUT.assetCatalog || {}).map(([id, prototype]) => [id, prototype.src]),
 ));
@@ -106,6 +114,18 @@ const CITY_MAP_TILES = Object.freeze(Array.from(
 ));
 
 const CITY_BASE_DOORS = [
+  {
+    id: "route-test-gate",
+    col: 20,
+    row: 65,
+    label: "Senda de los Naranjos",
+    action: "transition",
+    targetMap: "route-test",
+    targetX: 336,
+    targetY: 560,
+    targetDirection: "down",
+    effect: "fade",
+  },
   { col: 18, row: 21, label: "Centro de Salud San Pablo", action: "heal", npc: "nurse" },
   { col: 46, row: 25, label: "Galería Jazmín", action: "shop", npc: "clerk" },
   { col: 50, row: 34, label: "Umbral Prisma", action: "prism" },
@@ -135,14 +155,20 @@ const CITY_EDITED_BASE_DOORS = Object.freeze(CITY_BASE_DOORS.flatMap((door) => {
 }));
 
 window.CITY_MAP_CONFIG = Object.freeze({
+  id: "san-pablo",
+  name: "San Pablo",
+  kind: "city",
+  revision: 14,
   previewImage: "assets/maps/san-pablo-rebuilt-preview.webp",
   navigationMask: Object.freeze({
     image: "assets/maps/san-pablo-rebuilt-navigation-v2.png",
     cellSize: Number(CITY_LAYOUT.navigationCellSize) || 8,
     revision: Number(CITY_LAYOUT.revision) || 1,
   }),
-  width: CITY_MAP_SIZE,
-  height: CITY_MAP_SIZE,
+  width: CITY_MAP_WIDTH,
+  height: CITY_MAP_HEIGHT,
+  baseWidth: CITY_MAP_SIZE,
+  baseHeight: CITY_MAP_SIZE,
   sourceWidth: 5016,
   sourceHeight: 5016,
   textureScale: 2,
@@ -168,6 +194,7 @@ window.CITY_MAP_CONFIG = Object.freeze({
   worldAssets: CITY_LAYOUT.worldAssets || [],
   editorVacatedRects: CITY_LAYOUT.editorVacatedRects || [],
   sections: CITY_LAYOUT.sections || [],
+  extensionSurfaces: CITY_LAYOUT.extensionSurfaces || [],
   blockedRects: CITY_LAYOUT_BLOCKED_RECTS,
   walkableRects: CITY_LAYOUT_WALKABLE_RECTS,
   encounterAreas: CITY_LAYOUT_ENCOUNTER_AREAS,

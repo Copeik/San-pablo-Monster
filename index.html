@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Una aventura Pokémon web sobre un mapa de estilo HeartGold y SoulSilver." />
     <title>Pokémon · Ciudad Pokémon</title>
-  <link rel="stylesheet" href="styles.css?v=31" />
+  <link rel="stylesheet" href="styles.css?v=38" />
   </head>
   <body>
     <main class="app-shell">
@@ -25,6 +25,7 @@
         <div class="top-actions">
           <button id="fullscreenButton" type="button" aria-label="Cambiar pantalla completa" title="Pantalla completa">⛶</button>
           <button id="inventoryButton" type="button" aria-label="Abrir mochila" title="Mochila">▣</button>
+          <button id="attackDexButton" type="button" aria-label="Abrir Ataquedex" title="Ataquedex (K)">A</button>
           <button id="sanpledexButton" type="button" aria-label="Abrir Sanpledex" title="Sanpledex (P)">S</button>
           <button id="buildingEditorButton" type="button" aria-label="Abrir modo dios" title="Modo dios de desarrollo" hidden>✦</button>
           <button id="teamButton" type="button" aria-label="Abrir equipo" title="Equipo">☰</button>
@@ -242,6 +243,73 @@
           </div>
         </section>
 
+        <section id="attackDexModal" class="attack-dex-modal hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="attackDexTitle">
+          <div class="attack-dex-dialog">
+            <header>
+              <div><small>LABORATORIO DE EFECTOS · TODOS LOS MOVIMIENTOS</small><h2 id="attackDexTitle">Ataquedex</h2></div>
+              <button id="closeAttackDex" type="button" aria-label="Cerrar Ataquedex">×</button>
+            </header>
+            <div class="attack-dex-toolbar">
+              <label class="attack-dex-search"><span aria-hidden="true">⌕</span><input id="attackDexSearch" type="search" autocomplete="off" placeholder="Buscar ataque…" aria-label="Buscar ataque" /></label>
+              <label>TIPO <select id="attackDexTypeFilter" aria-label="Filtrar ataques por tipo"><option value="">Todos</option></select></label>
+              <strong id="attackDexCount" aria-live="polite">0 ataques</strong>
+            </div>
+            <div class="attack-dex-layout">
+              <nav class="attack-dex-catalog" aria-label="Movimientos de la Ataquedex">
+                <div id="attackDexList" class="attack-dex-list" role="listbox"></div>
+              </nav>
+              <article class="attack-dex-editor">
+                <div id="attackDexMoveSummary" class="attack-dex-move-summary"></div>
+                <div id="attackDexPreview" class="attack-dex-preview" aria-label="Vista previa del efecto">
+                  <span class="attack-dex-preview-label">VISTA PREVIA EN COMBATE</span>
+                  <div class="attack-dex-preview-source">
+                    <span class="attack-dex-preview-platform"></span>
+                    <img id="attackDexPreviewAttacker" src="assets/pokemon/petrillo-line/petrillo-back.png" alt="Pokémon atacante" draggable="false" />
+                  </div>
+                  <div class="attack-dex-preview-target">
+                    <span class="attack-dex-preview-platform"></span>
+                    <img id="attackDexPreviewDefender" src="assets/pokemon/luminai-line/luminio-front.png" alt="Pokémon objetivo" draggable="false" />
+                  </div>
+                </div>
+                <button id="attackDexPlay" class="attack-dex-play" type="button">▶ Probar efecto</button>
+                <form id="attackEffectForm" class="attack-effect-form" autocomplete="off">
+                  <fieldset>
+                    <legend>Diseño</legend>
+                    <label>EFECTO <select id="attackEffectPreset"></select></label>
+                    <label>IMPACTO <select id="attackEffectImpact"></select></label>
+                    <label>COLOR <span class="attack-effect-color"><input id="attackEffectColor" type="color" /><output id="attackEffectColorValue">#ffffff</output></span></label>
+                    <label class="attack-effect-switch"><input id="attackEffectEnabled" type="checkbox" /> Efecto visible</label>
+                    <label class="attack-effect-switch"><input id="attackEffectTrail" type="checkbox" /> Mostrar estela</label>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Tamaño y posición</legend>
+                    <label>ANCHO <input id="attackEffectWidth" type="number" inputmode="numeric" /><span>px</span></label>
+                    <label>ALTO <input id="attackEffectHeight" type="number" inputmode="numeric" /><span>px</span></label>
+                    <label>MOVER X <input id="attackEffectOffsetX" type="number" inputmode="numeric" /><span>px</span></label>
+                    <label>MOVER Y <input id="attackEffectOffsetY" type="number" inputmode="numeric" /><span>px</span></label>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Ritmo e impacto</legend>
+                    <label>DURACIÓN <input id="attackEffectDuration" type="number" inputmode="numeric" step="10" /><span>ms</span></label>
+                    <label>PARTÍCULAS <input id="attackEffectParticles" type="number" inputmode="numeric" /></label>
+                    <label>ONDAS <input id="attackEffectRings" type="number" inputmode="numeric" /></label>
+                    <label>TEMBLOR <input id="attackEffectShake" type="number" inputmode="decimal" step="0.05" /></label>
+                    <label>ESCALA GOLPE <input id="attackEffectImpactScale" type="number" inputmode="decimal" step="0.05" /></label>
+                  </fieldset>
+                </form>
+                <div class="attack-dex-actions">
+                  <button id="attackEffectSave" class="primary" type="button">Guardar ataque</button>
+                  <button id="attackEffectReset" type="button">Restaurar</button>
+                  <button id="attackEffectsExport" type="button">Exportar JSON</button>
+                  <button id="attackEffectsImport" type="button">Importar JSON</button>
+                  <input id="attackEffectsImportInput" class="hidden" type="file" accept="application/json,.json" />
+                </div>
+                <p id="attackDexStatus" class="attack-dex-status" role="status" aria-live="polite">Los cambios se guardan por movimiento y se usan en los combates.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
         <aside id="buildingEditor" class="building-editor" aria-hidden="true">
           <header>
             <div><small>MODO DIOS · SOLO DESARROLLO</small><h2>Editor del mundo</h2></div>
@@ -253,6 +321,8 @@
           </header>
           <section class="map-editor-collaboration" aria-label="Sesión colaborativa">
             <div class="map-editor-identity">
+              <label for="mapEditorMapSelect">Mapa</label>
+              <select id="mapEditorMapSelect" aria-label="Mapa que se está editando"></select>
               <label for="mapEditorNameInput">Tu nombre</label>
               <input id="mapEditorNameInput" type="text" maxlength="32" autocomplete="nickname" placeholder="Editor" />
               <button id="copyEditorInviteButton" type="button" title="Copiar enlace de esta sesión">Compartir</button>
@@ -319,6 +389,7 @@
           <div class="map-editor-tabs" role="tablist" aria-label="Herramientas del mapa">
             <button id="mapEditorTabObjects" class="selected" type="button" role="tab" data-editor-mode="objects" aria-controls="objectEditorPanel" aria-selected="true" tabindex="0"><span aria-hidden="true">◆</span><b>Objetos</b></button>
             <button id="mapEditorTabTerrain" type="button" role="tab" data-editor-mode="terrain" aria-controls="terrainEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">▦</span><b>Terreno</b></button>
+            <button id="mapEditorTabGround" type="button" role="tab" data-editor-mode="ground" aria-controls="groundEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">▧</span><b>Suelo</b></button>
             <button id="mapEditorTabNpcs" type="button" role="tab" data-editor-mode="npcs" aria-controls="npcEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">♟</span><b>NPC</b></button>
             <button id="mapEditorTabEntrances" type="button" role="tab" data-editor-mode="entrances" aria-controls="entranceEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">⇥</span><b>Entradas</b></button>
             <button id="mapEditorTabEvents" type="button" role="tab" data-editor-mode="events" aria-controls="eventEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">✦</span><b>Eventos</b></button>
@@ -330,7 +401,7 @@
               <summary>Catálogo de objetos</summary>
               <div class="map-editor-catalog-filters">
                 <input id="assetCatalogSearch" type="search" placeholder="Buscar objeto" aria-label="Buscar en el catálogo" />
-                <select id="assetCatalogCategory" aria-label="Categoría"><option value="all">Todas</option><option value="building">Edificios</option><option value="tree">Árboles</option><option value="prop">Mobiliario</option></select>
+                <select id="assetCatalogCategory" aria-label="Categoría"><option value="all">Todas</option><option value="building">Edificios</option><option value="tree">Árboles</option><option value="prop">Mobiliario</option><option value="blocker">Obstáculos</option></select>
                 <button id="assetCatalogFavorites" type="button" aria-pressed="false" title="Mostrar favoritos">☆ Favoritos</button>
               </div>
               <div id="assetCatalogGrid" class="map-editor-catalog-grid" role="listbox" aria-label="Objetos disponibles"></div>
@@ -366,6 +437,42 @@
                 <button id="deleteAssetButton" class="danger" type="button">Eliminar</button>
               </div>
             </fieldset>
+          </section>
+
+          <section id="groundEditorPanel" class="map-editor-panel hidden" data-editor-panel="ground" role="tabpanel" aria-labelledby="mapEditorTabGround" hidden>
+            <p class="editor-help">Pinta el aspecto del suelo sin cambiar por dónde puede caminar el jugador. “Sendero” se superpone al acabado existente y une rectas, curvas y cruces automáticamente.</p>
+            <div class="terrain-toolbox ground-toolbox" role="toolbar" aria-label="Herramientas de suelo">
+              <button type="button" class="selected" data-ground-tool="pencil">✎ <span>Lápiz</span></button>
+              <button type="button" data-ground-tool="path" aria-pressed="false">╋ <span>Sendero</span></button>
+              <button type="button" data-ground-tool="eraser">⌫ <span>Original</span></button>
+              <button type="button" data-ground-tool="eyedropper">◉ <span>Cuentagotas</span></button>
+              <button type="button" data-ground-tool="rectangle">▭ <span>Rectángulo</span></button>
+              <button type="button" data-ground-tool="fill">▧ <span>Relleno</span></button>
+            </div>
+            <div class="sprite-options-title"><strong>Acabado</strong><small>Tierra, asfalto con acera, hierba y más</small></div>
+            <div id="groundPalette" class="tile-palette ground-palette" role="group" aria-label="Tipo de suelo">
+              <button type="button" data-ground-type="inherit"><i></i>Original</button>
+              <button type="button" data-ground-type="grass" class="selected"><i></i>Hierba</button>
+              <button type="button" data-ground-type="dirt"><i></i>Tierra</button>
+              <button type="button" data-ground-type="asphalt"><i></i>Asfalto</button>
+              <button type="button" data-ground-type="sidewalk"><i></i>Acera</button>
+              <button type="button" data-ground-type="plaza"><i></i>Plaza</button>
+              <button type="button" data-ground-type="sand"><i></i>Arena</button>
+            </div>
+            <label class="editor-field editor-compact-field">Tamaño del pincel
+              <select id="groundBrushSize"><option value="1">1 × 1</option><option value="3">3 × 3</option><option value="5">5 × 5</option><option value="7">7 × 7</option><option value="9">9 × 9</option></select>
+            </label>
+            <button id="resetGroundMap" class="editor-wide-action" type="button">Borrar cambios de suelo</button>
+            <details class="map-editor-expansion" open>
+              <summary>Expandir el mapa</summary>
+              <p id="mapEditorSizeInfo" class="editor-help">Tamaño actual: 79 × 79 casillas</p>
+              <div class="editor-number-grid">
+                <label>Añadir columnas <input id="mapExpandCols" type="number" min="0" max="64" value="10" step="1" /></label>
+                <label>Añadir filas <input id="mapExpandRows" type="number" min="0" max="64" value="10" step="1" /></label>
+              </div>
+              <button id="expandMapButton" class="editor-primary editor-wide-action" type="button">Expandir al este y al sur</button>
+              <small>El contenido existente conserva su posición. El mapa nunca se reduce.</small>
+            </details>
           </section>
 
           <section id="terrainEditorPanel" class="map-editor-panel hidden" data-editor-panel="terrain" role="tabpanel" aria-labelledby="mapEditorTabTerrain" hidden>
@@ -559,11 +666,21 @@
         Proyecto fan, gratuito y de uso personal. Pokémon pertenece a Nintendo, Game Freak y Creatures. San Pablo C se ha reconstruido con cartografía IDE.Sevilla del Ayuntamiento de Sevilla y ortofoto PNOA del IGN; todos los monstruos jugables son diseños originales con recursos locales.
       </footer>
     </main>
+    <script src="map-registry.js?v=1"></script>
     <script src="map-geography.js?v=2"></script>
-    <script src="map-editor-data.js?v=3"></script>
-    <script src="map-layout.js?v=8"></script>
-    <script src="map-data.js?v=26"></script>
-    <script type="module" src="script.js?v=79"></script>
-    <script type="module" src="map-editor.js?v=14"></script>
+    <script src="map-editor-rules.js?v=2"></script>
+    <script src="map-editor-data.js?v=5"></script>
+    <script src="assets/generated/san-pablo-neighborhood/catalog.js?v=2"></script>
+    <script src="map-layout.js?v=10"></script>
+    <script src="map-data.js?v=28"></script>
+    <script src="maps/san-pablo/register.js?v=1"></script>
+    <script src="maps/route-test/editor-data.js?v=1"></script>
+    <script src="maps/route-test/map.js?v=2"></script>
+    <!-- GAME_MAP_PACKAGES -->
+    <script src="map-bootstrap.js?v=1"></script>
+    <script src="player-movement.js?v=3"></script>
+    <script src="attack-effects.js?v=1"></script>
+    <script src="script.js?v=96"></script>
+    <script src="map-editor-standalone.js?v=1"></script>
   </body>
 </html>

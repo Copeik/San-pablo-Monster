@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "generatedAtUtc": "2026-07-15T21:26:55.945903+00:00",
+  "outputs": {
+    "geography": "map-geography.js",
+    "reference": "assets/maps/san-pablo-reference-rectified.png",
+    "audit": "assets/maps/san-pablo-geodata-audit.json"
+  },
+  "sources": {
+    "boundary": "assets/maps/san-pablo-source/boundary.geojson",
+    "streets": "assets/maps/san-pablo-source/streets.geojson",
+    "sidewalks": "assets/maps/san-pablo-source/sidewalks.geojson",
+    "surfaces": "assets/maps/san-pablo-source/surfaces.geojson",
+    "greens": "assets/maps/san-pablo-source/greens.geojson",
+    "buildings": "assets/maps/san-pablo-source/buildings.geojson",
+    "obstacles": [
+      "assets/maps/san-pablo-source/obstacles.geojson"
+    ],
+    "trees": [
+      "assets/maps/san-pablo-source/trees.geojson"
+    ],
+    "osm": "assets/maps/san-pablo-source/openstreetmap.osm",
+    "pnoa": "assets/maps/san-pablo-source/pnoa.jpg",
+    "metadata": "assets/maps/san-pablo-source/metadata.json"
+  },
+  "world": {
+    "width": 2048,
+    "height": 4096,
+    "units": "logical pixels",
+    "pixelsPerMetre": 4.0,
+    "portrait": true
+  },
+  "transform": {
+    "kind": "WGS84 local tangent linear",
+    "sourceCrs": "EPSG:4326",
+    "referenceLonLat": [
+      -5.96182945,
+      37.39524375
+    ],
+    "metresPerDegree": {
+      "longitude": 88548.827018,
+      "latitude": 110985.064628
+    },
+    "rotationDegrees": -40.85,
+    "pixelsPerMetre": 4.0,
+    "rotatedCentreMetres": [
+      59.173217,
+      -58.020255
+    ],
+    "screenYAxis": "down"
+  },
+  "simplification": {
+    "algorithm": "Ramer-Douglas-Peucker",
+    "tolerancePixels": 0.75,
+    "polygonClip": "axis-aligned world rectangle"
+  },
+  "raster": {
+    "sourceSize": [
+      1400,
+      1800
+    ],
+    "outputSize": [
+      2048,
+      4096
+    ],
+    "crs": "EPSG:4326",
+    "boundsLonLat": [
+      -5.9663,
+      37.3904,
+      -5.9573,
+      37.4001
+    ],
+    "boundsProvenance": "documented-wms-fallback",
+    "inverseAffineOutputToSource": [
+      0.332206662475,
+      0.287259386095,
+      -88.269556689759,
+      -0.273405814607,
+      0.316185431651,
+      541.747014691955
+    ],
+    "boundaryOverlayWidth": 3
+  },
+  "bounds": {
+    "boundaryLonLat": {
+      "west": -5.9661723,
+      "south": 37.3905859,
+      "east": -5.9574866,
+      "north": 37.3999016
+    },
+    "boundaryWorldPixels": {
+      "minX": 92.04,
+      "minY": 92.79,
+      "maxX": 1955.96,
+      "maxY": 4003.21
+    },
+    "worldCornersLonLat": [
+      [
+        -5.966864233,
+        37.397177891
+      ],
+      [
+        -5.962490495,
+        37.400195319
+      ],
+      [
+        -5.954926545,
+        37.393216193
+      ],
+      [
+        -5.959300283,
+        37.390198765
+      ]
+    ]
+  },
+  "orientation": {
+    "calleAda": {
+      "matchedFeatures": 5,
+      "sampledPoints": 23,
+      "angleDegrees": -88.319,
+      "target": "vertical",
+      "deviationDegrees": 1.681,
+      "status": "ok"
+    },
+    "calleJerusalen": {
+      "matchedFeatures": 1,
+      "sampledPoints": 13,
+      "angleDegrees": 1.092,
+      "target": "horizontal",
+      "deviationDegrees": 1.092,
+      "status": "ok"
+    }
+  },
+  "counts": {
+    "inputFeatures": {
+      "boundary": 1,
+      "streets": 26,
+      "sidewalks": 112,
+      "surfaces": 120,
+      "greens": 9,
+      "buildings": 347,
+      "obstacles": 739,
+      "vegetation": 799
+    },
+    "output": {
+      "streetSurfaces": 26,
+      "sidewalks": 112,
+      "greens": 9,
+      "municipalSurfaces": 120,
+      "waterAreas": 4,
+      "sportsAreas": 15,
+      "buildingFootprints": 347,
+      "solidBuildingFootprints": 257,
+      "nonSolidBuildingFootprints": 90,
+      "barrierSegments": 739,
+      "trees": 752,
+      "palms": 47,
+      "streetCenterlines": 196,
+      "landmarks": 75,
+      "crossings": 60,
+      "busStops": 18
+    },
+    "osm": {
+      "sourceNodes": 6106,
+      "sourceWays": 819,
+      "rawBusStopNodesInWorld": 33,
+      "sourceRelations": 87
+    }
+  },
+  "validation": {
+    "checkedCoordinates": 16779,
+    "outOfBoundsCoordinates": 0,
+    "status": "ok"
+  }
+}

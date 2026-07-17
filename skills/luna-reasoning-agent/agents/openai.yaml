@@ -1,4 +1,0 @@
-interface:
-  display_name: "Luna Reasoning Agent"
-  short_description: "Razonamiento fiable con menos tokens"
-  default_prompt: "Usa $luna-reasoning-agent para resolver esta tarea con el mínimo contexto y evidencia suficiente."

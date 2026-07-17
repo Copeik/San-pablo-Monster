@@ -1,15 +1,18 @@
 import { MAP_EDITOR_RULES, editorOperationKey, validateEditorEntity, validateEditorOperation } from "./map-editor-contract.js?v=3";
 import {
   boundedBrushCells, changedKeysSince, chunkOperationBatches, CommandBuilder, DurableOutboxQueue, floodFillCells,
-  IndexedDbOutboxAdapter, lineCells, PresenceGate, rectangleCells, TransactionHistory,
+  groundPathSurface, groundPathType, IndexedDbOutboxAdapter, isGroundPathType, lineCells, mergeGroundPaintValue, PresenceGate, rectangleCells, TransactionHistory,
   resolveConflictQueue,
-} from "./map-editor-core.js?v=5";
+} from "./map-editor-core.js?v=6";
 
 (() => {
   "use strict";
 
   const bridge = window.__pokemonMapEditorBridge;
   if (!bridge) return;
+  const activeMapId = String(window.ACTIVE_GAME_MAP_ID || window.CITY_MAP_CONFIG?.id || "san-pablo");
+  const soloMode = window.location.protocol === "file:";
+  const initialGrid = bridge.grid?.() || {};
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -29,13 +32,22 @@ import {
     return Math.max(minimum, Math.min(maximum, Number.isFinite(number) ? number : fallback));
   };
   const emptyData = () => ({
-    version: 2,
-    tileOverrides: {}, assetOverrides: {}, addedAssets: [], hiddenAssets: [],
+    version: 3,
+    tileOverrides: {}, groundOverrides: {}, mapSize: {
+      cols: Number(initialGrid.cols) || MAP_EDITOR_RULES.world.cols,
+      rows: Number(initialGrid.rows) || MAP_EDITOR_RULES.world.rows,
+    },
+    assetOverrides: {}, addedAssets: [], hiddenAssets: [],
     npcOverrides: {}, addedNpcs: [], hiddenNpcs: [], entrances: [], events: [],
   });
   const normalizeData = (value = {}) => ({
     ...emptyData(),
     tileOverrides: { ...(value.tileOverrides || {}) },
+    groundOverrides: { ...(value.groundOverrides || {}) },
+    mapSize: {
+      cols: clamp(value.mapSize?.cols, MAP_EDITOR_RULES.world.minCols, MAP_EDITOR_RULES.world.maxCols, Number(initialGrid.cols) || MAP_EDITOR_RULES.world.cols),
+      rows: clamp(value.mapSize?.rows, MAP_EDITOR_RULES.world.minRows, MAP_EDITOR_RULES.world.maxRows, Number(initialGrid.rows) || MAP_EDITOR_RULES.world.rows),
+    },
     assetOverrides: clone(value.assetOverrides || {}),
     addedAssets: clone(Array.isArray(value.addedAssets) ? value.addedAssets : []),
     hiddenAssets: [...new Set(Array.isArray(value.hiddenAssets) ? value.hiddenAssets : [])],
@@ -52,6 +64,7 @@ import {
   let bound = false;
   let mode = "objects";
   let terrainType = "blocked";
+  let groundType = "grass";
   let selected = null;
   let drag = null;
   let lastPaintedTile = "";
@@ -73,6 +86,7 @@ import {
   let keyboardTransaction = null;
   let formTransaction = null;
   let terrainTool = "pencil";
+  let groundTool = "pencil";
   let spacePressed = false;
   let presenceRenderSignature = "";
   const remoteChangedKeys = new Set();
@@ -117,15 +131,31 @@ import {
     storage?.setItem("pokemon-map-editor-actor", generated);
     return generated;
   })();
-  const legacyOutboxId = `pending:${window.location.pathname}`;
+  const legacyOutboxId = `pending:${window.location.pathname}:${activeMapId}`;
   const outboxId = `${legacyOutboxId}:${actorId}`;
   let outbox = new DurableOutboxQueue(new IndexedDbOutboxAdapter({
     key: outboxId,
     legacyKeys: [legacyOutboxId],
     legacyActorId: actorId,
   }), { actorId, key: outboxId });
-  const fallbackOutboxKey = `pokemon-map-editor-outbox-v2:${window.location.pathname}:${actorId}`;
-  const legacyFallbackOutboxKey = `pokemon-map-editor-outbox-v2:${window.location.pathname}`;
+  const fallbackOutboxKey = `pokemon-map-editor-outbox-v2:${window.location.pathname}:${activeMapId}:${actorId}`;
+  const legacyFallbackOutboxKey = `pokemon-map-editor-outbox-v2:${window.location.pathname}:${activeMapId}`;
+  const soloStorageKey = `pokemon-map-editor-solo-v1:${activeMapId}`;
+
+  function readSoloSnapshot() {
+    try {
+      const stored = JSON.parse(persistentStorage?.getItem(soloStorageKey) || "null");
+      return stored?.version === 1 && stored.data ? { revision: Number(stored.revision) || 0, data: stored.data } : null;
+    } catch { return null; }
+  }
+
+  function persistSoloSnapshot() {
+    if (!persistentStorage) return false;
+    try {
+      persistentStorage.setItem(soloStorageKey, JSON.stringify({ version: 1, revision, data }));
+      return true;
+    } catch { return false; }
+  }
 
   function localStorageOutboxAdapter() {
     return {
@@ -193,7 +223,8 @@ import {
   };
 
   function apiUrl(pathname) {
-    const url = new URL(pathname, window.location.origin);
+    const url = new URL(pathname, window.location.href);
+    url.searchParams.set("map", activeMapId);
     if (token) url.searchParams.set("editorToken", token);
     return url;
   }
@@ -246,6 +277,16 @@ import {
       else data.tileOverrides[operation.key] = operation.value;
       return;
     }
+    if (operation.type === "ground.set") {
+      if (operation.value == null) delete data.groundOverrides[operation.key];
+      else data.groundOverrides[operation.key] = operation.value;
+      return;
+    }
+    if (operation.type === "map.resize") {
+      data.mapSize = { ...operation.value };
+      updateMapSizeUi();
+      return;
+    }
     if (operation.type === "list.set") {
       data[operation.list] = [...operation.value];
       return;
@@ -270,6 +311,16 @@ import {
     if (operation.type === "tile.set") {
       const [col, row] = operation.key.split(",").map(Number);
       bridge.setTile(col, row, operation.value == null ? "inherit" : operation.value);
+      return;
+    }
+    if (operation.type === "ground.set") {
+      const [col, row] = operation.key.split(",").map(Number);
+      bridge.setGround(col, row, operation.value == null ? "inherit" : operation.value);
+      return;
+    }
+    if (operation.type === "map.resize") {
+      bridge.resizeMap?.(operation.value.cols, operation.value.rows);
+      applyInputRules();
       return;
     }
     if (operation.type === "list.set") {
@@ -379,7 +430,7 @@ import {
       applyDataOperation(operation);
       applyBridgeOperation(operation);
     });
-    renderSelection();
+    updateMapSizeUi(); applyInputRules(); renderSelection();
   }
 
   async function resyncAfterConflict(result) {
@@ -393,6 +444,17 @@ import {
     window.clearTimeout(flushTimer);
     flushTimer = 0;
     if (!enabled || !pendingBatches.length || conflictState) return;
+    if (soloMode) {
+      const changeCount = pendingOperationCount();
+      setRevision(revision + 1);
+      const stored = persistSoloSnapshot();
+      pendingBatches = [];
+      try { await persistPendingBatches(); } catch { /* La copia principal ya se intentó en localStorage. */ }
+      setSaveStatus("saved", stored
+        ? `Modo solo · ${changeCount} cambio${changeCount === 1 ? "" : "s"} guardado${changeCount === 1 ? "" : "s"} en este navegador.`
+        : "Modo solo temporal · este navegador no permite almacenamiento local.");
+      return;
+    }
     if (sending) { flushTimer = window.setTimeout(flushOperations, 120); return; }
     sending = true;
     const batch = pendingBatches[0];
@@ -475,6 +537,7 @@ import {
   }
 
   function openEventStream() {
+    if (soloMode) return;
     eventSource?.close();
     window.clearTimeout(reconnectTimer);
     const url = apiUrl("/api/dev/map-editor/events");
@@ -499,7 +562,7 @@ import {
   }
 
   function scheduleReconnect() {
-    if (!enabled || reconnectTimer) return;
+    if (soloMode || !enabled || reconnectTimer) return;
     const base = Math.min(MAP_EDITOR_RULES.timing.reconnectMaximumMs, 700 * (2 ** reconnectAttempt));
     const delay = base + Math.floor(Math.random() * Math.max(250, base * .35));
     reconnectAttempt += 1;
@@ -516,6 +579,7 @@ import {
   }
 
   async function publishPresence(cursor = presenceCursor, { heartbeat = false } = {}) {
+    if (soloMode) return { send: false, wait: 0, changed: false };
     if (presenceRequestInFlight) return;
     const payload = presencePayload(cursor);
     const decision = presenceGate.decision(payload, Date.now(), { heartbeat });
@@ -535,6 +599,7 @@ import {
   }
 
   function sendPresence(cursor = null) {
+    if (soloMode) return;
     presenceCursor = cursor;
     if (presenceTimer) return;
     const publishLatest = async () => {
@@ -551,6 +616,7 @@ import {
   }
 
   function startPresenceHeartbeat() {
+    if (soloMode) return;
     window.clearInterval(presenceHeartbeatTimer);
     presenceHeartbeatTimer = window.setInterval(() => {
       if (!enabled) return;
@@ -788,7 +854,7 @@ import {
   }
 
   function setMode(nextMode) {
-    const modes = new Set(["objects", "terrain", "npcs", "entrances", "events"]);
+    const modes = new Set(["objects", "terrain", "ground", "npcs", "entrances", "events"]);
     mode = modes.has(nextMode) ? nextMode : "objects";
     $$('[data-editor-mode]').forEach((button) => {
       const active = button.dataset.editorMode === mode;
@@ -800,7 +866,7 @@ import {
     });
     editor.dataset.mode = mode;
     const relevantOverlays = {
-      objects: [], terrain: ["grid", "collisions"], npcs: ["npcs", "routes"],
+      objects: [], terrain: ["grid", "collisions"], ground: ["grid"], npcs: ["npcs", "routes"],
       entrances: ["entrances"], events: ["events"],
     }[mode];
     $$('[data-editor-overlay]').forEach((input) => { input.checked = relevantOverlays.includes(input.dataset.editorOverlay); });
@@ -1023,7 +1089,8 @@ import {
 
   function brushCellsAt(cell) {
     const grid = bridge.grid();
-    return boundedBrushCells({ col: cell.col, row: cell.row, size: Number($("#terrainBrushSize")?.value) || 1, cols: grid.cols, rows: grid.rows });
+    const brushInput = mode === "ground" ? $("#groundBrushSize") : $("#terrainBrushSize");
+    return boundedBrushCells({ col: cell.col, row: cell.row, size: Number(brushInput?.value) || 1, cols: grid.cols, rows: grid.rows });
   }
 
   function expandCellsWithBrush(cells) {
@@ -1035,13 +1102,16 @@ import {
     });
   }
 
-  function stageTerrainCells(cells, builder, selectedType = terrainType) {
+  function stageTerrainCells(cells, builder, selectedType = mode === "ground" ? groundType : terrainType, layer = mode === "ground" ? "ground" : "terrain") {
     const startedAt = performance.now();
     const value = selectedType === "inherit" ? null : selectedType;
+    const collection = layer === "ground" ? data.groundOverrides : data.tileOverrides;
+    const operationType = layer === "ground" ? "ground.set" : "tile.set";
     cells.forEach(({ col, row }) => {
-      const key = `${col},${row}`; const before = data.tileOverrides[key] ?? null;
-      if (before === value) return;
-      stageTransaction(builder, { type: "tile.set", key, value }, { type: "tile.set", key, value: before });
+      const key = `${col},${row}`; const before = collection[key] ?? null;
+      const after = layer === "ground" && value !== null ? mergeGroundPaintValue(before, value) : value;
+      if (before === after) return;
+      stageTransaction(builder, { type: operationType, key, value: after }, { type: operationType, key, value: before });
     });
     const elapsed = performance.now() - startedAt;
     const previous = Number(document.documentElement.dataset.editorMaxTerrainStageMs) || 0;
@@ -1049,17 +1119,31 @@ import {
     document.documentElement.dataset.editorMaxTerrainStageMs = Math.max(previous, elapsed).toFixed(2);
   }
 
-  function paintAtEvent(event, builder = activeTransaction) {
+  function selectedGroundPaintType(type = groundType, tool = groundTool) {
+    if (type === "inherit") return type;
+    const surface = groundPathSurface(type) || type;
+    return tool === "path" ? (groundPathType(surface) || surface) : surface;
+  }
+
+  function paintAtEvent(event, builder = activeTransaction, fromCell = null) {
     const center = tileAtEvent(event);
-    const brushSize = Math.max(1, Number($("#terrainBrushSize")?.value) || 1);
+    const isGround = mode === "ground";
+    const selectedType = isGround ? selectedGroundPaintType() : terrainType;
+    const selectedTool = isGround ? groundTool : terrainTool;
+    const brushSize = Math.max(1, Number($(isGround ? "#groundBrushSize" : "#terrainBrushSize")?.value) || 1);
     const centerCol = center.col; const centerRow = center.row;
-    const strokeKey = `${centerCol},${centerRow}:${terrainType}:${brushSize}`; if (strokeKey === lastPaintedTile) return;
+    const strokeKey = `${mode}:${centerCol},${centerRow}:${selectedType}:${brushSize}`; if (strokeKey === lastPaintedTile) return center;
     lastPaintedTile = strokeKey;
-    stageTerrainCells(brushCellsAt(center), builder, terrainTool === "eraser" ? "inherit" : terrainType);
+    const baseCells = isGround && selectedTool === "path" && fromCell ? lineCells(fromCell, center, bridge.grid()) : [center];
+    stageTerrainCells(expandCellsWithBrush(baseCells), builder, selectedTool === "eraser" ? "inherit" : selectedType, isGround ? "ground" : "terrain");
+    return center;
   }
 
   function previewTerrainCells(cells) {
-    bridge.setTerrainPreview?.(cells.map((cell) => ({ ...cell, type: terrainTool === "eraser" ? "inherit" : terrainType })));
+    const isGround = mode === "ground";
+    const selectedTool = isGround ? groundTool : terrainTool;
+    const selectedType = isGround ? selectedGroundPaintType() : terrainType;
+    bridge.setTerrainPreview?.(cells.map((cell) => ({ ...cell, type: selectedTool === "eraser" ? "inherit" : selectedType, layer: isGround ? "ground" : "terrain", tool: selectedTool })));
   }
 
   function onPointerDown(event) {
@@ -1085,23 +1169,36 @@ import {
       canvas.setPointerCapture?.(event.pointerId);
       return;
     } else if (event.button !== 0) return;
-    if (mode === "terrain") {
+    if (mode === "terrain" || mode === "ground") {
       event.preventDefault();
       const start = tileAtEvent(event);
-      if (terrainTool === "eyedropper") {
-        terrainType = bridge.tileType(start.col, start.row) || "inherit";
-        $$('[data-tile-type]').forEach((entry) => entry.classList.toggle("selected", entry.dataset.tileType === terrainType));
+      const isGround = mode === "ground";
+      const selectedTool = isGround ? groundTool : terrainTool;
+      if (selectedTool === "eyedropper") {
+        if (isGround) {
+          const sampledType = bridge.groundType(start.col, start.row) || "inherit";
+          groundType = groundPathSurface(sampledType) || sampledType;
+          if (isGroundPathType(sampledType)) {
+            groundTool = "path";
+            $$('[data-ground-tool]').forEach((entry) => { entry.classList.toggle("selected", entry.dataset.groundTool === groundTool); entry.setAttribute("aria-pressed", String(entry.dataset.groundTool === groundTool)); });
+          }
+          $$('[data-ground-type]').forEach((entry) => entry.classList.toggle("selected", entry.dataset.groundType === groundType));
+        } else {
+          terrainType = bridge.tileType(start.col, start.row) || "inherit";
+          $$('[data-tile-type]').forEach((entry) => entry.classList.toggle("selected", entry.dataset.tileType === terrainType));
+        }
         return;
       }
-      activeTransaction = beginTransaction(terrainTool === "fill" ? "Rellenar terreno" : terrainTool === "rectangle" ? "Rectángulo de terreno" : "Pintar terreno");
-      if (terrainTool === "fill") {
-        const cells = floodFillCells({ start, bounds: bridge.grid(), getValue: (col, row) => bridge.tileType(col, row) });
-        stageTerrainCells(cells, activeTransaction);
+      const layerLabel = isGround ? "suelo" : "terreno";
+      activeTransaction = beginTransaction(selectedTool === "fill" ? `Rellenar ${layerLabel}` : selectedTool === "rectangle" ? `Rectángulo de ${layerLabel}` : `Pintar ${layerLabel}`);
+      if (selectedTool === "fill") {
+        const cells = floodFillCells({ start, bounds: bridge.grid(), getValue: (col, row) => isGround ? bridge.groundType(col, row) : bridge.tileType(col, row) });
+        stageTerrainCells(cells, activeTransaction, isGround ? groundType : terrainType, isGround ? "ground" : "terrain");
         commitTransaction(activeTransaction); activeTransaction = null; bridge.setTerrainPreview?.([]); return;
       }
       lastPaintedTile = "";
-      if (terrainTool === "rectangle" || event.shiftKey) drag = { type: "terrain-shape", shape: terrainTool === "rectangle" ? "rectangle" : "line", pointerId: event.pointerId, start, current: start, transaction: activeTransaction };
-      else { drag = { type: "terrain", pointerId: event.pointerId, transaction: activeTransaction }; paintAtEvent(event, activeTransaction); }
+      if (selectedTool === "rectangle" || event.shiftKey) drag = { type: "terrain-shape", layer: isGround ? "ground" : "terrain", shape: selectedTool === "rectangle" ? "rectangle" : "line", tool: selectedTool, pointerId: event.pointerId, start, current: start, transaction: activeTransaction };
+      else { drag = { type: "terrain", layer: isGround ? "ground" : "terrain", tool: selectedTool, pointerId: event.pointerId, lastCell: start, transaction: activeTransaction }; paintAtEvent(event, activeTransaction); }
     } else if (mode === "objects") {
       if (drag?.type === "pan") { /* Space/middle pan has priority. */ }
       else {
@@ -1169,7 +1266,7 @@ import {
       sendPresence({ x: Math.round(cursor.x), y: Math.round(cursor.y) });
     }
     if (!drag || drag.pointerId !== event.pointerId || !bridge.isOpen()) {
-      if (!drag && mode === "terrain") previewTerrainCells(brushCellsAt(tileAtEvent(event)));
+      if (!drag && (mode === "terrain" || mode === "ground")) previewTerrainCells(brushCellsAt(tileAtEvent(event)));
       return;
     }
     event.preventDefault();
@@ -1177,7 +1274,7 @@ import {
       bridge.panBy?.(drag.clientX - event.clientX, drag.clientY - event.clientY);
       drag.clientX = event.clientX; drag.clientY = event.clientY; return;
     }
-    if (drag.type === "terrain") { paintAtEvent(event, drag.transaction); return; }
+    if (drag.type === "terrain") { drag.lastCell = paintAtEvent(event, drag.transaction, drag.tool === "path" ? drag.lastCell : null) || drag.lastCell; return; }
     if (drag.type === "terrain-shape") {
       drag.current = tileAtEvent(event);
       const baseCells = drag.shape === "rectangle" ? rectangleCells(drag.start, drag.current, bridge.grid()) : lineCells(drag.start, drag.current, bridge.grid());
@@ -1226,7 +1323,8 @@ import {
     const finished = drag; drag = null; lastPaintedTile = ""; canvas.releasePointerCapture?.(event.pointerId);
     if (finished.type === "terrain-shape") {
       const baseCells = finished.shape === "rectangle" ? rectangleCells(finished.start, finished.current, bridge.grid()) : lineCells(finished.start, finished.current, bridge.grid());
-      stageTerrainCells(expandCellsWithBrush(baseCells), finished.transaction);
+      const selectedType = finished.layer === "ground" ? selectedGroundPaintType(groundType, finished.tool) : terrainType;
+      stageTerrainCells(expandCellsWithBrush(baseCells), finished.transaction, selectedType, finished.layer);
       bridge.setTerrainPreview?.([]);
     }
     if (finished.type === "marquee") {
@@ -1327,7 +1425,7 @@ import {
     });
     prototypeSelect.replaceChildren(...[...groups].map(([kind, entries]) => {
       const group = document.createElement("optgroup"); group.label = labels[kind] || kind;
-      entries.forEach(([id, prototype]) => { const option = document.createElement("option"); option.value = id; option.textContent = `${id} · ${prototype.w}×${prototype.h}`; group.appendChild(option); });
+      entries.forEach(([id, prototype]) => { const option = document.createElement("option"); option.value = id; option.textContent = `${prototype.label || id} · ${prototype.w}×${prototype.h}`; group.appendChild(option); });
       return group;
     }));
     renderAssetCatalog();
@@ -1340,7 +1438,7 @@ import {
     const entries = Object.entries(bridge.assetCatalog()).filter(([id, prototype]) => {
       if (favoritesOnly && !favoriteAssetSprites.has(id)) return false;
       if (category !== "all" && (prototype.kind || "prop") !== category) return false;
-      return !query || `${id} ${prototype.kind || "prop"}`.toLowerCase().includes(query);
+      return !query || `${id} ${prototype.label || ""} ${(prototype.tags || []).join(" ")} ${prototype.kind || "prop"}`.toLowerCase().includes(query);
     }).sort(([first], [second]) => {
       const firstRecent = recentAssetSprites.indexOf(first); const secondRecent = recentAssetSprites.indexOf(second);
       if (firstRecent >= 0 && secondRecent >= 0) return firstRecent - secondRecent;
@@ -1353,11 +1451,11 @@ import {
       const select = document.createElement("button"); select.type = "button"; select.setAttribute("role", "option");
       select.setAttribute("aria-selected", String(prototypeSelect.value === id)); select.dataset.catalogAsset = id;
       const image = document.createElement("img"); image.src = prototype.src; image.alt = ""; image.loading = "lazy";
-      const name = document.createElement("span"); name.textContent = id;
+      const name = document.createElement("span"); name.textContent = prototype.label || id;
       const size = document.createElement("small"); size.textContent = `${prototype.w}×${prototype.h}`;
       select.append(image, name, size);
       const favorite = document.createElement("button"); favorite.type = "button"; favorite.dataset.catalogFavorite = id;
-      favorite.className = "map-editor-catalog-favorite"; favorite.setAttribute("aria-label", `${favoriteAssetSprites.has(id) ? "Quitar" : "Añadir"} ${id} ${favoriteAssetSprites.has(id) ? "de" : "a"} favoritos`);
+      favorite.className = "map-editor-catalog-favorite"; favorite.setAttribute("aria-label", `${favoriteAssetSprites.has(id) ? "Quitar" : "Añadir"} ${prototype.label || id} ${favoriteAssetSprites.has(id) ? "de" : "a"} favoritos`);
       favorite.setAttribute("aria-pressed", String(favoriteAssetSprites.has(id))); favorite.textContent = favoriteAssetSprites.has(id) ? "★" : "☆";
       item.append(select, favorite); return item;
     }));
@@ -1498,7 +1596,8 @@ import {
     if (!copiedAssets.length) return;
     const builder = beginTransaction("Pegar objetos"); multiSelection.clear();
     copiedAssets.forEach((source, index) => {
-      const asset = { ...clone(source), id: uniqueId(`editor-${source.sprite || "asset"}`), x: clamp(Number(source.x) + 32 + index * 8, 0, MAP_EDITOR_RULES.world.width), y: clamp(Number(source.y) + 32 + index * 8, 0, MAP_EDITOR_RULES.world.height), label: `${source.label || source.sprite || "Objeto"} (copia)`, placement: "editor" };
+      const grid = bridge.grid();
+      const asset = { ...clone(source), id: uniqueId(`editor-${source.sprite || "asset"}`), x: clamp(Number(source.x) + 32 + index * 8, 0, grid.cols * grid.tileSize), y: clamp(Number(source.y) + 32 + index * 8, 0, grid.rows * grid.tileSize), label: `${source.label || source.sprite || "Objeto"} (copia)`, placement: "editor" };
       const after = { type: "entity.set", entity: "asset", collection: "addedAssets", id: asset.id, value: assetRecord(asset, true) };
       const before = { type: "entity.delete", entity: "asset", collection: "addedAssets", id: asset.id, hide: false };
       stageTransaction(builder, after, before); multiSelection.add(selectionKey("asset", asset.id)); selected = { kind: "asset", id: asset.id };
@@ -1508,14 +1607,52 @@ import {
 
   function applyInputRules() {
     const setRange = (input, range) => { if (!input) return; input.min = String(range[0]); input.max = String(range[1]); };
-    [assetInputs.x, assetInputs.y].forEach((input, index) => setRange(input, [0, index ? MAP_EDITOR_RULES.world.height : MAP_EDITOR_RULES.world.width]));
+    const grid = bridge.grid();
+    [assetInputs.x, assetInputs.y].forEach((input, index) => setRange(input, [0, (index ? grid.rows : grid.cols) * grid.tileSize]));
     setRange(assetInputs.scale, MAP_EDITOR_RULES.ranges.scale); setRange(assetInputs.rotation, MAP_EDITOR_RULES.ranges.rotation); setRange(assetInputs.depthY, MAP_EDITOR_RULES.ranges.depthY);
-    [npcInputs.col, npcInputs.patrolCol, entranceInputs.col, eventInputs.col, $("#mapEditorJumpCol")].forEach((input) => setRange(input, [0, MAP_EDITOR_RULES.world.cols - 1]));
-    [npcInputs.row, npcInputs.patrolRow, entranceInputs.row, eventInputs.row, $("#mapEditorJumpRow")].forEach((input) => setRange(input, [0, MAP_EDITOR_RULES.world.rows - 1]));
+    [npcInputs.col, npcInputs.patrolCol, entranceInputs.col, eventInputs.col, $("#mapEditorJumpCol")].forEach((input) => setRange(input, [0, grid.cols - 1]));
+    [npcInputs.row, npcInputs.patrolRow, entranceInputs.row, eventInputs.row, $("#mapEditorJumpRow")].forEach((input) => setRange(input, [0, grid.rows - 1]));
     setRange(npcInputs.patrolSpeed, MAP_EDITOR_RULES.ranges.patrolSpeed);
     [entranceInputs.targetX, entranceInputs.targetY, eventInputs.targetX, eventInputs.targetY].forEach((input) => setRange(input, MAP_EDITOR_RULES.ranges.targetCoordinate));
     setRange(eventInputs.duration, MAP_EDITOR_RULES.ranges.duration); setRange(eventInputs.intensity, MAP_EDITOR_RULES.ranges.intensity);
     eventInputs.message.maxLength = MAP_EDITOR_RULES.lengths.eventMessage; npcInputs.lines.maxLength = MAP_EDITOR_RULES.lengths.npcLines * (MAP_EDITOR_RULES.lengths.npcLine + 1);
+  }
+
+  function updateMapSizeUi() {
+    const size = data.mapSize || { cols: MAP_EDITOR_RULES.world.cols, rows: MAP_EDITOR_RULES.world.rows };
+    const output = $("#mapEditorSizeInfo");
+    const width = size.cols === MAP_EDITOR_RULES.world.cols ? MAP_EDITOR_RULES.world.width : size.cols * MAP_EDITOR_RULES.world.tileSize;
+    const height = size.rows === MAP_EDITOR_RULES.world.rows ? MAP_EDITOR_RULES.world.height : size.rows * MAP_EDITOR_RULES.world.tileSize;
+    if (output) output.textContent = `Tamaño actual: ${size.cols} × ${size.rows} casillas (${width} × ${height} px)`;
+    const colsInput = $("#mapExpandCols"); const rowsInput = $("#mapExpandRows");
+    if (colsInput) colsInput.max = String(Math.min(64, MAP_EDITOR_RULES.world.maxCols - size.cols));
+    if (rowsInput) rowsInput.max = String(Math.min(64, MAP_EDITOR_RULES.world.maxRows - size.rows));
+    const button = $("#expandMapButton");
+    if (button) button.disabled = size.cols >= MAP_EDITOR_RULES.world.maxCols && size.rows >= MAP_EDITOR_RULES.world.maxRows;
+  }
+
+  function expandMap() {
+    const current = data.mapSize || { cols: MAP_EDITOR_RULES.world.cols, rows: MAP_EDITOR_RULES.world.rows };
+    const addCols = Math.max(0, Math.floor(Number($("#mapExpandCols")?.value) || 0));
+    const addRows = Math.max(0, Math.floor(Number($("#mapExpandRows")?.value) || 0));
+    const next = {
+      cols: Math.min(MAP_EDITOR_RULES.world.maxCols, current.cols + addCols),
+      rows: Math.min(MAP_EDITOR_RULES.world.maxRows, current.rows + addRows),
+    };
+    if (next.cols === current.cols && next.rows === current.rows) {
+      setSaveStatus("error", "Indica cuántas filas o columnas quieres añadir.");
+      return;
+    }
+    queueOperation({ type: "map.resize", value: next }, { applyBridge: true, label: "Expandir mapa" });
+    setSaveStatus("pending", `Mapa ampliado a ${next.cols} × ${next.rows} casillas.`);
+  }
+
+  function resetGroundOverrides() {
+    const entries = Object.keys(data.groundOverrides);
+    if (!entries.length) return;
+    const builder = beginTransaction("Borrar suelo pintado");
+    entries.forEach((key) => stageTransaction(builder, { type: "ground.set", key, value: null }, { type: "ground.set", key, value: data.groundOverrides[key] }));
+    commitTransaction(builder);
   }
 
   function updateZoomLabel() {
@@ -1542,6 +1679,22 @@ import {
   function bindUi() {
     if (bound) return; bound = true;
     applyInputRules();
+    const mapSelect = $("#mapEditorMapSelect");
+    if (mapSelect) {
+      mapSelect.value = activeMapId;
+      mapSelect.addEventListener("change", () => {
+        const targetMapId = mapSelect.value;
+        if (!targetMapId || targetMapId === activeMapId) return;
+        if (pendingBatches.length && !window.confirm("Hay cambios pendientes. ¿Cambiar de mapa después de intentar sincronizarlos?")) {
+          mapSelect.value = activeMapId;
+          return;
+        }
+        if (pendingBatches.length) void flushOperations({ keepalive: true });
+        const url = new URL(window.location.href);
+        url.searchParams.set("map", targetMapId);
+        window.location.assign(url.href);
+      });
+    }
     nameInput.value = editorName;
     nameInput.addEventListener("change", () => {
       editorName = nameInput.value.trim().slice(0, MAP_EDITOR_RULES.lengths.actorName) || `Editor ${actorId.slice(-4).toUpperCase()}`;
@@ -1573,6 +1726,16 @@ import {
       terrainTool = button.dataset.terrainTool;
       $$('[data-terrain-tool]').forEach((entry) => { entry.classList.toggle("selected", entry === button); entry.setAttribute("aria-pressed", String(entry === button)); });
     }));
+    $$('[data-ground-type]').forEach((button) => button.addEventListener("click", () => {
+      groundType = button.dataset.groundType;
+      $$('[data-ground-type]').forEach((entry) => entry.classList.toggle("selected", entry === button));
+    }));
+    $$('[data-ground-tool]').forEach((button) => button.addEventListener("click", () => {
+      groundTool = button.dataset.groundTool;
+      $$('[data-ground-tool]').forEach((entry) => { entry.classList.toggle("selected", entry === button); entry.setAttribute("aria-pressed", String(entry === button)); });
+    }));
+    $("#resetGroundMap")?.addEventListener("click", resetGroundOverrides);
+    $("#expandMapButton")?.addEventListener("click", expandMap);
     $("#addAssetButton").addEventListener("click", () => addAsset());
     $("#assetCatalogSearch")?.addEventListener("input", renderAssetCatalog);
     $("#assetCatalogCategory")?.addEventListener("change", renderAssetCatalog);
@@ -1664,7 +1827,8 @@ import {
     }, { passive: false });
     $("#miniMapCanvas")?.addEventListener("click", (event) => {
       if (!bridge.isOpen()) return; const rect = event.currentTarget.getBoundingClientRect();
-      bridge.centerAt?.((event.clientX - rect.left) / rect.width * MAP_EDITOR_RULES.world.width, (event.clientY - rect.top) / rect.height * MAP_EDITOR_RULES.world.height);
+      const grid = bridge.grid();
+      bridge.centerAt?.((event.clientX - rect.left) / rect.width * grid.cols * grid.tileSize, (event.clientY - rect.top) / rect.height * grid.rows * grid.tileSize);
     });
     document.addEventListener("map-editor-open", prepareOpenEditor);
     document.addEventListener("map-editor-close", commitTransientTransactions);
@@ -1712,6 +1876,13 @@ import {
       event.preventDefault(); event.returnValue = "";
     });
     document.addEventListener("visibilitychange", () => {
+      if (soloMode) {
+        if (document.visibilityState === "hidden") {
+          commitTransientTransactions();
+          if (pendingBatches.length) void flushOperations();
+        }
+        return;
+      }
       if (document.visibilityState === "hidden") {
         commitTransientTransactions();
         if (pendingBatches.length) void flushOperations({ keepalive: true });
@@ -1720,8 +1891,8 @@ import {
       void fetchSnapshot().then((snapshot) => applySnapshot(snapshot, { preservePending: pendingBatches.length > 0 })).catch(() => scheduleReconnect());
       if (eventSource?.readyState !== EventSource.OPEN) scheduleReconnect();
     });
-    window.addEventListener("online", () => { setConnection("reconnecting", "Recuperando conexión…"); void flushOperations(); scheduleReconnect(); });
-    window.addEventListener("offline", () => setSaveStatus("offline", "Sin conexión; los cambios están protegidos localmente."));
+    window.addEventListener("online", () => { if (!soloMode) { setConnection("reconnecting", "Recuperando conexión…"); void flushOperations(); scheduleReconnect(); } });
+    window.addEventListener("offline", () => { if (!soloMode) setSaveStatus("offline", "Sin conexión; los cambios están protegidos localmente."); });
   }
 
   const publicApi = {
@@ -1734,12 +1905,34 @@ import {
       });
     },
     save: flushOperations,
-    state: () => ({ enabled, connected: eventSource?.readyState === EventSource.OPEN, mode, revision, pending: pendingOperationCount(), durable: outbox.durable, conflict: Boolean(conflictState), actorId, selected: clone(selected), data: clone(data), collaborators: clone(collaborators) }),
+    state: () => ({ enabled, solo: soloMode, connected: soloMode || eventSource?.readyState === EventSource.OPEN, mode, revision, pending: pendingOperationCount(), durable: outbox.durable, conflict: Boolean(conflictState), actorId, selected: clone(selected), data: clone(data), collaborators: clone(collaborators) }),
   };
   window.PokemonMapEditor = Object.freeze(publicApi);
 
   async function connect() {
     try {
+      if (soloMode) {
+        const [stored, recovered] = await Promise.all([Promise.resolve(readSoloSnapshot()), recoverOutbox()]);
+        enabled = true;
+        pendingBatches = recovered;
+        inviteUrl = window.location.href;
+        bridge.enable(); populatePrototypes(); populateNpcSprites(); bindUi();
+        applySnapshot({ revision: stored?.revision || 0, data: stored?.data || window.CITY_MAP_EDITOR_DATA || {} }, { preservePending: pendingBatches.length > 0 });
+        setMode("objects");
+        if (bridge.isOpen()) prepareOpenEditor();
+        renderPresence([{ actorId, name: editorName, color }]);
+        renderOutliner();
+        setConnection("online", "Modo solo");
+        if (pendingBatches.length) {
+          setSaveStatus("pending", `Recuperados ${pendingOperationCount()} cambios locales.`);
+          void flushOperations();
+        } else {
+          setSaveStatus("saved", stored
+            ? `Modo solo · cambios de ${activeMapId} cargados desde este navegador.`
+            : `Modo solo · ${activeMapId} usa los datos incluidos en index.html.`);
+        }
+        return;
+      }
       const [result, recovered] = await Promise.all([fetchSnapshot(), recoverOutbox()]);
       if (!result.enabled) throw new Error("Editor desactivado");
       enabled = true;
@@ -1755,7 +1948,7 @@ import {
       if (pendingBatches.length) {
         setSaveStatus("pending", `Recuperados ${pendingOperationCount()} cambios del cierre anterior.`);
         void flushOperations();
-      } else setSaveStatus("saved", `Conectado · los cambios se escriben en ${result.file}`);
+      } else setSaveStatus("saved", `Conectado a ${result.mapId || activeMapId} · los cambios se escriben en ${result.file}`);
     } catch (error) {
       enabled = false; bridge.disable(); setConnection("offline", "Solo disponible en desarrollo");
     }

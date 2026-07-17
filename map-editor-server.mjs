@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { open, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import { isEditorId, MAP_EDITOR_RULES, validateEditorOperation, validateMapEditorData } from "./map-editor-contract.js";
+import { isEditorId, isGroundPaintValue, MAP_EDITOR_RULES, validateEditorOperation, validateMapEditorData } from "./map-editor-contract.js";
 
 const TILE_TYPES = new Set(MAP_EDITOR_RULES.types.terrain);
 const DIRECTIONS = new Set(MAP_EDITOR_RULES.types.direction);
@@ -47,7 +47,7 @@ function cleanTileKey(value) {
   const match = /^(\d+),(\d+)$/.exec(String(value || ""));
   if (!match) return "";
   const col = Number(match[1]); const row = Number(match[2]);
-  return col < MAP_EDITOR_RULES.world.cols && row < MAP_EDITOR_RULES.world.rows ? `${col},${row}` : "";
+  return col < MAP_EDITOR_RULES.world.maxCols && row < MAP_EDITOR_RULES.world.maxRows ? `${col},${row}` : "";
 }
 
 function cleanStringList(value, { maximumItems = 12, maximumLength = 500 } = {}) {
@@ -66,8 +66,8 @@ function cleanIdList(value, maximumItems = MAP_EDITOR_RULES.limits.hiddenAssets)
 function cleanAssetTransform(value, { id = "", requireIdentity = false } = {}) {
   if (!isPlainObject(value)) return null;
   const transform = {
-    x: clamp(value.x, 0, MAP_EDITOR_RULES.world.width),
-    y: clamp(value.y, 0, MAP_EDITOR_RULES.world.height),
+    x: clamp(value.x, 0, MAP_EDITOR_RULES.world.maxWidth),
+    y: clamp(value.y, 0, MAP_EDITOR_RULES.world.maxHeight),
     scale: clamp(value.scale, ...MAP_EDITOR_RULES.ranges.scale, 1),
     rotation: clamp(value.rotation, ...MAP_EDITOR_RULES.ranges.rotation, 0),
     solid: value.solid !== false,
@@ -92,15 +92,15 @@ function cleanNpc(value, { id = "", requireIdentity = false } = {}) {
     if (!normalizedId) return null;
     npc.id = normalizedId;
   }
-  if (value.col !== undefined) npc.col = Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.cols - 1));
-  if (value.row !== undefined) npc.row = Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.rows - 1));
+  if (value.col !== undefined) npc.col = Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.maxCols - 1));
+  if (value.row !== undefined) npc.row = Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.maxRows - 1));
   if (DIRECTIONS.has(value.direction)) npc.direction = value.direction;
   const name = cleanText(value.name, MAP_EDITOR_RULES.lengths.npcName); if (name) npc.name = name;
   const sprite = cleanEditorId(value.sprite); if (sprite) npc.sprite = sprite;
   if (Array.isArray(value.lines)) npc.lines = cleanStringList(value.lines);
   if (isPlainObject(value.patrol) && Array.isArray(value.patrol.to) && value.patrol.to.length >= 2) {
     npc.patrol = {
-      to: [Math.floor(clamp(value.patrol.to[0], 0, MAP_EDITOR_RULES.world.cols - 1)), Math.floor(clamp(value.patrol.to[1], 0, MAP_EDITOR_RULES.world.rows - 1))],
+      to: [Math.floor(clamp(value.patrol.to[0], 0, MAP_EDITOR_RULES.world.maxCols - 1)), Math.floor(clamp(value.patrol.to[1], 0, MAP_EDITOR_RULES.world.maxRows - 1))],
       tilesPerSecond: clamp(value.patrol.tilesPerSecond, ...MAP_EDITOR_RULES.ranges.patrolSpeed, .75),
     };
   }
@@ -114,8 +114,8 @@ function cleanEntrance(value, id = "") {
   if (!isPlainObject(value)) return null;
   const entrance = {
     id: cleanEditorId(id || value.id),
-    col: Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.cols - 1)),
-    row: Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.rows - 1)),
+    col: Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.maxCols - 1)),
+    row: Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.maxRows - 1)),
   };
   if (!entrance.id) return null;
   const label = cleanText(value.label, MAP_EDITOR_RULES.lengths.label); if (label) entrance.label = label;
@@ -135,8 +135,8 @@ function cleanEvent(value, id = "") {
   if (!isPlainObject(value)) return null;
   const event = {
     id: cleanEditorId(id || value.id),
-    col: Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.cols - 1)),
-    row: Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.rows - 1)),
+    col: Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.maxCols - 1)),
+    row: Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.maxRows - 1)),
     type: EVENT_TYPES.has(value.type) ? value.type : "dialogue",
     trigger: EVENT_TRIGGERS.has(value.trigger) ? value.trigger : "interact",
   };
@@ -174,8 +174,10 @@ function cleanEntityArray(value, cleaner, maximumItems) {
 
 export function emptyMapEditorData() {
   return {
-    version: 2,
+    version: 3,
     tileOverrides: {},
+    groundOverrides: {},
+    mapSize: { cols: MAP_EDITOR_RULES.world.cols, rows: MAP_EDITOR_RULES.world.rows },
     assetOverrides: {},
     addedAssets: [],
     hiddenAssets: [],
@@ -196,6 +198,18 @@ export function sanitizeMapEditorData(value) {
       const key = cleanTileKey(rawKey);
       if (key && TILE_TYPES.has(type)) result.tileOverrides[key] = type;
     });
+  Object.entries(isPlainObject(source.groundOverrides) ? source.groundOverrides : {})
+    .slice(0, MAP_EDITOR_RULES.limits.groundOverrides)
+    .forEach(([rawKey, type]) => {
+      const key = cleanTileKey(rawKey);
+      if (key && isGroundPaintValue(type)) result.groundOverrides[key] = type;
+    });
+  if (isPlainObject(source.mapSize)) {
+    result.mapSize = {
+      cols: Math.floor(clamp(source.mapSize.cols, MAP_EDITOR_RULES.world.minCols, MAP_EDITOR_RULES.world.maxCols, MAP_EDITOR_RULES.world.cols)),
+      rows: Math.floor(clamp(source.mapSize.rows, MAP_EDITOR_RULES.world.minRows, MAP_EDITOR_RULES.world.maxRows, MAP_EDITOR_RULES.world.rows)),
+    };
+  }
   result.assetOverrides = cleanRecord(source.assetOverrides, (entry) => cleanAssetTransform(entry), MAP_EDITOR_RULES.limits.assetOverrides);
   result.addedAssets = cleanEntityArray(source.addedAssets,
     (entry, id) => cleanAssetTransform(entry, { id, requireIdentity: true }), MAP_EDITOR_RULES.limits.addedAssets);
@@ -252,6 +266,7 @@ export async function atomicWriteMapEditorData(filePath, data) {
 export function mapEditorCounts(data) {
   return {
     tiles: Object.keys(data.tileOverrides).length,
+    ground: Object.keys(data.groundOverrides).length,
     objects: Object.keys(data.assetOverrides).length + data.addedAssets.length,
     npcs: Object.keys(data.npcOverrides).length + data.addedNpcs.length,
     entrances: data.entrances.length,
@@ -289,6 +304,20 @@ function normalizeOperation(rawOperation) {
     if (!key || (rawOperation.value !== null && !TILE_TYPES.has(rawOperation.value))) fail("Casilla o tipo de terreno no válido");
     return { type: "tile.set", key, value: rawOperation.value };
   }
+  if (rawOperation.type === "ground.set") {
+    const key = cleanTileKey(rawOperation.key);
+    if (!key || (rawOperation.value !== null && !isGroundPaintValue(rawOperation.value))) fail("Casilla o tipo de suelo no válido");
+    return { type: "ground.set", key, value: rawOperation.value };
+  }
+  if (rawOperation.type === "map.resize") {
+    return {
+      type: "map.resize",
+      value: {
+        cols: Math.floor(clamp(rawOperation.value.cols, MAP_EDITOR_RULES.world.minCols, MAP_EDITOR_RULES.world.maxCols)),
+        rows: Math.floor(clamp(rawOperation.value.rows, MAP_EDITOR_RULES.world.minRows, MAP_EDITOR_RULES.world.maxRows)),
+      },
+    };
+  }
   if (rawOperation.type === "list.set") {
     if (!HIDDEN_LISTS.has(rawOperation.list)) fail("Lista del editor no válida");
     if (!Array.isArray(rawOperation.value)) fail("El valor de la lista debe ser un array");
@@ -315,6 +344,8 @@ function normalizeOperation(rawOperation) {
 
 function operationKey(operation) {
   if (operation.type === "tile.set") return `tile:${operation.key}`;
+  if (operation.type === "ground.set") return `ground:${operation.key}`;
+  if (operation.type === "map.resize") return "map:size";
   if (operation.type === "list.set") return `list:${operation.list}`;
   return `entity:${operation.entity}:${operation.id}`;
 }
@@ -328,6 +359,8 @@ function operationTouchedKeys(operation) {
 
 function currentValueForKey(data, key) {
   if (key.startsWith("tile:")) return data.tileOverrides[key.slice(5)] ?? null;
+  if (key.startsWith("ground:")) return data.groundOverrides[key.slice(7)] ?? null;
+  if (key === "map:size") return clone(data.mapSize);
   if (key === "list:hiddenAssets" || key === "list:hiddenNpcs") return clone(data[key.slice(5)] || []);
   const match = /^entity:(asset|npc|entrance|event):(.+)$/.exec(key);
   if (!match) return null;
@@ -342,6 +375,18 @@ function applyOperation(data, operation) {
   if (operation.type === "tile.set") {
     if (operation.value === null) delete data.tileOverrides[operation.key];
     else data.tileOverrides[operation.key] = operation.value;
+    return;
+  }
+  if (operation.type === "ground.set") {
+    if (operation.value === null) delete data.groundOverrides[operation.key];
+    else data.groundOverrides[operation.key] = operation.value;
+    return;
+  }
+  if (operation.type === "map.resize") {
+    data.mapSize = {
+      cols: Math.max(data.mapSize?.cols || MAP_EDITOR_RULES.world.cols, operation.value.cols),
+      rows: Math.max(data.mapSize?.rows || MAP_EDITOR_RULES.world.rows, operation.value.rows),
+    };
     return;
   }
   if (operation.type === "list.set") {
@@ -398,7 +443,7 @@ function cleanPresence(value) {
     selection: null,
   };
   if (isPlainObject(value.cursor) && Number.isFinite(Number(value.cursor.x)) && Number.isFinite(Number(value.cursor.y))) {
-    user.cursor = { x: clamp(value.cursor.x, 0, MAP_EDITOR_RULES.world.width), y: clamp(value.cursor.y, 0, MAP_EDITOR_RULES.world.height) };
+    user.cursor = { x: clamp(value.cursor.x, 0, MAP_EDITOR_RULES.world.maxWidth), y: clamp(value.cursor.y, 0, MAP_EDITOR_RULES.world.maxHeight) };
   }
   if (isPlainObject(value.selection)) {
     const entity = cleanToken(value.selection.entity, 32); const id = cleanEditorId(value.selection.id);
@@ -414,8 +459,8 @@ function cleanPresence(value) {
       : "down";
     const interior = value.player.interior == null ? null : cleanToken(value.player.interior, 64) || null;
     user.player = {
-      x: clamp(value.player.x, 0, MAP_EDITOR_RULES.world.width),
-      y: clamp(value.player.y, 0, MAP_EDITOR_RULES.world.height),
+      x: clamp(value.player.x, 0, MAP_EDITOR_RULES.world.maxWidth),
+      y: clamp(value.player.y, 0, MAP_EDITOR_RULES.world.maxHeight),
       direction,
       dimension: cleanToken(value.player.dimension, 32) || "san_pablo",
       interior,

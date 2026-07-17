@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "assets": [
+    { "id": "orangeTreeMature", "file": "tree-orange-mature", "label": "Naranjo adulto", "kind": "tree", "maxWidth": 112, "maxHeight": 124, "tags": ["naranjo", "arbol", "sevilla", "fruta"] },
+    { "id": "orangeTreeYoung", "file": "tree-orange-young", "label": "Naranjo joven", "kind": "tree", "maxWidth": 92, "maxHeight": 112, "tags": ["naranjo", "arbol", "joven"] },
+    { "id": "orangeTreePruned", "file": "tree-orange-pruned", "label": "Naranjo podado", "kind": "tree", "maxWidth": 104, "maxHeight": 114, "tags": ["naranjo", "arbol", "podado", "urbano"] },
+    { "id": "orangeTreeBlossom", "file": "tree-orange-blossom", "label": "Naranjo en flor", "kind": "tree", "maxWidth": 112, "maxHeight": 124, "tags": ["naranjo", "arbol", "azahar", "flor"] },
+    { "id": "orangeTreePlanter", "file": "tree-orange-planter", "label": "Naranjo en jardinera", "kind": "tree", "maxWidth": 126, "maxHeight": 116, "tags": ["naranjo", "jardinera", "plaza", "terracota"] },
+    { "id": "orangeTreePair", "file": "tree-orange-pair", "label": "Naranjo alto", "kind": "tree", "maxWidth": 120, "maxHeight": 176, "orientation": "vertical", "units": 1, "tags": ["naranjo", "arbol", "alto", "individual", "vertical"] },
+
+    { "id": "towerTanFront", "file": "building-tower-tan-front", "label": "Torre de ladrillo frontal", "kind": "building", "maxWidth": 340, "maxHeight": 520, "tags": ["torre", "bloque", "ladrillo", "alto", "frontal"] },
+    { "id": "towerTanLeft", "file": "building-tower-tan-left", "label": "Torre de ladrillo vertical A", "kind": "building", "maxWidth": 350, "maxHeight": 510, "orientation": "vertical", "tags": ["torre", "bloque", "ladrillo", "alto", "vertical", "ortogonal"] },
+    { "id": "towerTanRight", "file": "building-tower-tan-right", "label": "Torre de ladrillo vertical B", "kind": "building", "maxWidth": 350, "maxHeight": 510, "orientation": "vertical", "tags": ["torre", "bloque", "ladrillo", "alto", "vertical", "ortogonal"] },
+    { "id": "towerTanCorner", "file": "building-tower-tan-corner", "label": "Torre de ladrillo horizontal", "kind": "building", "maxWidth": 390, "maxHeight": 500, "orientation": "horizontal", "tags": ["torre", "bloque", "ladrillo", "alto", "horizontal", "ortogonal"] },
+    { "id": "towerWhiteOrangeFront", "file": "building-tower-white-orange-front", "label": "Edificio blanco y albero horizontal (4 plantas)", "kind": "building", "maxWidth": 350, "maxHeight": 510, "orientation": "horizontal", "storeys": 4, "tags": ["edificio", "blanco", "albero", "toldos", "horizontal", "cuatro plantas", "ortogonal"] },
+    { "id": "towerWhiteOrangeLeft", "file": "building-tower-white-orange-left", "label": "Edificio blanco y albero vertical (4 plantas)", "kind": "building", "maxWidth": 360, "maxHeight": 500, "orientation": "vertical", "storeys": 4, "tags": ["edificio", "blanco", "albero", "toldos", "vertical", "cuatro plantas", "ortogonal"] },
+    { "id": "apartmentAwningFront", "file": "building-apartment-awning-front", "label": "Bloque alto con toldos", "kind": "building", "maxWidth": 330, "maxHeight": 450, "tags": ["bloque", "apartamentos", "toldos", "azul", "frontal"] },
+    { "id": "apartmentAwningCorner", "file": "building-apartment-awning-corner", "label": "Bloque alto con toldos vertical", "kind": "building", "maxWidth": 380, "maxHeight": 440, "orientation": "vertical", "tags": ["bloque", "apartamentos", "toldos", "vertical", "ortogonal"] },
+    { "id": "apartmentBrickFront", "file": "building-apartment-brick-front", "label": "Bloque de ladrillo frontal", "kind": "building", "maxWidth": 330, "maxHeight": 440, "tags": ["bloque", "apartamentos", "ladrillo", "frontal"] },
+    { "id": "apartmentBrickSide", "file": "building-apartment-brick-side", "label": "Bloque de ladrillo vertical", "kind": "building", "maxWidth": 380, "maxHeight": 430, "orientation": "vertical", "tags": ["bloque", "apartamentos", "ladrillo", "vertical", "ortogonal"] },
+
+    { "id": "midriseAwningBlue", "file": "building-midrise-awning-blue", "label": "Bloque medio con toldos azules", "kind": "building", "maxWidth": 300, "maxHeight": 320, "tags": ["bloque", "medio", "toldos", "azul"] },
+    { "id": "midriseAwningGreen", "file": "building-midrise-awning-green", "label": "Bloque medio con toldos verdes", "kind": "building", "maxWidth": 300, "maxHeight": 320, "tags": ["bloque", "medio", "toldos", "verde"] },
+    { "id": "midriseBrickBalconies", "file": "building-midrise-brick-balconies", "label": "Bloque medio de ladrillo", "kind": "building", "maxWidth": 340, "maxHeight": 320, "tags": ["bloque", "medio", "ladrillo", "balcones"] },
+    { "id": "midriseWhiteOrange", "file": "building-midrise-white-orange", "label": "Bloque medio blanco y albero", "kind": "building", "maxWidth": 300, "maxHeight": 320, "tags": ["bloque", "medio", "blanco", "albero"] },
+    { "id": "residentialBlockLong", "file": "building-residential-block-long", "label": "Bloque residencial largo", "kind": "building", "maxWidth": 560, "maxHeight": 260, "tags": ["bloque", "residencial", "largo", "hilera"] },
+    { "id": "residentialBlockCorner", "file": "building-residential-block-corner", "label": "Bloque residencial vertical", "kind": "building", "maxWidth": 430, "maxHeight": 360, "orientation": "vertical", "tags": ["bloque", "residencial", "vertical", "ortogonal"] },
+    { "id": "industrialWorkshop", "file": "building-workshop-industrial", "label": "Taller industrial", "kind": "building", "maxWidth": 310, "maxHeight": 190, "tags": ["taller", "industrial", "garaje", "nave"] },
+    { "id": "fencedCarPark", "file": "building-car-park-fenced", "label": "Aparcamiento vallado", "kind": "building", "maxWidth": 360, "maxHeight": 250, "tags": ["aparcamiento", "parking", "valla", "solar"] },
+
+    { "id": "shopGroceryFront", "file": "shop-grocery-front", "label": "Ultramarinos frontal", "kind": "building", "maxWidth": 220, "maxHeight": 190, "tags": ["tienda", "ultramarinos", "fruta", "frontal"] },
+    { "id": "shopGroceryLeft", "file": "shop-grocery-left", "label": "Ultramarinos vertical A", "kind": "building", "maxWidth": 230, "maxHeight": 195, "orientation": "vertical", "tags": ["tienda", "ultramarinos", "fruta", "vertical", "ortogonal"] },
+    { "id": "shopGroceryRight", "file": "shop-grocery-right", "label": "Ultramarinos vertical B", "kind": "building", "maxWidth": 230, "maxHeight": 195, "orientation": "vertical", "tags": ["tienda", "ultramarinos", "fruta", "vertical", "ortogonal"] },
+    { "id": "shopBakeryFront", "file": "shop-bakery-front", "label": "Panaderia", "kind": "building", "maxWidth": 210, "maxHeight": 190, "tags": ["tienda", "panaderia", "pan", "toldo"] },
+    { "id": "shopCafeFront", "file": "shop-cafe-front", "label": "Cafe de barrio", "kind": "building", "maxWidth": 205, "maxHeight": 190, "tags": ["tienda", "cafe", "bar", "azulejo"] },
+    { "id": "shopPharmacyFront", "file": "shop-pharmacy-front", "label": "Farmacia", "kind": "building", "maxWidth": 210, "maxHeight": 190, "tags": ["tienda", "farmacia", "salud", "verde"] },
+    { "id": "shopLaundromatFront", "file": "shop-laundromat-front", "label": "Lavanderia", "kind": "building", "maxWidth": 210, "maxHeight": 190, "tags": ["tienda", "lavanderia", "lavadoras", "azul"] },
+    { "id": "shopCornerAwning", "file": "shop-corner-awning", "label": "Tienda con toldos horizontal", "kind": "building", "maxWidth": 280, "maxHeight": 205, "orientation": "horizontal", "tags": ["tienda", "horizontal", "toldos", "comercio", "ortogonal"] },
+    { "id": "shopWorkshopFront", "file": "shop-workshop-front", "label": "Taller de barrio", "kind": "building", "maxWidth": 220, "maxHeight": 180, "tags": ["tienda", "taller", "garaje", "persiana"] },
+    { "id": "shopMarketKiosk", "file": "shop-market-kiosk", "label": "Quiosco de mercado", "kind": "building", "maxWidth": 195, "maxHeight": 185, "tags": ["tienda", "quiosco", "mercado", "fruta"] },
+
+    { "id": "ornateBench", "file": "prop-bench-ornate", "label": "Banco de hierro", "kind": "prop", "maxWidth": 96, "maxHeight": 62, "tags": ["banco", "parque", "hierro", "mobiliario"] },
+    { "id": "billboardRow", "file": "prop-billboard-row", "label": "Fila de vallas publicitarias", "kind": "prop", "maxWidth": 280, "maxHeight": 122, "tags": ["valla", "cartel", "publicidad", "fila"] },
+    { "id": "billboardSingle", "file": "prop-billboard-single", "label": "Valla publicitaria horizontal", "kind": "prop", "maxWidth": 185, "maxHeight": 138, "orientation": "horizontal", "tags": ["valla", "cartel", "publicidad", "horizontal", "ortogonal"] },
+    { "id": "whiteWall", "file": "prop-white-wall", "label": "Muro blanco", "kind": "prop", "maxWidth": 240, "maxHeight": 68, "tags": ["muro", "blanco", "limite", "pared"] },
+    { "id": "metalFence", "file": "prop-metal-fence", "label": "Valla metalica", "kind": "prop", "maxWidth": 240, "maxHeight": 76, "tags": ["valla", "metal", "rejilla", "limite"] },
+    { "id": "curvedStreetlamp", "file": "prop-streetlamp-curved", "label": "Farola curva", "kind": "prop", "maxWidth": 38, "maxHeight": 116, "tags": ["farola", "luz", "calle", "curva"] }
+  ]
+}

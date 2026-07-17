@@ -14,68 +14,105 @@
   const assetCatalog = Object.freeze({
     institutional: {
       src: "assets/generated/san-pablo-derived/runtime/building-institutional.png",
-      kind: "building", w: 440, h: 354, colliders: [[-176, -55, 352, 50]],
+      kind: "building", label: "Edificio institucional", w: 440, h: 354, colliders: [[-176, -55, 352, 50]],
     },
     clinic: {
       src: "assets/generated/san-pablo-derived/runtime/building-clinic-red.png",
-      kind: "building", w: 323, h: 252, colliders: [[-135, -65, 270, 55]],
+      kind: "building", label: "Clinica roja", w: 323, h: 252, colliders: [[-135, -65, 270, 55]],
     },
     blueHouse: {
       src: "assets/generated/san-pablo-derived/runtime/building-house-blue.png",
-      kind: "building", w: 280, h: 300, colliders: [[-104, -70, 208, 48]],
+      kind: "building", label: "Casa azul", w: 280, h: 300, colliders: [[-104, -70, 208, 48]],
     },
     residential: {
       src: "assets/generated/san-pablo-derived/runtime/building-residential-tan.png",
-      kind: "building", w: 147, h: 195, colliders: [[-55, -38, 110, 34]],
+      kind: "building", label: "Bloque residencial beige", w: 147, h: 195, colliders: [[-55, -38, 110, 34]],
     },
     traditional: {
       src: "assets/generated/san-pablo-derived/runtime/building-traditional-red.png",
-      kind: "building", w: 224, h: 220, colliders: [[-88, -48, 176, 42]],
+      kind: "building", label: "Casa tradicional roja", w: 224, h: 220, colliders: [[-88, -48, 176, 42]],
     },
     rowhouse: {
       src: "assets/generated/san-pablo-rebuilt/runtime/building-rowhouse-tan.png",
-      kind: "building", w: 400, h: 188, colliders: [[-176, -42, 352, 38]],
+      kind: "building", label: "Hilera de viviendas", w: 400, h: 188, colliders: [[-176, -42, 352, 38]],
     },
     campus: {
       src: "assets/generated/san-pablo-rebuilt/runtime/building-campus-civic.png",
-      kind: "building", w: 430, h: 314, colliders: [[-174, -58, 348, 52]],
+      kind: "building", label: "Campus civico", w: 430, h: 314, colliders: [[-174, -58, 348, 52]],
     },
     bank: {
       src: "assets/generated/san-pablo-rebuilt/runtime/building-bank-civic.png",
-      kind: "building", w: 320, h: 320, colliders: [[-126, -70, 252, 62]],
+      kind: "building", label: "Banco civico", w: 320, h: 320, colliders: [[-126, -70, 252, 62]],
     },
     modern: {
       src: "assets/generated/san-pablo-rebuilt/runtime/building-modern-southeast.png",
-      kind: "building", w: 380, h: 340, colliders: [[-142, -72, 284, 64]],
+      kind: "building", label: "Edificio moderno", w: 380, h: 340, colliders: [[-142, -72, 284, 64]],
     },
     evergreen: {
       src: "assets/generated/san-pablo-derived/runtime/tree-evergreen.png",
-      kind: "tree", w: 69, h: 108, colliders: [[-12, -17, 24, 17]],
+      kind: "tree", label: "Abeto", w: 69, h: 108, colliders: [[-12, -17, 24, 17]],
     },
     deciduous: {
       src: "assets/generated/san-pablo-rebuilt/runtime/tree-deciduous.png",
-      kind: "tree", w: 88, h: 108, colliders: [[-14, -18, 28, 18]],
+      kind: "tree", label: "Arbol de hoja caduca", w: 88, h: 108, colliders: [[-14, -18, 28, 18]],
     },
     cherry: {
       src: "assets/generated/san-pablo-derived/runtime/tree-cherry.png",
-      kind: "tree", w: 93, h: 105, colliders: [[-13, -18, 26, 18]],
+      kind: "tree", label: "Cerezo", w: 93, h: 105, colliders: [[-13, -18, 26, 18]],
     },
     streetlamp: {
       src: "assets/generated/san-pablo-derived/runtime/prop-streetlamp.png",
-      kind: "prop", w: 28, h: 72, colliders: [[-5, -8, 10, 8]],
+      kind: "prop", label: "Farola clasica", w: 28, h: 72, colliders: [[-5, -8, 10, 8]],
     },
     bench: {
       src: "assets/generated/san-pablo-derived/runtime/prop-park-bench.png",
-      kind: "prop", w: 76, h: 44, colliders: [[-30, -12, 60, 12]],
+      kind: "prop", label: "Banco de parque", w: 76, h: 44, colliders: [[-30, -12, 60, 12]],
     },
     hedge: {
       src: "assets/generated/san-pablo-derived/runtime/prop-hedge-flowerbed.png",
-      kind: "prop", w: 242, h: 44, colliders: [[-121, -18, 242, 18]],
+      kind: "prop", label: "Jardinera con seto", w: 242, h: 44, colliders: [[-121, -18, 242, 18]],
     },
     thornBarrier: {
       src: "assets/generated/san-pablo-rebuilt/runtime/prop-thorn-barrier.png",
-      kind: "blocker", w: 112, h: 32, colliders: [[-56, -17, 112, 17]],
+      kind: "blocker", label: "Barrera de espinos", w: 112, h: 32, colliders: [[-56, -17, 112, 17]],
     },
+    civicUNorth: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/building-civic-u-north.png",
+      kind: "building", label: "Centro civico norte", tags: ["civico", "campus"], w: 1785, h: 344, colliders: [[-760, -70, 1520, 64]],
+    },
+    civicUSouthLab: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/building-civic-u-south-lab.png",
+      kind: "building", label: "Laboratorio civico sur", tags: ["civico", "laboratorio"], w: 1823, h: 393, colliders: [[-780, -76, 1560, 68]],
+    },
+    civicUWest: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/building-civic-u-west.png",
+      kind: "building", label: "Ala civica oeste", tags: ["civico", "campus"], w: 332, h: 1665, colliders: [[-130, -690, 260, 1380]],
+    },
+    libraryVertical: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/building-library-vertical.png",
+      kind: "building", label: "Biblioteca vertical", tags: ["biblioteca", "civico"], w: 562, h: 941, colliders: [[-220, -360, 440, 720]],
+    },
+    palmTree: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/tree-palm.png",
+      kind: "tree", label: "Palmera", tags: ["palmera", "arbol"], w: 192, h: 256, colliders: [[-18, -26, 36, 26]],
+    },
+    whiteFenceHorizontal: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/prop-white-fence-horizontal.png",
+      kind: "prop", label: "Valla blanca horizontal", tags: ["valla", "blanca"], w: 1753, h: 347, colliders: [[-820, -45, 1640, 40]],
+    },
+    whiteFenceVertical: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/prop-white-fence-vertical.png",
+      kind: "prop", label: "Valla blanca vertical", tags: ["valla", "blanca"], w: 142, h: 1723, colliders: [[-34, -800, 68, 1600]],
+    },
+    whiteWallHorizontal: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/prop-white-wall-horizontal.png",
+      kind: "prop", label: "Muro blanco horizontal", tags: ["muro", "blanco"], w: 1753, h: 348, colliders: [[-820, -48, 1640, 44]],
+    },
+    whiteWallVertical: {
+      src: "assets/generated/san-pablo-rebuilt/runtime/prop-white-wall-vertical.png",
+      kind: "prop", label: "Muro blanco vertical", tags: ["muro", "blanco"], w: 146, h: 1923, colliders: [[-36, -900, 72, 1800]],
+    },
+    ...(window.CITY_NEIGHBORHOOD_ASSET_CATALOG || {}),
   });
 
   const worldAssets = [];
@@ -124,6 +161,42 @@
   addAsset("south-campus-annex", "modern", 1620, 2478, {
     depthY: 2452, label: "Anexo Sur", district: "south-center",
   });
+
+  /* Residencial de las Cuatro Torres: ampliacion aislada al sur. La puerta
+     del limite antiguo permite entrar por el acceso inferior de la zona. */
+  [
+    ["four-towers-west", 760, 3410, "Torre Oeste", false],
+    ["four-towers-central", 1220, 3232, "Torre Central", true],
+    ["four-towers-northeast", 1696, 3296, "Torre Nordeste", false],
+    ["four-towers-southeast", 1672, 3760, "Torre Sudeste", true],
+  ].forEach(([id, x, y, label, flipX]) => addAsset(id, "apartmentBrickFront", x, y, {
+    label, flipX, district: "four-towers",
+  }));
+  addAsset("four-towers-central-bar", "shopBakeryFront", 1220, 3254, {
+    door: [38, 101], approach: [1232, 3280, "up"],
+    depthY: 3256, label: "Bar de la Torre", district: "four-towers",
+  });
+
+  [
+    ["four-towers-orange-01", "orangeTreeMature", 520, 2960],
+    ["four-towers-orange-02", "orangeTreeYoung", 930, 2780],
+    ["four-towers-orange-03", "orangeTreeMature", 1510, 2780],
+    ["four-towers-orange-04", "orangeTreePruned", 1980, 2990],
+    ["four-towers-orange-05", "orangeTreePlanter", 540, 3660],
+    ["four-towers-orange-06", "orangeTreeMature", 920, 3860],
+    ["four-towers-orange-07", "orangeTreeBlossom", 1540, 3920],
+    ["four-towers-orange-08", "orangeTreePruned", 1980, 3660],
+  ].forEach(([id, sprite, x, y]) => addAsset(id, sprite, x, y, { district: "four-towers" }));
+  [
+    ["four-towers-bench-west", 1040, 3560],
+    ["four-towers-bench-east", 1450, 3560],
+  ].forEach(([id, x, y]) => addAsset(id, "ornateBench", x, y, { district: "four-towers" }));
+  [
+    ["four-towers-lamp-west", 1100, 3830],
+    ["four-towers-lamp-east", 1420, 3830],
+  ].forEach(([id, x, y]) => addAsset(id, "curvedStreetlamp", x, y, { district: "four-towers" }));
+  addAsset("four-towers-fence-southwest", "metalFence", 1008, 4056, { district: "four-towers" });
+  addAsset("four-towers-fence-southeast", "metalFence", 1520, 4056, { district: "four-towers" });
 
   /* Viviendas tan: las hileras solo se repiten donde la referencia comparte modulo. */
   const rowhouses = [
@@ -296,6 +369,14 @@
     { id: "grass-north-park-east", name: "Hierba del Parque Norte", x: 2080, y: 128, w: 128, h: 128, surface: "grass", walkable: true, encounter: true },
     { id: "grass-south-park-west", name: "Hierba del Parque Sur", x: 368, y: 2312, w: 238, h: 112, surface: "grass", walkable: true, encounter: true },
     { id: "grass-tesalonica-garden", name: "Jardín de Tesalónica", x: 1648, y: 1992, w: 80, h: 64, surface: "grass", walkable: true, encounter: true },
+    { id: "four-towers-lawn", x: 416, y: 2624, w: 1696, h: 1440, surface: "grass", walkable: true, extension: true, border: true },
+    { id: "four-towers-precinct", x: 512, y: 2720, w: 1504, h: 1248, surface: "sidewalk", walkable: true, extension: true },
+    { id: "four-towers-south-road", x: 512, y: 3872, w: 1600, h: 192, surface: "asphalt", walkable: true, extension: true },
+    { id: "four-towers-east-road", x: 1888, y: 2720, w: 224, h: 1344, surface: "asphalt", walkable: true, extension: true },
+    { id: "four-towers-courtyard", x: 912, y: 3264, w: 704, h: 544, surface: "plaza", walkable: true, extension: true },
+    { id: "four-towers-entry-walk", x: 1152, y: 3680, w: 256, h: 384, surface: "sidewalk", walkable: true, extension: true },
+    { id: "four-towers-garden-west", x: 544, y: 3424, w: 304, h: 384, surface: "grass", walkable: true, extension: true },
+    { id: "four-towers-garden-east", x: 1640, y: 3376, w: 216, h: 288, surface: "grass", walkable: true, extension: true },
   ]);
 
   const surfacePolygons = Object.freeze([
@@ -340,6 +421,7 @@
     { id: "south-west", name: "San Pablo · Parque Sur", x: 0, y: 1672, w: 836, h: 836 },
     { id: "south-center", name: "San Pablo · Tesalonica", x: 836, y: 1672, w: 836, h: 836 },
     { id: "south-east", name: "San Pablo · Distrito Moderno", x: 1672, y: 1672, w: 836, h: 836 },
+    { id: "four-towers", name: "San Pablo · Residencial de las Cuatro Torres", x: 384, y: 2580, w: 1760, h: 1516 },
   ]);
 
   /* Los cambios del editor se aplican antes de congelar el layout. El archivo
@@ -443,6 +525,7 @@
     roads,
     paths,
     surfaceRects,
+    extensionSurfaces: Object.freeze(surfaceRects.filter((surface) => surface.extension)),
     surfacePolygons,
     encounterAreas,
     sportsFields: Object.freeze([

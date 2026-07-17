@@ -10,3 +10,9 @@ Archivos:
 Poses frontales de ataque: editadas en julio de 2026 con OpenAI ImageGen a partir de cada sprite frontal del proyecto, recortadas a transparencia y optimizadas a 512 × 512.
 - peyote-attack-front.png
 - prensalito-attack-front.png
+
+Animaciones idle de Peyote: poses clave editadas con OpenAI ImageGen y fotogramas intermedios generados offline con LTX-Video 2B 0.9.8-distilled (Lightricks). El resultado se recortó a 32 fotogramas RGBA, se limpió por chroma key y se optimizó como WebP animado. Contenido generado con IA y revisado manualmente.
+- peyote-idle-front.webp
+- peyote-idle-back.webp
+
+Modelo y código de referencia: https://github.com/Lightricks/LTX-Video

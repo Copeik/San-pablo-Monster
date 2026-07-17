@@ -67,9 +67,9 @@ async function connectEventStream(url) {
   };
 }
 
-test("normaliza y migra los datos del editor al esquema v2", () => {
+test("normaliza y migra los datos del editor al esquema v3", () => {
   assert.deepEqual(sanitizeMapEditorData({
-    tileOverrides: { "2,3": "encounter", "99,1": "blocked", nope: "walkable" },
+    tileOverrides: { "2,3": "encounter", "199,1": "blocked", nope: "walkable" },
     assetOverrides: { house: { x: 9000, y: 40, scale: 9, solid: false, label: "Casa editada" } },
     addedAssets: [{ id: "editor-bench-1", sprite: "bench", x: 120, y: 200, scale: .1 }],
     hiddenAssets: ["old-house", "old-house", "../bad"],
@@ -79,9 +79,11 @@ test("normaliza y migra los datos del editor al esquema v2", () => {
     entrances: [{ id: "exit-north", col: 2, row: 1, action: "transition", targetMap: "route_1", targetX: 20, targetY: 30 }],
     events: [{ id: "thought-1", col: 8, row: 9, type: "thought", trigger: "step", message: "Algo se mueve", once: true }],
   }), {
-    version: 2,
+    version: 3,
     tileOverrides: { "2,3": "encounter" },
-    assetOverrides: { house: { x: 2508, y: 40, scale: 4, rotation: 0, solid: false, label: "Casa editada" } },
+    groundOverrides: {},
+    mapSize: { cols: 79, rows: 79 },
+    assetOverrides: { house: { x: 4096, y: 40, scale: 4, rotation: 0, solid: false, label: "Casa editada" } },
     addedAssets: [{ x: 120, y: 200, scale: .25, rotation: 0, solid: true, id: "editor-bench-1", sprite: "bench" }],
     hiddenAssets: ["old-house"],
     npcOverrides: { guide: { col: 4, row: 5, direction: "left", name: "Guía" } },
@@ -92,7 +94,7 @@ test("normaliza y migra los datos del editor al esquema v2", () => {
   });
 });
 
-test("GET entrega snapshot y el POST completo legacy persiste atómicamente en v2", async (t) => {
+test("GET entrega snapshot y el POST completo legacy persiste atómicamente en v3", async (t) => {
   const app = await startEditorServer(); t.after(() => app.close());
   const availability = await fetch(`${app.origin}/api/dev/map-editor`);
   assert.equal(availability.status, 200);
@@ -100,7 +102,7 @@ test("GET entrega snapshot y el POST completo legacy persiste atómicamente en v
   assert.equal(initial.enabled, true);
   assert.equal(initial.file, "map-editor-data.js");
   assert.equal(initial.revision, 0);
-  assert.equal(initial.data.version, 2);
+  assert.equal(initial.data.version, 3);
   assert.deepEqual(initial.collaboration, { enabled: false, requireToken: false });
 
   const response = await postJson(`${app.origin}/api/dev/map-editor`, {
@@ -112,9 +114,9 @@ test("GET entrega snapshot y el POST completo legacy persiste atómicamente en v
   assert.equal(result.revision, 1);
   assert.equal(result.tiles, 1);
   assert.equal(result.objects, 1);
-  assert.deepEqual(result.counts, { tiles: 1, objects: 1, npcs: 0, entrances: 0, events: 0 });
+  assert.deepEqual(result.counts, { tiles: 1, ground: 0, objects: 1, npcs: 0, entrances: 0, events: 0 });
   const written = await readFile(app.editorDataPath, "utf8");
-  assert.equal(parseMapEditorSource(written).version, 2);
+  assert.equal(parseMapEditorSource(written).version, 3);
   assert.match(written, /"editor-tree-1"/);
 
   const liveData = await fetch(`${app.origin}/map-editor-data.js?v=test`, { headers: { Connection: "close" } });
@@ -155,6 +157,29 @@ test("operaciones concurrentes fusionan claves distintas y rechazan la misma cla
   assert.deepEqual(persisted.tileOverrides, snapshot.data.tileOverrides);
 });
 
+test("guarda suelo visual y amplía el mapa sin permitir reducciones", async (t) => {
+  const app = await startEditorServer(); t.after(() => app.close());
+  const expanded = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId: "builder", baseRevision: 0, transactionId: "ground-and-size",
+    operations: [
+      { type: "ground.set", key: "80,80", value: "grass|path-asphalt" },
+      { type: "map.resize", value: { cols: 89, rows: 91 } },
+    ],
+  });
+  assert.equal(expanded.status, 200);
+  const expandedBody = await expanded.json();
+  assert.equal(expandedBody.counts.ground, 1);
+
+  const shrink = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId: "builder", baseRevision: 1, transactionId: "no-shrink",
+    operations: [{ type: "map.resize", value: { cols: 80, rows: 80 } }],
+  });
+  assert.equal(shrink.status, 200);
+  const snapshot = await (await fetch(`${app.origin}/api/dev/map-editor`)).json();
+  assert.deepEqual(snapshot.data.mapSize, { cols: 89, rows: 91 });
+  assert.deepEqual(snapshot.data.groundOverrides, { "80,80": "grass|path-asphalt" });
+});
+
 test("valida operaciones estrictamente, no trunca y mantiene el archivo anterior", async (t) => {
   const app = await startEditorServer(); t.after(() => app.close());
   const valid = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
@@ -179,10 +204,16 @@ test("valida operaciones estrictamente, no trunca y mantiene el archivo anterior
   const outside = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
     actorId: "strict", baseRevision: 1, transactionId: "invalid-2",
     operations: [{ type: "entity.set", entity: "entrance", collection: "entrances", id: "outside", value: {
-      id: "outside", col: 2, row: 2, action: "transition", targetMap: "current", targetX: 2600, targetY: 20,
+      id: "outside", col: 2, row: 2, action: "transition", targetMap: "current", targetX: 5000, targetY: 20,
     } }],
   });
   assert.equal(outside.status, 400);
+
+  const invalidLayers = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId: "strict", baseRevision: 1, transactionId: "invalid-ground-layers",
+    operations: [{ type: "ground.set", key: "3,3", value: "grass|asphalt" }],
+  });
+  assert.equal(invalidLayers.status, 400);
 });
 
 test("una transacción repetida es idempotente y no duplica revisión", async (t) => {
@@ -261,7 +292,7 @@ test("SSE emite snapshot, presencia y operaciones autoritativas", async (t) => {
   t.after(() => stream.close());
   const initial = await stream.next("snapshot");
   assert.equal(initial.data.revision, 0);
-  assert.equal(initial.data.data.version, 2);
+  assert.equal(initial.data.data.version, 3);
 
   await stream.next("presence");
   const presenceResponse = await postJson(`${app.origin}/api/dev/map-editor/presence`, {

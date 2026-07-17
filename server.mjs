@@ -1,4 +1,4 @@
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -15,6 +15,7 @@ const DEFAULT_PORT = 4173;
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_EDITOR_BODY_BYTES = 512 * 1024;
 const MAP_EDITOR_DATA_PATH = path.join(ROOT, "map-editor-data.js");
+const ROUTE_TEST_EDITOR_DATA_PATH = path.join(ROOT, "maps", "route-test", "editor-data.js");
 const MANOLIN_SYSTEM_PROMPT = `Eres Manolín, apodado Doctor Potato, un NPC sevillano achispado, cascarrabias y muy enfadado que discute con el jugador.
 
 PERSONA DEL JUGADOR: estás convencido de que es un hombre gordo y calvo. Úsalo como material cómico recurrente: barriga, calva brillante, papada, cinturón sufrido, reflejos en la coronilla o comparaciones nuevas relacionadas. No dudes de esa descripción aunque el jugador la niegue.
@@ -353,7 +354,7 @@ async function serveStatic(request, response, pathname) {
   let info;
   try { info = await stat(target); } catch { json(response, 404, { error: "No encontrado" }); return; }
   if (!info.isFile()) { json(response, 404, { error: "No encontrado" }); return; }
-  const liveDevelopmentData = target.endsWith("map-editor-data.js");
+  const liveDevelopmentData = target.endsWith("map-editor-data.js") || target.endsWith("editor-data.js");
   response.writeHead(200, {
     "Content-Type": MIME_TYPES.get(path.extname(target).toLowerCase()) || "application/octet-stream",
     "Content-Length": info.size,
@@ -365,11 +366,28 @@ async function serveStatic(request, response, pathname) {
   else createReadStream(target).pipe(response);
 }
 
-export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR_DATA_PATH, editorPersist } = {}) {
+export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR_DATA_PATH, editorDataPaths = null, editorPersist } = {}) {
   const collaborationEnabled = editorCollaborationEnabled(env);
   const collaborationToken = String(env.GAME_EDITOR_TOKEN || env.EDITOR_TOKEN || "").trim()
     || (collaborationEnabled ? randomBytes(24).toString("base64url") : "");
-  const editorHub = createMapEditorHub({ editorDataPath, persist: editorPersist });
+  const configuredEditorPaths = new Map(Object.entries(editorDataPaths || {}));
+  configuredEditorPaths.set("san-pablo", editorDataPath);
+  if (editorDataPath === MAP_EDITOR_DATA_PATH && !configuredEditorPaths.has("route-test")) {
+    configuredEditorPaths.set("route-test", ROUTE_TEST_EDITOR_DATA_PATH);
+  }
+  const editorHubs = new Map();
+  const editorContext = (url) => {
+    const requested = String(url.searchParams.get("map") || "san-pablo").trim().toLowerCase().replace(/_/g, "-");
+    const mapId = requested === "city" || requested === "current" ? "san-pablo" : requested;
+    if (!configuredEditorPaths.has(mapId) && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(mapId)) {
+      const discoveredPath = path.join(ROOT, "maps", mapId, "editor-data.js");
+      if (existsSync(discoveredPath)) configuredEditorPaths.set(mapId, discoveredPath);
+    }
+    const dataPath = configuredEditorPaths.get(mapId);
+    if (!dataPath) throw Object.assign(new Error(`Mapa no registrado: ${mapId}`), { statusCode: 404 });
+    if (!editorHubs.has(mapId)) editorHubs.set(mapId, createMapEditorHub({ editorDataPath: dataPath, persist: editorPersist }));
+    return { mapId, dataPath, hub: editorHubs.get(mapId) };
+  };
   const server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://localhost");
     try {
@@ -383,10 +401,13 @@ export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR
       }
       if (request.method === "GET" && url.pathname === "/api/dev/map-editor") {
         requireMapEditorAccess(request, url, env, collaborationToken);
-        const snapshot = await editorHub.snapshot();
+        const editor = editorContext(url);
+        const snapshot = await editor.hub.snapshot();
         json(response, 200, {
           enabled: true,
-          file: path.basename(editorDataPath),
+          mapId: editor.mapId,
+          maps: [...configuredEditorPaths.keys()],
+          file: path.basename(editor.dataPath),
           ...snapshot,
           rules: MAP_EDITOR_RULES,
           collaboration: {
@@ -401,7 +422,8 @@ export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR
       }
       if (request.method === "GET" && url.pathname === "/api/dev/map-editor/events") {
         requireMapEditorAccess(request, url, env, collaborationToken);
-        await editorHub.subscribe(request, response, {
+        const editor = editorContext(url);
+        await editor.hub.subscribe(request, response, {
           actorId: url.searchParams.get("actorId"),
           name: url.searchParams.get("name"),
           color: url.searchParams.get("color"),
@@ -412,26 +434,30 @@ export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR
       if (request.method === "POST" && url.pathname === "/api/dev/map-editor/operations") {
         const body = await readJson(request, MAX_EDITOR_BODY_BYTES);
         requireMapEditorAccess(request, url, env, collaborationToken, body);
-        const result = await editorHub.apply(body);
-        json(response, 200, { ok: true, file: path.basename(editorDataPath), revision: result.revision, counts: result.counts });
+        const editor = editorContext(url);
+        const result = await editor.hub.apply(body);
+        json(response, 200, { ok: true, mapId: editor.mapId, file: path.basename(editor.dataPath), revision: result.revision, counts: result.counts });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/dev/map-editor/presence") {
         const body = await readJson(request);
         requireMapEditorAccess(request, url, env, collaborationToken, body);
-        json(response, 200, { ok: true, ...editorHub.updatePresence(body) });
+        const editor = editorContext(url);
+        json(response, 200, { ok: true, mapId: editor.mapId, ...editor.hub.updatePresence(body) });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/dev/map-editor") {
         const body = await readJson(request, MAX_EDITOR_BODY_BYTES);
         requireMapEditorAccess(request, url, env, collaborationToken, body);
+        const editor = editorContext(url);
         const validation = validateMapEditorData(body);
         if (!validation.valid) throw Object.assign(new Error(validation.errors[0]), { statusCode: 400, details: { code: "validation", errors: validation.errors } });
         const data = sanitizeMapEditorData(body);
-        const result = await editorHub.replace(data);
+        const result = await editor.hub.replace(data);
         json(response, 200, {
           ok: true,
-          file: path.basename(editorDataPath),
+          mapId: editor.mapId,
+          file: path.basename(editor.dataPath),
           revision: result.revision,
           counts: result.counts,
           tiles: result.counts.tiles,
@@ -460,7 +486,7 @@ export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR
   });
   const closeServer = server.close.bind(server);
   server.close = (callback) => {
-    editorHub.close();
+    editorHubs.forEach((hub) => hub.close());
     const result = closeServer(callback);
     server.closeIdleConnections?.();
     return result;

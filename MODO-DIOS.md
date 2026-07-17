@@ -1,6 +1,8 @@
 # Modo Dios / Editor del mundo
 
-El editor modifica datos v2 compatibles con `map-editor-data.js`. La interfaz y todas las rutas de escritura existen solo en desarrollo; producción responde `404` y no muestra el botón.
+El editor modifica datos v3 compatibles con los archivos `editor-data.js`. La interfaz y todas las rutas de escritura existen solo en desarrollo; producción responde `404` y no muestra el botón.
+
+El selector **Mapa** abre el paquete registrado que se desea editar. San Pablo persiste en `map-editor-data.js`; los mapas nuevos persisten en `maps/<map-id>/editor-data.js`, con revisiones, conflictos y bandejas locales independientes. Consulta `MAPAS.md` para crear paquetes con `npm run map:new`.
 
 ## Arranque
 

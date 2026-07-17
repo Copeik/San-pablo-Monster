@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MAP_EDITOR_RULES, validateEditorEntity, validateEditorOperation } from "../map-editor-contract.js";
+import { groundPaintLayers, isGroundPaintValue, MAP_EDITOR_RULES, validateEditorEntity, validateEditorOperation } from "../map-editor-contract.js";
 import {
   boundedBrushCells,
   changedKeysSince,
   chunkOperationBatches,
   CommandBuilder,
   DurableOutboxQueue,
+  groundPathConnectionMask,
+  groundPathSurface,
+  groundPathType,
+  isGroundPathType,
+  mergeGroundPaintValue,
   MemoryOutboxAdapter,
   PresenceGate,
   resolveConflictQueue,
@@ -16,6 +21,43 @@ import {
 function tileOperation(col, row, value) {
   return { type: "tile.set", key: `${col},${row}`, value };
 }
+
+test("los senderos orientan rectas, curvas, cruces y uniones entre acabados", () => {
+  const values = new Map();
+  const getValue = (col, row) => values.get(`${col},${row}`) || "grass";
+  const maskAt = (col, row) => groundPathConnectionMask({ col, row, getValue, bounds: { cols: 12, rows: 12, maxCols: 12, maxRows: 12 } });
+  const paint = (col, row, surface = "dirt") => values.set(`${col},${row}`, groundPathType(surface));
+
+  paint(5, 5); paint(5, 4, "grass"); paint(6, 5, "asphalt");
+  assert.equal(maskAt(5, 5), 3, "la esquina conecta norte y este");
+  paint(5, 6); assert.equal(maskAt(5, 5), 7, "la unión en T añade el sur");
+  paint(4, 5, "sidewalk"); assert.equal(maskAt(5, 5), 15, "el cruce conecta las cuatro direcciones");
+
+  assert.equal(groundPathSurface("path-asphalt"), "asphalt");
+  assert.equal(isGroundPathType("path-grass"), true);
+  assert.equal(isGroundPathType("grass"), false);
+  assert.equal(groundPathType("unknown"), null);
+  assert.equal(validateEditorOperation({ type: "ground.set", key: "5,5", value: "path-dirt" }).valid, true);
+});
+
+test("el sendero conserva el suelo base y el valor compuesto sigue siendo válido", () => {
+  assert.equal(mergeGroundPaintValue("grass", "path-asphalt"), "grass|path-asphalt");
+  assert.equal(mergeGroundPaintValue("grass|path-dirt", "path-asphalt"), "grass|path-asphalt");
+  assert.equal(mergeGroundPaintValue("grass|path-asphalt", "sand"), "sand|path-asphalt");
+  assert.deepEqual(groundPaintLayers("grass|path-asphalt"), { base: "grass", path: "path-asphalt" });
+  assert.equal(groundPathSurface("grass|path-asphalt"), "asphalt");
+  assert.equal(isGroundPathType("grass|path-asphalt"), true);
+  assert.equal(isGroundPaintValue("grass|path-asphalt"), true);
+  assert.equal(isGroundPaintValue("path-asphalt|grass"), false);
+  assert.equal(validateEditorOperation({ type: "ground.set", key: "5,5", value: "grass|path-asphalt" }).valid, true);
+  assert.equal(validateEditorOperation({ type: "ground.set", key: "5,5", value: "grass|asphalt" }).valid, false);
+  assert.equal(validateEditorOperation({ type: "ground.set", key: "5,5", value: "grass|path-unknown" }).valid, false);
+
+  const values = new Map([["3,3", "grass|path-dirt"], ["4,3", "sand|path-asphalt"]]);
+  assert.equal(groundPathConnectionMask({
+    col: 3, row: 3, getValue: (col, row) => values.get(`${col},${row}`), bounds: { cols: 8, rows: 8, maxCols: 8, maxRows: 8 },
+  }), 2, "los caminos compuestos también conectan por el este");
+});
 
 test("un trazo 5×5 en borde forma un solo comando deshacer/rehacer", () => {
   const cells = boundedBrushCells({ col: 0, row: 0, size: 5 });
@@ -147,7 +189,7 @@ test("cliente y servidor comparten límites y rechazan sin truncar", () => {
 
   const outside = validateEditorEntity("entrance", {
     id: "bad-exit", col: 1, row: 1, action: "transition", targetMap: "current",
-    targetX: MAP_EDITOR_RULES.world.width + 1, targetY: 20,
+    targetX: MAP_EDITOR_RULES.world.maxWidth + 1, targetY: 20,
   });
   assert.equal(outside.valid, false);
   assert.match(outside.errors.join(" "), /Destino X/);

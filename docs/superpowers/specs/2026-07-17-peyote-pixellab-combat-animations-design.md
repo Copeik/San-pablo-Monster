@@ -16,19 +16,20 @@ La generación se realizará mediante el MCP de PixelLab. No se añadirán movim
 El trabajo incluye:
 
 1. crear un nuevo personaje maestro en PixelLab a partir de `peyote-front.png`;
-2. validar sus vistas frontal y trasera antes de animar;
-3. generar las cuatro animaciones indicadas;
-4. descargar y conservar los fotogramas PNG con transparencia;
-5. producir WebP animados optimizados para el navegador;
-6. integrar el estado de espera y el estado de ataque en los combates;
-7. mantener fallbacks estáticos y soporte para movimiento reducido;
-8. actualizar créditos y pruebas automatizadas.
+2. usar `peyote-back.png` como referencia obligatoria y pose inicial real de todas las animaciones traseras;
+3. validar las referencias frontal y trasera antes de animar;
+4. generar las cuatro animaciones indicadas;
+5. descargar y conservar los fotogramas PNG con transparencia;
+6. producir WebP animados optimizados para el navegador;
+7. integrar el estado de espera y el estado de ataque en los combates;
+8. mantener fallbacks estáticos y soporte para movimiento reducido;
+9. actualizar créditos y pruebas automatizadas.
 
 Quedan fuera de alcance las animaciones de las otras seis direcciones, efectos de impacto sobre el rival, nuevos movimientos de combate y cambios a Prensalito.
 
 ## Fuente y personaje maestro
 
-La fuente de identidad será `assets/pokemon/peyote-line/peyote-front.png`. Se preparará una copia transparente de 256 × 256 px, que es el tamaño de personaje solicitado para PixelLab v3. El original no se modificará.
+Las fuentes de identidad serán `assets/pokemon/peyote-line/peyote-front.png` y `assets/pokemon/peyote-line/peyote-back.png`. Se preparará una copia transparente de 256 × 256 px de cada una. Los originales no se modificarán.
 
 La copia se enviará a `create_character` con:
 
@@ -37,7 +38,7 @@ La copia se enviará a `create_character` con:
 - `reference_image_base64` con la copia preparada;
 - una descripción limitada a preservar el cuerpo rectangular de adobe, las capas de piedra, las cuatro patas, la cara, la paleta marrón y el medallón de peyote.
 
-PixelLab generará ocho direcciones, pero para este alcance solo se usarán `south` como vista frontal de rival y `north` como vista trasera de compañero.
+PixelLab generará ocho direcciones para establecer el personaje y su esqueleto, pero la dirección `north` generada automáticamente no será la fuente visual de la espalda. Para este alcance se usará `south` como vista frontal de rival y se pasará la copia de `peyote-back.png` como `custom_start_frame` de cada llamada `north`. Así se conserva el panel trasero cuadrado con la hoja, la mampostería sin cara y la anatomía trasera suministrada por el usuario.
 
 Antes de animar se comprobará que ambas vistas conservan:
 
@@ -45,14 +46,15 @@ Antes de animar se comprobará que ambas vistas conservan:
 - cuatro patas y garras de piedra;
 - estratos de adobe y roca;
 - paleta cálida marrón;
-- ojos, boca y medallón frontal cuando sean visibles;
+  - ojos, boca y medallón circular en el frente;
+  - ausencia de cara y panel cuadrado con hoja en la espalda;
 - fondo transparente.
 
 Si la identidad deriva de forma significativa, se detendrá el flujo y se consultará al usuario antes de repetir una generación.
 
 ## Animaciones PixelLab
 
-Cada animación tendrá 12 fotogramas generados en modo v3. Las llamadas usarán `keep_first_frame=false` para obtener exactamente 12 fotogramas y las direcciones `south` y `north`.
+Cada animación tendrá 12 fotogramas generados en modo v3. Las llamadas usarán `keep_first_frame=false` para obtener exactamente 12 fotogramas. Como PixelLab exige exactamente una dirección cuando se proporciona `custom_start_frame`, se harán cuatro llamadas separadas: idle `south` con `peyote-front.png`, idle `north` con `peyote-back.png`, ataque `south` con `peyote-front.png` y ataque `north` con `peyote-back.png`.
 
 ### Espera: baile feliz
 
@@ -72,7 +74,7 @@ La descripción enviada a PixelLab pedirá esta secuencia:
 6. retroceso breve;
 7. regreso a la pose inicial.
 
-La vista trasera conservará la misma mecánica corporal sin inventar rasgos faciales visibles desde atrás. No se solicitarán proyectiles, rocas, polvo ni otros efectos.
+La vista trasera conservará la misma mecánica corporal, el panel cuadrado con la hoja y la mampostería real de `peyote-back.png`, sin inventar rasgos faciales visibles desde atrás. No se solicitarán proyectiles, rocas, polvo ni otros efectos.
 
 La animación se reproducirá una sola vez por ataque. Sus fotogramas también se normalizarán a 384 × 384 px y compartirán ancla con la espera.
 

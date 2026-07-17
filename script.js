@@ -1,16 +1,27 @@
-import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
-
 (() => {
   "use strict";
 
+  const PLAYER_MOVEMENT_CORE = globalThis.PLAYER_MOVEMENT_CORE;
+  if (!PLAYER_MOVEMENT_CORE) throw new Error("No se pudo cargar el controlador de movimiento del protagonista.");
+
+  const MAP_EDITOR_RULES = globalThis.MAP_EDITOR_RULES;
+  if (!MAP_EDITOR_RULES) throw new Error("No se pudo cargar la configuración compartida del mapa.");
+
+  const MAP_REGISTRY = globalThis.GAME_MAP_REGISTRY;
+  if (!MAP_REGISTRY) throw new Error("No se pudo cargar el registro de mapas.");
+
+  const ATTACK_EFFECTS = globalThis.AttackEffects;
+  if (!ATTACK_EFFECTS) throw new Error("No se pudo cargar el editor de efectos de ataque.");
+
   const SAVE_KEY = "pokemon-city-save-v3";
   const MAP_EDIT_KEY = "pokemon-city-tile-overrides-v5";
-  const MAP_REVISION = 14;
   const CITY_MAP = window.CITY_MAP_CONFIG;
-  const CITY_GRID_COLS = Math.ceil(Number(CITY_MAP.width) / Number(CITY_MAP.tileSize));
-  const CITY_GRID_ROWS = Math.ceil(Number(CITY_MAP.height) / Number(CITY_MAP.tileSize));
-  const CITY_MAX_COL = CITY_GRID_COLS - 1;
-  const CITY_MAX_ROW = CITY_GRID_ROWS - 1;
+  const ACTIVE_MAP_ID = MAP_REGISTRY.resolve(window.ACTIVE_GAME_MAP_ID || CITY_MAP.id || MAP_REGISTRY.defaultMapId);
+  const MAP_REVISION = Number(CITY_MAP.revision) || 1;
+  let CITY_GRID_COLS = Math.ceil(Number(CITY_MAP.width) / Number(CITY_MAP.tileSize));
+  let CITY_GRID_ROWS = Math.ceil(Number(CITY_MAP.height) / Number(CITY_MAP.tileSize));
+  let CITY_MAX_COL = CITY_GRID_COLS - 1;
+  let CITY_MAX_ROW = CITY_GRID_ROWS - 1;
   const BASE_CITY_NPCS = Array.isArray(CITY_MAP.npcs) ? CITY_MAP.npcs.map((npc) => ({ ...npc })) : [];
   const BASE_CITY_ENTRANCES = Array.isArray(CITY_MAP.entrances)
     ? CITY_MAP.entrances.map((entrance) => ({ ...entrance }))
@@ -156,8 +167,13 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   }
 
   function buildRuntimeEvents(editorData = {}) {
-    const source = Array.isArray(editorData.events) ? editorData.events : [];
-    return source.map((event, index) => normalizeRuntimeEvent(event, `event-${index + 1}`)).filter(Boolean);
+    const records = new Map();
+    [...(Array.isArray(CITY_MAP.events) ? CITY_MAP.events : []), ...(Array.isArray(editorData.events) ? editorData.events : [])]
+      .forEach((event, index) => {
+        const normalized = normalizeRuntimeEvent(event, `event-${index + 1}`);
+        if (normalized) records.set(normalized.id, normalized);
+      });
+    return [...records.values()];
   }
 
   const initialEditorData = window.CITY_MAP_EDITOR_DATA || {};
@@ -181,8 +197,8 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   let VIEW_WIDTH = 960;
   let VIEW_HEIGHT = BASE_VIEW_HEIGHT;
   const PIXELS_PER_METER = 8;
-  const WORLD_WIDTH = CITY_MAP.width;
-  const WORLD_HEIGHT = CITY_MAP.height;
+  let WORLD_WIDTH = CITY_MAP.width;
+  let WORLD_HEIGHT = CITY_MAP.height;
   const PRISM_WIDTH = 2100;
   const PRISM_HEIGHT = 2200;
   const MAX_TEAM = 3;
@@ -299,6 +315,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
   const BUILDING_SHEET_URL = "https://www.spriters-resource.com/media/assets/4/3849.png?updated=1755472417";
   const PLAYER_SHEET_URL = "assets/sprites/protagonist-walk.png";
+  const PLAYER_DIAGONAL_SHEET_URL = "assets/sprites/protagonist-walk-diagonal.png?v=4";
   const NPC_SHEET_URL = "assets/sprites/hgss-npc-idle.png";
   const GUIDE_NPC_SHEET_URL = "assets/sprites/npc-guide-walk.png";
   const DOCTOR_POTATO_PORTRAIT_URL = "assets/portraits/doctor-potato.png";
@@ -400,6 +417,15 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     9814: { front: "assets/pokemon/ascuero-line/tolebrasa-front.png", back: "assets/pokemon/ascuero-line/tolebrasa-back.png" },
     9815: { front: "assets/pokemon/ascuero-line/matallama-front.png", back: "assets/pokemon/ascuero-line/matallama-back.png" },
   });
+  const CUSTOM_POKEMON_FRAME_ASSETS = Object.freeze({
+    9101: {
+      front: "assets/pokemon/peyote-line/peyote-idle-front.webp",
+      back: "assets/pokemon/peyote-line/peyote-idle-back.webp",
+    },
+  });
+  const REDUCED_MOTION_QUERY = typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
   const CUSTOM_POKEMON_MOTIONS = Object.freeze({
     9001: "petrillo",
     9002: "musgolem",
@@ -541,6 +567,9 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     riverWhisker: { name: "Bigote Fluvial", type: "Agua", power: 21, accuracy: 94 },
     forgeSlash: { name: "Tajo de Fragua", type: "Acero", power: 22, accuracy: 92 },
   };
+
+  Object.entries(MOVES).forEach(([id, move]) => { move.id = id; });
+  const MOVE_TYPES_BY_ID = Object.freeze(Object.fromEntries(Object.entries(MOVES).map(([id, move]) => [id, move.type])));
 
   const POKEMON = {
     1: { id: 1, name: "Bulbasaur", type: "Planta", secondaryType: "Veneno", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Paciente y resistente. Una elección muy equilibrada." },
@@ -794,7 +823,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     distance: 0, grassDistance: 0, balls: 6, trainerLevel: 1,
     activeTeamIndex: 0, caught: [], seen: [], team: [], questStage: 0,
     clinicGiftClaimed: false, sound: true, buildingSkins: {},
-    dimension: "san_pablo", dimensionVisited: false, caughtDimension: false,
+    mapId: ACTIVE_MAP_ID, dimension: "san_pablo", dimensionVisited: false, caughtDimension: false,
     returnPosition: null, collectedObjects: [], triggeredEvents: [], interior: null, interiorData: null, maintenanceReturn: null,
     maze: null, secretPokemonSaved: false, secretPokemonId: null,
     money: 500, battlesWon: 0, gifts: {},
@@ -814,8 +843,13 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   let audioContext = null;
   let lastFrameTime = 0;
   let animationTime = 0;
+  let animationPhase = 0;
   let animationFrame = 0;
   let playerRunning = false;
+  let playerVelocityX = 0;
+  let playerVelocityY = 0;
+  let preferredMovementDirection = NORMAL_START.direction;
+  let playerAnimationDirection = NORMAL_START.direction;
   let lastEncounterCheck = 0;
   let lastGrassStepAt = 0;
   let lastGrassStepX = 0;
@@ -829,6 +863,11 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   let selectedSanpledexId = PETRILLO_ID;
   let lastSanpledexFocus = null;
   let sanpledexAttackTimer = 0;
+  let attackEffectOverrides = Object.create(null);
+  let selectedAttackMoveId = Object.keys(MOVES)[0];
+  let lastAttackDexFocus = null;
+  let attackDexPreviewTimers = [];
+  let attackDexLivePreviewTimer = 0;
   let mazeDefinition = null;
   let microphoneStream = null;
   let microphoneAnalyser = null;
@@ -891,12 +930,16 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
   const buildingSheet = new Image();
   const playerSheet = new Image();
+  const playerDiagonalSheet = new Image();
   const npcSheet = new Image();
   const guideNpcSheet = new Image();
   const npcRosterSheets = new Map();
   const cityMapPreview = new Image();
   const cityNavigationMask = new Image();
   const encounterGrassSheet = new Image();
+  const groundPaletteImage = new Image();
+  const grassDirtTilesetImage = new Image();
+  const roadSidewalkTilesetImage = new Image();
   const cityMapTileCache = new Map();
   const cityMapVisibleTileIds = new Set();
   /* El runtime usa copias mutables: el layout declarativo permanece congelado,
@@ -951,16 +994,21 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   const activeScareClips = new Set();
   let buildingSheetReady = false;
   let playerSheetReady = false;
+  let playerDiagonalSheetReady = false;
   let npcSheetReady = false;
   let guideNpcSheetReady = false;
   let cityMapPreviewReady = false;
   let cityNavigationMaskReady = false;
   let cityNavigationMaskData = null;
   let encounterGrassSheetReady = false;
+  let groundPaletteReady = false;
+  let grassDirtTilesetReady = false;
+  let roadSidewalkTilesetReady = false;
   let lastMapCameraSample = { x: camera.x, y: camera.y, time: 0 };
   let shadowStalkerReady = false;
   const defaultMapTiles = new Map();
   const tileOverrides = new Map();
+  const groundOverrides = new Map();
   const playerFrames = new Map();
   let selectedTileType = "blocked";
   let selectedMapTile = null;
@@ -1007,6 +1055,23 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     closeSanpledex: $("#closeSanpledex"), sanpledexList: $("#sanpledexList"),
     sanpledexDetail: $("#sanpledexDetail"), sanpledexCaughtCount: $("#sanpledexCaughtCount"),
     sanpledexSeenCount: $("#sanpledexSeenCount"), sanpledexProgress: $("#sanpledexProgress"),
+    attackDexButton: $("#attackDexButton"), attackDexModal: $("#attackDexModal"),
+    closeAttackDex: $("#closeAttackDex"), attackDexSearch: $("#attackDexSearch"),
+    attackDexTypeFilter: $("#attackDexTypeFilter"), attackDexCount: $("#attackDexCount"),
+    attackDexList: $("#attackDexList"), attackDexMoveSummary: $("#attackDexMoveSummary"),
+    attackDexPreview: $("#attackDexPreview"), attackDexPreviewAttacker: $("#attackDexPreviewAttacker"),
+    attackDexPreviewDefender: $("#attackDexPreviewDefender"), attackDexPlay: $("#attackDexPlay"),
+    attackEffectForm: $("#attackEffectForm"), attackEffectPreset: $("#attackEffectPreset"),
+    attackEffectImpact: $("#attackEffectImpact"), attackEffectColor: $("#attackEffectColor"),
+    attackEffectColorValue: $("#attackEffectColorValue"), attackEffectEnabled: $("#attackEffectEnabled"),
+    attackEffectTrail: $("#attackEffectTrail"), attackEffectWidth: $("#attackEffectWidth"),
+    attackEffectHeight: $("#attackEffectHeight"), attackEffectOffsetX: $("#attackEffectOffsetX"),
+    attackEffectOffsetY: $("#attackEffectOffsetY"), attackEffectDuration: $("#attackEffectDuration"),
+    attackEffectParticles: $("#attackEffectParticles"), attackEffectRings: $("#attackEffectRings"),
+    attackEffectShake: $("#attackEffectShake"), attackEffectImpactScale: $("#attackEffectImpactScale"),
+    attackEffectSave: $("#attackEffectSave"), attackEffectReset: $("#attackEffectReset"),
+    attackEffectsExport: $("#attackEffectsExport"), attackEffectsImport: $("#attackEffectsImport"),
+    attackEffectsImportInput: $("#attackEffectsImportInput"), attackDexStatus: $("#attackDexStatus"),
     saveButton: $("#saveButton"), resetButton: $("#resetButton"), soundButton: $("#soundButton"),
     soundIcon: $("#soundIcon"), enemyName: $("#enemyName"), enemyLevel: $("#enemyLevel"),
     enemyHpBar: $("#enemyHpBar"), enemyHpText: $("#enemyHpText"), enemySprite: $("#enemySprite"),
@@ -1727,6 +1792,11 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   }
 
   function customPokemonAsset(id, view = "front") { return CUSTOM_POKEMON_ASSETS[id]?.[view] || null; }
+  function prefersReducedMotion() { return Boolean(REDUCED_MOTION_QUERY?.matches); }
+  function customPokemonFrameAsset(id, view = "front") {
+    if (prefersReducedMotion()) return null;
+    return CUSTOM_POKEMON_FRAME_ASSETS[Number(id)]?.[view] || null;
+  }
   function customPokemonAttack(id) { return CUSTOM_POKEMON_ATTACKS[Number(id)] || null; }
   function customAttackStyle(profile) {
     if (!profile) return "";
@@ -1738,7 +1808,9 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   function setBattlePokemonMotion(element, id, view = "front") {
     const motion = CUSTOM_POKEMON_MOTIONS[Number(id)];
     const attack = customPokemonAttack(id);
-    element.classList.toggle("custom-pokemon-motion", Boolean(motion));
+    const frameAnimated = Boolean(customPokemonFrameAsset(id, view));
+    element.classList.toggle("frame-animated", frameAnimated);
+    element.classList.toggle("custom-pokemon-motion", Boolean(motion) && !frameAnimated);
     element.dataset.pokemonId = String(id);
     element.dataset.view = view;
     if (motion) element.dataset.pokemonMotion = motion; else delete element.dataset.pokemonMotion;
@@ -1756,14 +1828,49 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   }
   function artworkUrl(id) { return customPokemonAsset(id) || ""; }
   function iconUrl(id) { return customPokemonAsset(id) || ""; }
-  function frontSpriteUrl(id) { return customPokemonAsset(id) || ""; }
-  function backSpriteUrl(id) { return customPokemonAsset(id, "back") || ""; }
+  function frontSpriteUrl(id) { return customPokemonFrameAsset(id) || customPokemonAsset(id) || ""; }
+  function backSpriteUrl(id) { return customPokemonFrameAsset(id, "back") || customPokemonAsset(id, "back") || ""; }
   function itemSpriteUrl(name) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${name}.png`; }
   function currentWorldWidth() { return state.dimension === "prism" ? PRISM_WIDTH : WORLD_WIDTH; }
   function currentWorldHeight() { return state.dimension === "prism" ? PRISM_HEIGHT : WORLD_HEIGHT; }
 
   function attachSpriteFallback(image, id, back = false) {
-    image.onerror = null;
+    const view = back ? "back" : "front";
+    const animatedAsset = customPokemonFrameAsset(id, view);
+    const fallbackAsset = customPokemonAsset(id, view);
+    if (!animatedAsset || !fallbackAsset) {
+      image.onerror = null;
+      return;
+    }
+    image.onerror = () => {
+      image.onerror = null;
+      image.classList.remove("frame-animated");
+      image.classList.toggle("custom-pokemon-motion", Boolean(CUSTOM_POKEMON_MOTIONS[Number(id)]));
+      image.src = fallbackAsset;
+    };
+  }
+
+  function refreshVisiblePokemonFrameAssets() {
+    if (battle) {
+      const active = activePokemon();
+      const sprites = [
+        { image: elements.enemySprite, id: battle.enemy.id, view: "front" },
+        { image: elements.activeSprite, id: active.id, view: "back" },
+      ];
+      sprites.forEach(({ image, id, view }) => {
+        image.src = view === "back" ? backSpriteUrl(id) : frontSpriteUrl(id);
+        attachSpriteFallback(image, id, view === "back");
+        setBattlePokemonMotion(image, id, view);
+      });
+    }
+    if (!elements.sanpledexModal?.classList.contains("hidden")) {
+      elements.sanpledexDetail.querySelectorAll(".sanpledex-base-sprite").forEach((image) => {
+        const view = image.dataset.view === "back" ? "back" : "front";
+        image.classList.toggle("frame-animated", Boolean(customPokemonFrameAsset(selectedSanpledexId, view)));
+        image.src = view === "back" ? backSpriteUrl(selectedSanpledexId) : frontSpriteUrl(selectedSanpledexId);
+        attachSpriteFallback(image, selectedSanpledexId, view === "back");
+      });
+    }
   }
 
   function worldAssetSource(asset) {
@@ -1946,6 +2053,16 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     buildingSheet.onerror = () => { buildingSheetReady = false; };
     playerSheet.onload = () => { buildPlayerFrames(); playerSheetReady = true; updateAssetNotice(); };
     playerSheet.onerror = () => { playerSheetReady = false; elements.assetNotice.textContent = "Personaje en modo alternativo"; };
+    playerDiagonalSheet.onload = () => {
+      playerDiagonalSheetReady = true;
+      document.documentElement.dataset.playerDiagonalSheetReady = "true";
+      if (playerSheetReady) buildPlayerFrames();
+    };
+    playerDiagonalSheet.onerror = () => {
+      playerDiagonalSheetReady = false;
+      document.documentElement.dataset.playerDiagonalSheetReady = "error";
+      console.warn("No se pudo cargar el sprite diagonal del protagonista.");
+    };
     npcSheet.onload = () => { npcSheetReady = true; };
     npcSheet.onerror = () => { npcSheetReady = false; };
     guideNpcSheet.onload = () => { guideNpcSheetReady = true; updateAssetNotice(); };
@@ -1970,10 +2087,27 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       console.warn("No se pudo cargar el sprite de hierba alta.");
       updateAssetNotice();
     };
+    groundPaletteImage.onload = () => {
+      groundPaletteReady = true;
+      document.documentElement.dataset.groundPaletteReady = "true";
+    };
+    groundPaletteImage.onerror = () => {
+      groundPaletteReady = false;
+      document.documentElement.dataset.groundPaletteReady = "error";
+    };
+    const updatePathTextureDataset = () => {
+      document.documentElement.dataset.pathTexturesReady = grassDirtTilesetReady && roadSidewalkTilesetReady ? "true" : "loading";
+    };
+    grassDirtTilesetImage.onload = () => { grassDirtTilesetReady = true; updatePathTextureDataset(); };
+    grassDirtTilesetImage.onerror = () => { grassDirtTilesetReady = false; document.documentElement.dataset.pathTexturesReady = "error"; };
+    roadSidewalkTilesetImage.onload = () => { roadSidewalkTilesetReady = true; updatePathTextureDataset(); };
+    roadSidewalkTilesetImage.onerror = () => { roadSidewalkTilesetReady = false; document.documentElement.dataset.pathTexturesReady = "error"; };
     shadowStalkerImage.onload = () => { shadowStalkerReady = true; };
     shadowStalkerImage.onerror = () => { shadowStalkerReady = false; };
     buildingSheet.src = BUILDING_SHEET_URL;
     playerSheet.src = PLAYER_SHEET_URL;
+    playerDiagonalSheet.decoding = "async";
+    playerDiagonalSheet.src = PLAYER_DIAGONAL_SHEET_URL;
     npcSheet.src = NPC_SHEET_URL;
     guideNpcSheet.src = GUIDE_NPC_SHEET_URL;
     loadNpcRosterSprites();
@@ -1990,6 +2124,13 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     } else {
       document.documentElement.dataset.encounterGrassReady = "unused";
     }
+    groundPaletteImage.decoding = "async";
+    groundPaletteImage.src = "assets/generated/san-pablo-neighborhood/runtime/ground-palette.png?v=2";
+    document.documentElement.dataset.pathTexturesReady = "loading";
+    grassDirtTilesetImage.decoding = "async";
+    grassDirtTilesetImage.src = "assets/generated/san-pablo-derived/tileset-grass-dirt.png?v=1";
+    roadSidewalkTilesetImage.decoding = "async";
+    roadSidewalkTilesetImage.src = "assets/generated/san-pablo-derived/tileset-road-sidewalk.png?v=1";
     loadCityWorldAssets();
     updateMapTileStreaming();
     shadowStalkerImage.src = SHADOW_SPRITE_URL;
@@ -1999,7 +2140,9 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   function updateAssetNotice() {
     const visibleIds = [...cityMapVisibleTileIds];
     const readyCount = visibleIds.filter((id) => cityMapTileCache.get(id)?.ready).length;
-    const visibleReady = visibleIds.length > 0 && readyCount === visibleIds.length;
+    const visibleReady = visibleIds.length > 0
+      ? readyCount === visibleIds.length
+      : !(CITY_MAP.tiles || []).length;
     document.documentElement.dataset.cityMapReady = visibleReady ? "true" : "loading";
     const failedAssets = [...cityWorldAssetImages.values()].filter((record) => record.failed).length;
     if (visibleReady && playerSheetReady && guideNpcSheetReady && worldAssetsReady() && encounterGrassReady()) elements.assetNotice.classList.add("hidden");
@@ -2090,7 +2233,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       const response = await fetch(tile.image, { signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
-      if (typeof window.createImageBitmap === "function") return window.createImageBitmap(blob);
+      if (typeof window.createImageBitmap === "function") return await window.createImageBitmap(blob);
 
       objectUrl = URL.createObjectURL(blob);
       const image = new Image();
@@ -2143,6 +2286,8 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       if (error?.name === "AbortError" || cityMapTileCache.get(tile.id) !== record) return;
       record.ready = false;
       record.failedAt = performance.now();
+      document.documentElement.dataset.mapStreamingError = String(error?.message || error);
+      console.warn(`[map-streaming] ${tile.id}:`, error);
       elements.assetNotice.textContent = `No se pudo cargar el sector ${tile.id}`;
       elements.assetNotice.classList.remove("hidden");
       updateMapStreamingDataset();
@@ -2292,6 +2437,185 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     context.imageSmoothingEnabled = false;
   }
 
+  const GROUND_PALETTE_INDEX = Object.freeze({ grass: 0, dirt: 1, asphalt: 2, sidewalk: 3, plaza: 4, sand: 5 });
+  const GROUND_FALLBACK_COLORS = Object.freeze({ grass: "#559b4d", dirt: "#aa7746", asphalt: "#58616a", sidewalk: "#c7c3b5", plaza: "#d99b68", sand: "#dfc37c" });
+  const GROUND_PATH_PREFIX = "path-";
+  const GROUND_LAYER_SEPARATOR = "|";
+  const GROUND_PATH_TEXTURES = Object.freeze({
+    grass: Object.freeze({ atlas: "grass-dirt", col: 0, row: 0 }),
+    dirt: Object.freeze({ atlas: "grass-dirt", col: 1, row: 0 }),
+    asphalt: Object.freeze({ atlas: "road-sidewalk", col: 0, row: 0 }),
+    sidewalk: Object.freeze({ atlas: "road-sidewalk", col: 1, row: 0 }),
+  });
+
+  function groundPaintLayers(value) {
+    if (typeof value !== "string" || !value) return null;
+    const parts = value.split(GROUND_LAYER_SEPARATOR);
+    if (parts.length > 2) return null;
+    const isBase = (entry) => Object.hasOwn(GROUND_PALETTE_INDEX, entry);
+    const isPath = (entry) => entry.startsWith(GROUND_PATH_PREFIX) && isBase(entry.slice(GROUND_PATH_PREFIX.length));
+    if (parts.length === 1) {
+      if (isBase(parts[0])) return { base: parts[0], path: null };
+      if (isPath(parts[0])) return { base: null, path: parts[0] };
+      return null;
+    }
+    return isBase(parts[0]) && isPath(parts[1]) ? { base: parts[0], path: parts[1] } : null;
+  }
+
+  function groundPathSurface(type) {
+    const path = groundPaintLayers(type)?.path;
+    return path ? path.slice(GROUND_PATH_PREFIX.length) : null;
+  }
+
+  function isGroundPathType(type) {
+    return groundPathSurface(type) !== null;
+  }
+
+  function isGroundPaintType(type) {
+    return groundPaintLayers(type) !== null;
+  }
+
+  function groundPathConnectionMask(col, row, previewValues = null) {
+    const valueAt = (candidateCol, candidateRow) => {
+      const key = tileKey(candidateCol, candidateRow);
+      return previewValues?.has(key) ? previewValues.get(key) : groundOverrides.get(key);
+    };
+    if (!isGroundPathType(valueAt(col, row))) return 0;
+    return [
+      { bit: 1, col: 0, row: -1 },
+      { bit: 2, col: 1, row: 0 },
+      { bit: 4, col: 0, row: 1 },
+      { bit: 8, col: -1, row: 0 },
+    ].reduce((mask, direction) => isGroundPathType(valueAt(col + direction.col, row + direction.row)) ? mask | direction.bit : mask, 0);
+  }
+
+  function traceGroundPathShape(context, x, y, size, mask, width) {
+    const centerX = x + size / 2; const centerY = y + size / 2; const half = width / 2;
+    context.beginPath(); context.arc(centerX, centerY, half, 0, Math.PI * 2);
+    if (mask & 1) context.rect(centerX - half, y, width, size / 2);
+    if (mask & 2) context.rect(centerX, centerY - half, size / 2, width);
+    if (mask & 4) context.rect(centerX - half, centerY, width, size / 2);
+    if (mask & 8) context.rect(x, centerY - half, size / 2, width);
+  }
+
+  function drawGroundPathTexture(context, surface, x, y, size) {
+    const texture = GROUND_PATH_TEXTURES[surface];
+    const atlasImage = texture?.atlas === "grass-dirt" ? grassDirtTilesetImage : roadSidewalkTilesetImage;
+    const atlasReady = texture?.atlas === "grass-dirt" ? grassDirtTilesetReady : roadSidewalkTilesetReady;
+    if (texture && atlasReady) {
+      const cellWidth = atlasImage.naturalWidth / 4; const cellHeight = atlasImage.naturalHeight / 4;
+      const inset = Math.max(6, Math.round(Math.min(cellWidth, cellHeight) * .035));
+      context.imageSmoothingEnabled = true; context.imageSmoothingQuality = "high";
+      context.drawImage(
+        atlasImage,
+        texture.col * cellWidth + inset,
+        texture.row * cellHeight + inset,
+        cellWidth - inset * 2,
+        cellHeight - inset * 2,
+        x, y, size, size,
+      );
+      return;
+    }
+    const paletteIndex = GROUND_PALETTE_INDEX[surface];
+    if (groundPaletteReady && Number.isInteger(paletteIndex)) context.drawImage(groundPaletteImage, paletteIndex * size, 0, size, size, x, y, size, size);
+    else { context.fillStyle = GROUND_FALLBACK_COLORS[surface] || "#aa7746"; context.fillRect(x, y, size, size); }
+  }
+
+  function paintGroundPathLayer(context, surface, x, y, size, mask, width, alpha) {
+    context.save();
+    traceGroundPathShape(context, x, y, size, mask, width); context.clip();
+    context.globalAlpha *= alpha;
+    drawGroundPathTexture(context, surface, x, y, size);
+    context.restore();
+  }
+
+  function drawGroundPathTile(context, type, col, row, size, previewValues = null) {
+    const surface = groundPathSurface(type); const x = col * size; const y = row * size;
+    const mask = groundPathConnectionMask(col, row, previewValues);
+    const width = Math.max(10, Math.round(size * .58));
+    if (surface === "asphalt") {
+      const vergeWidth = Math.min(size, width + Math.round(size * .28));
+      paintGroundPathLayer(context, "sidewalk", x, y, size, mask, Math.min(size, vergeWidth + 5), .2);
+      paintGroundPathLayer(context, "sidewalk", x, y, size, mask, Math.min(size, vergeWidth + 2), .48);
+      paintGroundPathLayer(context, "sidewalk", x, y, size, mask, vergeWidth, 1);
+      paintGroundPathLayer(context, surface, x, y, size, mask, width, 1);
+      return;
+    }
+    paintGroundPathLayer(context, surface, x, y, size, mask, Math.min(size, width + 7), .16);
+    paintGroundPathLayer(context, surface, x, y, size, mask, Math.min(size, width + 4), .42);
+    paintGroundPathLayer(context, surface, x, y, size, mask, Math.min(size, width + 2), .72);
+    paintGroundPathLayer(context, surface, x, y, size, mask, width, 1);
+  }
+
+  function drawMapExtensionSurfaces(context) {
+    const surfaces = CITY_MAP.extensionSurfaces || [];
+    if (!surfaces.length) return;
+    const size = Number(CITY_MAP.tileSize) || 32;
+    const bounds = {
+      left: Math.max(0, camera.x - size),
+      top: Math.max(0, camera.y - size),
+      right: Math.min(WORLD_WIDTH, camera.x + VIEW_WIDTH + size),
+      bottom: Math.min(WORLD_HEIGHT, camera.y + VIEW_HEIGHT + size),
+    };
+    context.save();
+    context.imageSmoothingEnabled = false;
+    surfaces.forEach((surface) => {
+      const x = Number(surface.x); const y = Number(surface.y);
+      const width = Number(surface.w); const height = Number(surface.h);
+      if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
+      const left = Math.max(x, bounds.left); const top = Math.max(y, bounds.top);
+      const right = Math.min(x + width, bounds.right); const bottom = Math.min(y + height, bounds.bottom);
+      if (left >= right || top >= bottom) return;
+      const paletteIndex = GROUND_PALETTE_INDEX[surface.surface];
+      context.save();
+      context.beginPath(); context.rect(x, y, width, height); context.clip();
+      if (groundPaletteReady && Number.isInteger(paletteIndex)) {
+        const startX = Math.floor(left / size) * size;
+        const startY = Math.floor(top / size) * size;
+        for (let tileY = startY; tileY < bottom; tileY += size) {
+          for (let tileX = startX; tileX < right; tileX += size) {
+            context.drawImage(groundPaletteImage, paletteIndex * size, 0, size, size, tileX, tileY, size, size);
+          }
+        }
+      } else {
+        context.fillStyle = GROUND_FALLBACK_COLORS[surface.surface] || "#559b4d";
+        context.fillRect(x, y, width, height);
+      }
+      context.restore();
+      if (surface.border) {
+        context.strokeStyle = "rgba(32, 58, 43, .7)";
+        context.lineWidth = 8;
+        context.strokeRect(x + 4, y + 4, width - 8, height - 8);
+      }
+    });
+    context.restore();
+  }
+
+  function drawGroundOverrides(context) {
+    if (!groundOverrides.size) return;
+    const size = Number(CITY_MAP.tileSize) || 32;
+    const left = Math.max(0, Math.floor(camera.x / size) - 2);
+    const top = Math.max(0, Math.floor(camera.y / size) - 2);
+    const right = Math.min(CITY_GRID_COLS - 1, Math.ceil((camera.x + VIEW_WIDTH) / size) + 2);
+    const bottom = Math.min(CITY_GRID_ROWS - 1, Math.ceil((camera.y + VIEW_HEIGHT) / size) + 2);
+    context.save(); context.imageSmoothingEnabled = false;
+    groundOverrides.forEach((type, key) => {
+      const [col, row] = key.split(",").map(Number);
+      if (col < left || col > right || row < top || row > bottom) return;
+      const layers = groundPaintLayers(type);
+      const paletteIndex = GROUND_PALETTE_INDEX[layers?.base];
+      if (layers?.base) {
+        if (groundPaletteReady && Number.isInteger(paletteIndex)) context.drawImage(groundPaletteImage, paletteIndex * size, 0, size, size, col * size, row * size, size, size);
+        else {
+          context.fillStyle = GROUND_FALLBACK_COLORS[layers.base] || "#559b4d";
+          context.fillRect(col * size, row * size, size, size);
+        }
+      }
+      if (layers?.path) drawGroundPathTile(context, layers.path, col, row, size);
+    });
+    context.restore();
+  }
+
   function strokeWorldPolyline(context, points) {
     if (!Array.isArray(points) || points.length < 2) return;
     context.beginPath();
@@ -2395,7 +2719,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
   function mapSectionAt(x, y) {
     return (CITY_MAP.sections || []).find((section) => x >= section.x && x < section.x + section.w
-      && y >= section.y && y < section.y + section.h) || { id: "san-pablo", name: "San Pablo", x: 0, y: 0, w: WORLD_WIDTH, h: WORLD_HEIGHT };
+      && y >= section.y && y < section.y + section.h) || { id: ACTIVE_MAP_ID, name: CITY_MAP.name || ACTIVE_MAP_ID, x: 0, y: 0, w: WORLD_WIDTH, h: WORLD_HEIGHT };
   }
 
   function zoneAtY(y) {
@@ -2449,9 +2773,9 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
   function rebuildDefaultMapTiles() {
     defaultMapTiles.clear();
-    (CITY_MAP.blockedRects || []).forEach((rect) => setDefaultTileRect("blocked", rect));
     (CITY_MAP.walkableRects || []).forEach((rect) => setDefaultTileRect("walkable", rect));
     (CITY_MAP.walkableSegments || []).forEach((segment) => setDefaultTileSegment("walkable", segment));
+    (CITY_MAP.blockedRects || []).forEach((rect) => setDefaultTileRect("blocked", rect));
     (CITY_MAP.encounterRects || []).forEach((rect) => setDefaultTileRect("encounter", rect));
     (CITY_MAP.encounterTiles || []).forEach(([col, row]) => defaultMapTiles.set(tileKey(col, row), "encounter"));
     cityEvents.filter((event) => event.enabled !== false)
@@ -2467,9 +2791,34 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     });
   }
 
+  function applyRuntimeGroundOverrides(overrides = {}) {
+    groundOverrides.clear();
+    Object.entries(overrides && typeof overrides === "object" ? overrides : {}).forEach(([key, type]) => {
+      if (/^\d+,\d+$/.test(key) && isGroundPaintType(type)) groundOverrides.set(key, type);
+    });
+  }
+
+  function resizeRuntimeWorld(cols, rows) {
+    const baseCols = Math.ceil(Number(CITY_MAP.baseWidth || 2508) / CITY_MAP.tileSize);
+    const baseRows = Math.ceil(Number(CITY_MAP.baseHeight || 2508) / CITY_MAP.tileSize);
+    const nextCols = Math.max(baseCols, Math.min(MAP_EDITOR_RULES.world.maxCols, Math.floor(Number(cols) || baseCols)));
+    const nextRows = Math.max(baseRows, Math.min(MAP_EDITOR_RULES.world.maxRows, Math.floor(Number(rows) || baseRows)));
+    WORLD_WIDTH = nextCols === baseCols ? Number(CITY_MAP.baseWidth || 2508) : nextCols * CITY_MAP.tileSize;
+    WORLD_HEIGHT = nextRows === baseRows ? Number(CITY_MAP.baseHeight || 2508) : nextRows * CITY_MAP.tileSize;
+    CITY_GRID_COLS = nextCols; CITY_GRID_ROWS = nextRows;
+    CITY_MAX_COL = nextCols - 1; CITY_MAX_ROW = nextRows - 1;
+    editorOverlayCanvas.width = WORLD_WIDTH; editorOverlayCanvas.height = WORLD_HEIGHT;
+    camera.x = clamp(camera.x, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
+    camera.y = clamp(camera.y, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+    editorOverlayDirty = true;
+    document.documentElement.dataset.mapEditorGrid = `${nextCols}x${nextRows}`;
+    return { cols: nextCols, rows: nextRows, width: WORLD_WIDTH, height: WORLD_HEIGHT };
+  }
+
   function initializeMapTiles() {
     rebuildDefaultMapTiles();
     applyRuntimeTileOverrides(window.CITY_MAP_EDITOR_DATA?.tileOverrides || {});
+    applyRuntimeGroundOverrides(window.CITY_MAP_EDITOR_DATA?.groundOverrides || {});
   }
 
   function saveMapTiles() {
@@ -2802,13 +3151,18 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       const angle = Math.PI * 2 * index / 12;
       samples.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
     }
-    return samples.every(([offsetX, offsetY]) => {
-      if (editorVacatedAt(x + offsetX, y + offsetY)) return true;
-      const col = Math.floor((x + offsetX) / cellSize);
-      const row = Math.floor((y + offsetY) / cellSize);
-      if (col < 0 || row < 0 || col >= cityNavigationMaskData.width || row >= cityNavigationMaskData.height) return false;
-      return cityNavigationMaskData.pixels[row * cityNavigationMaskData.width + col] >= 128;
-    });
+    const cells = samples.map(([offsetX, offsetY]) => ({
+      x: x + offsetX,
+      y: y + offsetY,
+      col: Math.floor((x + offsetX) / cellSize),
+      row: Math.floor((y + offsetY) / cellSize),
+    }));
+    /* La mascara compilada solo cubre el mapa historico. En ampliaciones se
+       usa el terreno declarativo/editable en vez de tratarlas como bloqueadas. */
+    if (cells.some((cell) => cell.col < 0 || cell.row < 0
+      || cell.col >= cityNavigationMaskData.width || cell.row >= cityNavigationMaskData.height)) return null;
+    return cells.every((cell) => editorVacatedAt(cell.x, cell.y)
+      || cityNavigationMaskData.pixels[cell.row * cityNavigationMaskData.width + cell.col] >= 128);
   }
 
   function cityMapCanOccupy(x, y) {
@@ -2903,8 +3257,16 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   function resetPlayerAnimation() {
     animationFrame = 0;
     animationTime = 0;
+    animationPhase = 0;
     playerRunning = false;
     elements.runBadge?.classList.add("hidden");
+  }
+
+  function resetPlayerMotion() {
+    playerVelocityX = 0;
+    playerVelocityY = 0;
+    document.documentElement.dataset.playerMovementMode = "idle";
+    document.documentElement.dataset.playerVelocity = "0,0";
   }
 
   function playerFramePixels(frame) {
@@ -2968,19 +3330,19 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     document.querySelector("#playerAnimationDebugAtlas")?.remove();
     const canvas = document.createElement("canvas");
     canvas.id = "playerAnimationDebugAtlas";
-    canvas.width = 512; canvas.height = 512;
+    canvas.width = 512; canvas.height = 1024;
     canvas.setAttribute("role", "img");
-    canvas.setAttribute("aria-label", "Atlas corregido del protagonista: abajo, izquierda, derecha y arriba");
-    canvas.style.cssText = "position:fixed;inset:50% auto auto 50%;width:min(512px,92vw);height:auto;transform:translate(-50%,-50%);z-index:9999;border:4px solid #fff;background:#17212b;box-shadow:0 18px 60px rgba(0,0,0,.65);image-rendering:pixelated";
+    canvas.setAttribute("aria-label", "Atlas del protagonista con cuatro direcciones cardinales y cuatro diagonales");
+    canvas.style.cssText = "position:fixed;inset:50% auto auto 50%;width:auto;height:min(1024px,92vh);transform:translate(-50%,-50%);z-index:9999;border:4px solid #fff;background:#17212b;box-shadow:0 18px 60px rgba(0,0,0,.65);image-rendering:pixelated";
     const context = canvas.getContext("2d");
     context.imageSmoothingEnabled = false;
-    for (let row = 0; row < 8; row += 1) {
+    for (let row = 0; row < 16; row += 1) {
       for (let col = 0; col < 8; col += 1) {
         context.fillStyle = (row + col) % 2 ? "#263442" : "#1d2934";
         context.fillRect(col * 64, row * 64, 64, 64);
       }
     }
-    ["down", "left", "right", "up"].forEach((direction, row) => {
+    ["down", "left", "right", "up", "down-left", "down-right", "up-left", "up-right"].forEach((direction, row) => {
       const frames = playerFrames.get(`walk-${direction}`) || [];
       frames.forEach((frame, column) => {
         context.drawImage(frame, column * 128, row * 128, 128, 128);
@@ -3049,6 +3411,57 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
         }
       }
     });
+
+    const diagonalDirectionRows = {
+      "down-left": 0,
+      "down-right": 1,
+      "up-left": 2,
+      "up-right": 3,
+    };
+    if (playerDiagonalSheetReady) {
+      const sourceWidth = playerDiagonalSheet.naturalWidth / 4;
+      const sourceHeight = playerDiagonalSheet.naturalHeight / 4;
+      Object.entries(diagonalDirectionRows).forEach(([direction, row]) => {
+        const frames = [];
+        for (let index = 0; index < 4; index += 1) {
+          const canvas = createPlayerFrameCanvas();
+          const context = canvas.getContext("2d", { willReadFrequently: true });
+          context.imageSmoothingEnabled = false;
+          context.drawImage(
+            playerDiagonalSheet,
+            index * sourceWidth, row * sourceHeight, sourceWidth, sourceHeight,
+            0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE,
+          );
+          frames.push(canvas);
+        }
+        playerFrames.set(`walk-${direction}`, frames);
+        playerFrames.set(`run-${direction}`, frames);
+        if (pixelInspectionAvailable) {
+          try {
+            frames.forEach((frame) => {
+              const pixels = playerFramePixels(frame);
+              let opaquePixels = 0;
+              for (let pixel = 3; pixel < pixels.length; pixel += 4) if (pixels[pixel] > 0) opaquePixels += 1;
+              minimumOpaquePixels = Math.min(minimumOpaquePixels, opaquePixels);
+            });
+            const cap = frames.every((frame) => playerFrameRegionEqual(frames[0], frame, 0, PLAYER_HEAD_LOCK_HEIGHT));
+            metrics[direction] = {
+              cap,
+              neutral: playerFrameRegionEqual(frames[0], frames[2]),
+              body: cap,
+              support: frames.every((frame) => playerFrameBottom(frame) === PLAYER_SUPPORT_ROW),
+              strideIoU: Number(playerSupportIoU(frames[1], frames[3]).toFixed(3)),
+            };
+          } catch (error) {
+            pixelInspectionAvailable = false;
+          }
+        }
+      });
+    }
+    document.documentElement.dataset.playerDiagonalFrames = Object.keys(diagonalDirectionRows)
+      .map((direction) => `${direction}:${playerFrames.get(`walk-${direction}`)?.length || 0}`)
+      .join(",");
+    document.documentElement.dataset.playerSpriteStandard = "64x64;head-x=32;feet-y=59;cycle=neutral-a-neutral-b";
     const metricValues = Object.values(metrics);
     document.documentElement.dataset.playerFrames = [...playerFrames].map(([name, frames]) => `${name}:${frames.length}`).join(",");
     document.documentElement.dataset.playerOpaqueMin = pixelInspectionAvailable ? String(minimumOpaquePixels) : "unavailable-file-origin";
@@ -3331,13 +3744,15 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       const raw = window.localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
       const saved = JSON.parse(raw);
+      const savedMapId = MAP_REGISTRY.resolve(saved.mapId || MAP_REGISTRY.defaultMapId);
+      const mapChanged = savedMapId !== ACTIVE_MAP_ID;
       const next = { ...defaultState(), ...saved };
       next.team = Array.isArray(saved.team) ? saved.team.map(hydratePokemon).filter(Boolean).slice(0, MAX_TEAM) : [];
       next.caught = Array.isArray(saved.caught) ? [...new Set(saved.caught.map(normalizeMonsterId).filter(Boolean))] : [];
       next.seen = Array.isArray(saved.seen) ? [...new Set(saved.seen.map(normalizeMonsterId).filter(Boolean))] : [];
       next.worldX = clamp(Number(saved.worldX) || NORMAL_START.x, 35, WORLD_WIDTH - 35);
       next.worldY = clamp(Number(saved.worldY) || NORMAL_START.y, 45, WORLD_HEIGHT - 30);
-      if (saved.mapRevision !== MAP_REVISION) {
+      if (mapChanged || saved.mapRevision !== MAP_REVISION) {
         next.worldX = NORMAL_START.x;
         next.worldY = NORMAL_START.y;
         next.direction = NORMAL_START.direction;
@@ -3387,6 +3802,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
         next.secretPokemonId = null;
       }
       next.version = defaultState().version;
+      next.mapId = ACTIVE_MAP_ID;
       next.dimension = saved.dimension === "prism" ? "prism" : "san_pablo";
       if (next.dimension === "prism") {
         next.dimension = "san_pablo";
@@ -3457,6 +3873,14 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   }
 
   function startNewGame() {
+    if (ACTIVE_MAP_ID !== MAP_REGISTRY.defaultMapId) {
+      try {
+        window.localStorage.removeItem(SAVE_KEY);
+        window.sessionStorage.setItem("pokemon-new-game", "1");
+      } catch { /* El juego puede continuar sin almacenamiento. */ }
+      window.location.assign(mapNavigationUrl(MAP_REGISTRY.defaultMapId));
+      return;
+    }
     primeDialogMusic(DOCTOR_POTATO_THEME_URL);
     if (VOICE_NPC_ENABLED) requestVoiceNpcAccess();
     requestGameFullscreen();
@@ -3937,12 +4361,38 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   }
 
   function normalizedTargetMap(value) {
-    return String(value || "san-pablo").trim().toLowerCase().replace(/_/g, "-");
+    return MAP_REGISTRY.resolve(value || ACTIVE_MAP_ID, ACTIVE_MAP_ID);
+  }
+
+  function mapNavigationUrl(mapId) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("map", mapId);
+    ["debugSpawn", "debugBattle", "debugPrism", "debugVoice"].forEach((key) => url.searchParams.delete(key));
+    return url.href;
+  }
+
+  function navigateToRegisteredMap(mapId, destination, direction) {
+    const target = MAP_REGISTRY.get(mapId);
+    if (!target) return false;
+    state.mapId = target.id;
+    state.mapRevision = Number(target.config.revision) || 1;
+    state.dimension = "san_pablo";
+    state.interior = null;
+    state.interiorData = null;
+    state.maintenanceReturn = null;
+    state.worldX = destination.x;
+    state.worldY = destination.y;
+    state.direction = direction;
+    saveGame();
+    try { window.sessionStorage.setItem("pokemon-map-transfer-resume", target.id); } catch { /* opcional */ }
+    window.location.assign(mapNavigationUrl(target.id));
+    return true;
   }
 
   async function executeMapTransfer(event, { persist = true } = {}) {
     const targetMap = normalizedTargetMap(event.targetMap);
-    if (!["san-pablo", "city", "current"].includes(targetMap)) {
+    const targetRecord = MAP_REGISTRY.get(targetMap);
+    if (!targetRecord) {
       const detail = { ...event, targetMap, handled: false };
       window.dispatchEvent(new CustomEvent("pokemon-map-transition", { detail }));
       if (detail.handled) return true;
@@ -3952,17 +4402,29 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       ], "◇");
       return false;
     }
-    const requestedX = Number.isFinite(Number(event.targetX)) ? Number(event.targetX) : NORMAL_START.x;
-    const requestedY = Number.isFinite(Number(event.targetY)) ? Number(event.targetY) : NORMAL_START.y;
+    const targetConfig = targetRecord.config;
+    const requestedX = Number.isFinite(Number(event.targetX)) ? Number(event.targetX) : Number(targetConfig.spawn?.x);
+    const requestedY = Number.isFinite(Number(event.targetY)) ? Number(event.targetY) : Number(targetConfig.spawn?.y);
+    const direction = ["up", "down", "left", "right"].includes(event.targetDirection)
+      ? event.targetDirection
+      : targetConfig.spawn?.direction || "down";
+    if (targetRecord.id !== ACTIVE_MAP_ID) {
+      const destination = {
+        x: clamp(requestedX || Number(targetConfig.spawn?.x) || 32, 16, Number(targetConfig.width) - 16),
+        y: clamp(requestedY || Number(targetConfig.spawn?.y) || 32, 16, Number(targetConfig.height) - 16),
+      };
+      await applyWorldTransitionEffect(event.effect || "fade", () => {
+        navigateToRegisteredMap(targetRecord.id, destination, direction);
+      });
+      return true;
+    }
     const destination = nearestOpenCityTarget(requestedX, requestedY);
     if (!destination) {
       await showDialogAsync(["El destino está bloqueado y no hay una casilla segura cerca."], "!");
       return false;
     }
-    const direction = ["up", "down", "left", "right"].includes(event.targetDirection)
-      ? event.targetDirection
-      : "down";
     await applyWorldTransitionEffect(event.effect || (event.type === "transition" ? "fade" : "none"), () => {
+      state.mapId = ACTIVE_MAP_ID;
       state.dimension = "san_pablo";
       state.interior = null;
       state.interiorData = null;
@@ -4858,6 +5320,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   function clearDirectionalInput() {
     input.up = false; input.down = false; input.left = false; input.right = false;
     input.strafeLeft = false; input.strafeRight = false; input.run = false;
+    resetPlayerMotion();
   }
 
   function normalizeAngle(angle) {
@@ -5063,7 +5526,8 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       if (actualMovement > .0001) {
         maze.steps += actualMovement;
         animationTime += deltaSeconds * 1000;
-        animationFrame = Math.floor(animationTime / (playerRunning ? 82 : 145)) % 4;
+        animationPhase = (animationPhase + deltaSeconds * 1000 / (playerRunning ? 82 : 145)) % 4;
+        animationFrame = Math.floor(animationPhase) % 4;
       } else resetPlayerAnimation();
     } else resetPlayerAnimation();
 
@@ -5242,37 +5706,62 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       return;
     }
     if (!state.started || battle || inputLocked || drawerOpen || !elements.dialogBox.classList.contains("hidden")) {
+      resetPlayerMotion();
       resetPlayerAnimation();
       return;
     }
 
-    let dx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    let dy = (input.down ? 1 : 0) - (input.up ? 1 : 0);
-    const moving = dx !== 0 || dy !== 0;
-    if (!moving) {
-      resetPlayerAnimation();
-      return;
-    }
-
-    const length = Math.hypot(dx, dy);
-    dx /= length; dy /= length;
-    const running = input.run;
-    playerRunning = running;
+    const intent = PLAYER_MOVEMENT_CORE.movementIntent(input, preferredMovementDirection);
+    const running = intent.active ? input.run : playerRunning;
     const speed = running ? 205 : 108;
-    const amount = speed * deltaSeconds;
-    if (Math.abs(dx) > Math.abs(dy)) state.direction = dx < 0 ? "left" : "right";
-    else state.direction = dy < 0 ? "up" : "down";
+    const velocity = PLAYER_MOVEMENT_CORE.smoothVelocity(
+      { x: playerVelocityX, y: playerVelocityY },
+      { x: intent.x * speed, y: intent.y * speed },
+      deltaSeconds,
+      intent.active ? 18 : 26,
+    );
+    playerVelocityX = velocity.x;
+    playerVelocityY = velocity.y;
 
-    const nextX = state.worldX + dx * amount;
-    const nextY = state.worldY + dy * amount;
-    let moved = 0;
-    if (canMoveTo(nextX, state.worldY)) { state.worldX = nextX; moved += Math.abs(dx * amount); }
-    if (canMoveTo(state.worldX, nextY)) { state.worldY = nextY; moved += Math.abs(dy * amount); }
+    if (intent.active) {
+      state.direction = intent.direction;
+      playerAnimationDirection = intent.animationDirection;
+      playerRunning = running;
+    } else if (Math.hypot(playerVelocityX, playerVelocityY) < 1) {
+      resetPlayerMotion();
+      resetPlayerAnimation();
+      return;
+    }
+
+    const deltaX = playerVelocityX * deltaSeconds;
+    const deltaY = playerVelocityY * deltaSeconds;
+    let movedX = 0;
+    let movedY = 0;
+    if (Math.abs(deltaX) > .001) {
+      const nextX = state.worldX + deltaX;
+      if (canMoveTo(nextX, state.worldY)) { state.worldX = nextX; movedX = deltaX; }
+      else playerVelocityX = 0;
+    }
+    if (Math.abs(deltaY) > .001) {
+      const nextY = state.worldY + deltaY;
+      if (canMoveTo(state.worldX, nextY)) { state.worldY = nextY; movedY = deltaY; }
+      else playerVelocityY = 0;
+    }
+    const moved = Math.hypot(movedX, movedY);
+    document.documentElement.dataset.playerMovementMode = intent.diagonal
+      ? "diagonal"
+      : intent.active ? "cardinal" : "coasting";
+    document.documentElement.dataset.playerVelocity = `${playerVelocityX.toFixed(1)},${playerVelocityY.toFixed(1)}`;
+    if (moved > 0 && intent.diagonal && (!movedX || !movedY)) {
+      state.direction = movedX ? (movedX < 0 ? "left" : "right") : (movedY < 0 ? "up" : "down");
+      playerAnimationDirection = state.direction;
+    }
 
     if (moved > 0) {
       state.distance += moved;
-      animationTime += deltaSeconds * 1000;
-      animationFrame = Math.floor(animationTime / (running ? 82 : 145)) % 4;
+      animationTime += moved;
+      animationPhase = PLAYER_MOVEMENT_CORE.advanceAnimationPhase(animationPhase, moved, running);
+      animationFrame = Math.floor(animationPhase) % 4;
       elements.runBadge.classList.toggle("hidden", !running);
       if (triggerStepMapEvent()) {
         updateAreaLabel(); updateInteractPrompt();
@@ -5308,7 +5797,10 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       }
       updateAreaLabel(); updateInteractPrompt();
       if (previousQuestStage !== state.questStage) renderHud();
-    } else resetPlayerAnimation();
+    } else {
+      resetPlayerAnimation();
+      if (!intent.active) resetPlayerMotion();
+    }
   }
 
   function drawRoad(context, road) {
@@ -6356,11 +6848,13 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
   function playerSourceFrame() {
     const gait = playerRunning ? "run" : "walk";
-    const frames = playerFrames.get(`${gait}-${state.direction}`) || [];
+    const requestedDirection = playerAnimationDirection || state.direction;
+    const direction = playerFrames.has(`${gait}-${requestedDirection}`) ? requestedDirection : state.direction;
+    const frames = playerFrames.get(`${gait}-${direction}`) || [];
     if (!frames.length) return null;
     const frameIndex = animationFrame % frames.length;
     document.documentElement.dataset.playerAnimationFrame = String(frameIndex);
-    document.documentElement.dataset.playerAnimationDirection = state.direction;
+    document.documentElement.dataset.playerAnimationDirection = direction;
     document.documentElement.dataset.playerAnimationGait = gait;
     return frames[frameIndex];
   }
@@ -6983,11 +7477,20 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       context.strokeStyle = "#fff"; context.lineWidth = 3;
       context.strokeRect(selectedMapTile.col * CITY_MAP.tileSize + 1.5, selectedMapTile.row * CITY_MAP.tileSize + 1.5, CITY_MAP.tileSize - 3, CITY_MAP.tileSize - 3);
     }
+    const previewGroundPaths = new Map(editorTerrainPreview
+      .filter((cell) => cell.layer === "ground" && isGroundPathType(cell.type))
+      .map((cell) => [tileKey(cell.col, cell.row), cell.type]));
     editorTerrainPreview.forEach((cell) => {
       context.fillStyle = cell.type === "inherit" ? "rgba(255,255,255,.35)" : "rgba(255,229,106,.36)";
       context.strokeStyle = "rgba(255,229,106,.95)"; context.lineWidth = 2;
-      context.fillRect(cell.col * CITY_MAP.tileSize, cell.row * CITY_MAP.tileSize, CITY_MAP.tileSize, CITY_MAP.tileSize);
-      context.strokeRect(cell.col * CITY_MAP.tileSize + 1, cell.row * CITY_MAP.tileSize + 1, CITY_MAP.tileSize - 2, CITY_MAP.tileSize - 2);
+      if (cell.layer === "ground" && isGroundPathType(cell.type)) {
+        const size = CITY_MAP.tileSize; const width = Math.max(10, Math.round(size * .62));
+        traceGroundPathShape(context, cell.col * size, cell.row * size, size, groundPathConnectionMask(cell.col, cell.row, previewGroundPaths), width);
+        context.fill(); context.stroke();
+      } else {
+        context.fillRect(cell.col * CITY_MAP.tileSize, cell.row * CITY_MAP.tileSize, CITY_MAP.tileSize, CITY_MAP.tileSize);
+        context.strokeRect(cell.col * CITY_MAP.tileSize + 1, cell.row * CITY_MAP.tileSize + 1, CITY_MAP.tileSize - 2, CITY_MAP.tileSize - 2);
+      }
     });
     if (editorMarquee) {
       const left = Math.min(editorMarquee.start.x, editorMarquee.end.x); const top = Math.min(editorMarquee.start.y, editorMarquee.end.y);
@@ -7050,6 +7553,8 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     const renderedCamera = mapRenderCamera(renderScale);
     context.translate(-renderedCamera.x, -renderedCamera.y);
     drawStreamedCityMap(context);
+    drawMapExtensionSurfaces(context);
+    drawGroundOverrides(context);
     drawStreetPolish(context);
     const encounterGrass = drawEncounterGrassBack(context);
     const visibleAssets = drawWorldEntities(context, encounterGrass);
@@ -7071,10 +7576,27 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     const scaleX = width / WORLD_WIDTH;
     const scaleY = height / WORLD_HEIGHT;
     context.clearRect(0, 0, width, height);
-    if (cityMapPreviewReady) context.drawImage(cityMapPreview, 0, 0, width, height);
-    else { context.fillStyle = "#79a85d"; context.fillRect(0, 0, width, height); }
-    /* La miniatura compilada ya contiene edificios y arbolado. Dibujar de
-       nuevo los assets aquí oscurecía y duplicaba la cartografía. */
+    context.fillStyle = "#244c39"; context.fillRect(0, 0, width, height);
+    const baseWidth = Math.min(WORLD_WIDTH, Number(CITY_MAP.baseWidth) || WORLD_WIDTH);
+    const baseHeight = Math.min(WORLD_HEIGHT, Number(CITY_MAP.baseHeight) || WORLD_HEIGHT);
+    if (cityMapPreviewReady) context.drawImage(cityMapPreview, 0, 0, baseWidth * scaleX, baseHeight * scaleY);
+    else {
+      context.fillStyle = "#79a85d";
+      context.fillRect(0, 0, baseWidth * scaleX, baseHeight * scaleY);
+    }
+    (CITY_MAP.extensionSurfaces || []).forEach((surface) => {
+      context.fillStyle = GROUND_FALLBACK_COLORS[surface.surface] || "#559b4d";
+      context.fillRect(surface.x * scaleX, surface.y * scaleY, surface.w * scaleX, surface.h * scaleY);
+    });
+    cityWorldAssets.filter((asset) => Number(asset.y) > baseHeight).forEach((asset) => {
+      context.fillStyle = asset.kind === "building" ? "rgba(115,70,48,.9)" : "rgba(40,91,49,.85)";
+      worldAssetColliderRects(asset).forEach((rect) => {
+        context.fillRect(rect.x * scaleX, rect.y * scaleY,
+          Math.max(1, rect.w * scaleX), Math.max(1, rect.h * scaleY));
+      });
+    });
+    /* La miniatura compilada ya contiene los objetos históricos; solo las
+       huellas de la ampliación se dibujan encima. */
     context.fillStyle = "rgba(13,35,27,.12)"; context.fillRect(0, 0, width, height);
     const size = CITY_MAP.tileSize;
     context.fillStyle = "rgba(52,183,91,.5)";
@@ -7165,7 +7687,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
   function chooseWildPokemon() {
     if (LOCAL_DEBUG_BATTLE?.wildId && POKEMON[LOCAL_DEBUG_BATTLE.wildId]) return LOCAL_DEBUG_BATTLE.wildId;
-    let table = WILD_TABLE;
+    let table = Array.isArray(CITY_MAP.encounters) && CITY_MAP.encounters.length ? CITY_MAP.encounters : WILD_TABLE;
     if (state.dimension === "prism") table = PRISM_WILD_TABLE;
     else if (state.interior === "route") table = ROUTE_WILD_TABLE;
     const total = table.reduce((sum, entry) => sum + entry.weight, 0);
@@ -7190,7 +7712,11 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       battle = { enemy, busy: false, turns: 0 };
       elements.worldScreen.classList.add("hidden"); elements.titleScreen.classList.add("hidden"); elements.battleScreen.classList.remove("hidden");
       elements.battleScreen.classList.toggle("prism-battle", state.dimension === "prism");
-      const label = state.dimension === "prism" ? "ENCUENTRO · DIMENSIÓN PRISMA" : state.interior === "route" ? "ENCUENTRO SALVAJE · RUTA SILVESTRE" : "ENCUENTRO SALVAJE · SAN PABLO";
+      const label = state.dimension === "prism"
+        ? "ENCUENTRO · DIMENSIÓN PRISMA"
+        : state.interior === "route"
+          ? "ENCUENTRO SALVAJE · RUTA SILVESTRE"
+          : `ENCUENTRO SALVAJE · ${(CITY_MAP.name || ACTIVE_MAP_ID).toUpperCase()}`;
       elements.battleLabel.textContent = label;
       elements.flashOverlay.classList.remove("encounter"); inputLocked = false;
       renderBattle(); setBattleMessage(`¡Un ${speciesOf(enemy).name} salvaje apareció!`); saveGame();
@@ -7311,12 +7837,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   }
 
   function moveFxClass(moveType) {
-    const classes = {
-      Fuego: "fire", Agua: "water", Planta: "grass", Eléctrico: "electric",
-      Psíquico: "psychic", Fantasma: "ghost", Siniestro: "ghost", Dragón: "dragon", Hada: "psychic", Volador: "wind",
-      Bicho: "bug", Veneno: "poison", Acero: "steel", Tierra: "ground", Roca: "ground", Hielo: "water", Lucha: "normal", Normal: "normal",
-    };
-    return classes[moveType] || "normal";
+    return ATTACK_EFFECTS.presetForType(moveType);
   }
 
   const BATTLE_SPRITE_HIT_FX = Object.freeze({
@@ -7326,41 +7847,93 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     Eléctrico: { className: "electric", duration: 460, frames: 6 },
   });
 
-  function spawnMoveVisual(attacker, defender, moveType) {
-    const scene = elements.battleScene; if (!scene) return [];
+  const BATTLE_SPRITE_HIT_FX_BY_CLASS = Object.freeze(Object.fromEntries(
+    Object.values(BATTLE_SPRITE_HIT_FX).map((effect) => [effect.className, effect]),
+  ));
+
+  function attackEffectForMove(move) {
+    const safeMove = move && typeof move === "object" ? move : { type: String(move || "Normal") };
+    return ATTACK_EFFECTS.normalizeProfile(
+      safeMove.id && Object.hasOwn(attackEffectOverrides, safeMove.id) ? attackEffectOverrides[safeMove.id] : {},
+      safeMove.type,
+    );
+  }
+
+  function attackEffectTravelTail(profile) {
+    return ATTACK_EFFECTS.travelTail(profile);
+  }
+
+  function loadAttackEffectOverrides() {
+    try {
+      const raw = window.localStorage.getItem(ATTACK_EFFECTS.STORAGE_KEY);
+      if (!raw) return;
+      attackEffectOverrides = ATTACK_EFFECTS.parsePack(raw, MOVE_TYPES_BY_ID).effects;
+    } catch (error) {
+      console.warn("No se pudieron cargar los efectos personalizados de ataque.", error);
+      attackEffectOverrides = Object.create(null);
+    }
+  }
+
+  function persistAttackEffectOverrides() {
+    window.localStorage.setItem(
+      ATTACK_EFFECTS.STORAGE_KEY,
+      ATTACK_EFFECTS.serializePack(attackEffectOverrides, MOVE_TYPES_BY_ID),
+    );
+  }
+
+  function spawnMoveVisual(attacker, defender, move, sceneOverride = null, profileOverride = null) {
+    const scene = sceneOverride || elements.battleScene; if (!scene) return [];
+    const safeMove = move && typeof move === "object" ? move : { type: String(move || "Normal") };
+    const effect = profileOverride || attackEffectForMove(safeMove);
+    if (!effect.enabled) return [];
     const sceneRect = scene.getBoundingClientRect();
     const a = attacker.getBoundingClientRect(); const d = defender.getBoundingClientRect();
     const startX = a.left + a.width / 2 - sceneRect.left; const startY = a.top + a.height * .48 - sceneRect.top;
-    const endX = d.left + d.width / 2 - sceneRect.left; const endY = d.top + d.height * .48 - sceneRect.top;
+    const endX = d.left + d.width / 2 - sceneRect.left + effect.offsetX;
+    const endY = d.top + d.height * .48 - sceneRect.top + effect.offsetY;
     const dx = endX - startX; const dy = endY - startY;
     const distancePx = Math.hypot(dx, dy); const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    const fxClass = moveFxClass(moveType); const nodes = [];
+    const fxClass = effect.preset || moveFxClass(safeMove.type); const nodes = [];
+    const applyProfile = (node) => {
+      node.classList.add("fx-custom-color");
+      node.style.setProperty("--fx-color", effect.color);
+      node.style.setProperty("--fx-duration", `${effect.duration}ms`);
+    };
 
-    const trail = document.createElement("span");
-    trail.className = `fx-move-trail fx-${fxClass}`;
-    trail.style.left = `${startX}px`; trail.style.top = `${startY}px`;
-    trail.style.width = `${distancePx}px`; trail.style.setProperty("--angle", `${angle}deg`);
-    scene.appendChild(trail); nodes.push(trail);
+    if (effect.trail) {
+      const trail = document.createElement("span");
+      trail.className = `fx-move-trail fx-${fxClass}`;
+      trail.style.left = `${startX}px`; trail.style.top = `${startY}px`;
+      trail.style.width = `${distancePx}px`; trail.style.height = `${Math.max(3, Math.round(effect.height * .2))}px`;
+      trail.style.marginTop = `${Math.round(effect.height * -.1)}px`;
+      trail.style.setProperty("--angle", `${angle}deg`);
+      applyProfile(trail);
+      scene.appendChild(trail); nodes.push(trail);
+    }
 
     const count = ["electric", "psychic", "ghost", "dragon"].includes(fxClass) ? 3 : 6;
     for (let index = 0; index < count; index += 1) {
       const projectile = document.createElement("span");
       projectile.className = `fx-move-projectile fx-${fxClass}`;
       projectile.style.left = `${startX}px`; projectile.style.top = `${startY}px`;
+      projectile.style.width = `${effect.width}px`; projectile.style.height = `${effect.height}px`;
+      projectile.style.marginLeft = `${effect.width / -2}px`; projectile.style.marginTop = `${effect.height / -2}px`;
       projectile.style.setProperty("--tx", `${dx}px`); projectile.style.setProperty("--ty", `${dy}px`);
       projectile.style.setProperty("--mx", `${dx * .56}px`); projectile.style.setProperty("--my", `${dy * .56}px`);
       projectile.style.setProperty("--curve", `${(index - (count - 1) / 2) * 13}px`);
       projectile.style.setProperty("--delay", `${index * 35}ms`);
       projectile.textContent = fxClass === "grass" ? "◆" : fxClass === "wind" ? "◌" : "";
+      applyProfile(projectile);
       scene.appendChild(projectile); nodes.push(projectile);
     }
 
-    if (["electric", "psychic", "ghost", "dragon"].includes(fxClass)) {
-      for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
+    if (effect.rings > 0) {
+      for (let ringIndex = 0; ringIndex < effect.rings; ringIndex += 1) {
         const ring = document.createElement("span");
         ring.className = `fx-move-ring fx-${fxClass}`;
         ring.style.left = `${endX}px`; ring.style.top = `${endY}px`;
         ring.style.setProperty("--delay", `${180 + ringIndex * 80}ms`);
+        applyProfile(ring);
         scene.appendChild(ring); nodes.push(ring);
       }
     }
@@ -7380,7 +7953,9 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     return cue;
   }
 
-  async function animateMove(attacker, defender, moveType, intensity = 1) {
+  async function animateMove(attacker, defender, move, intensity = 1) {
+    const safeMove = move && typeof move === "object" ? move : { type: String(move || "Normal") };
+    const effect = attackEffectForMove(safeMove);
     const pokemonId = Number(attacker.dataset.pokemonId);
     const profile = customPokemonAttack(pokemonId);
     const isFront = attacker.dataset.view === "front";
@@ -7401,13 +7976,13 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
     if (!profile) {
       attacker.classList.add("attacking");
-      nodes.push(...spawnMoveVisual(attacker, defender, moveType));
+      nodes.push(...spawnMoveVisual(attacker, defender, safeMove, null, effect));
       later(() => {
         defender.classList.add("hit");
-        spawnHitParticles(defender, moveType, intensity);
-        if (["Eléctrico", "Dragón", "Tierra", "Acero", "Hielo", "Lucha"].includes(moveType)) shakeBattle(.65 * intensity);
-      }, 260);
-      await wait(560);
+        spawnHitParticles(defender, safeMove, intensity, null, effect);
+        if (effect.enabled && effect.shake > 0) shakeBattle(effect.shake * intensity);
+      }, Math.max(110, Math.round(effect.duration * .58)));
+      await wait(Math.max(430, attackEffectTravelTail(effect) + 80));
     } else {
       attacker.classList.add("anatomy-attacking");
       anatomyCue = spawnAnatomyCue(attacker, profile);
@@ -7415,17 +7990,17 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
         attacker.classList.add("attack-pose-active");
         attacker.src = attackPose;
       }, 690);
-      later(() => nodes.push(...spawnMoveVisual(attacker, defender, moveType)), 880);
+      later(() => nodes.push(...spawnMoveVisual(attacker, defender, safeMove, null, effect)), 880);
       later(() => {
         defender.classList.add("hit");
-        spawnHitParticles(defender, moveType, intensity);
-        if (["Eléctrico", "Dragón", "Tierra", "Acero", "Roca", "Hielo", "Lucha"].includes(moveType)) shakeBattle(.8 * intensity);
-      }, 1260);
+        spawnHitParticles(defender, safeMove, intensity, null, effect);
+        if (effect.enabled && effect.shake > 0) shakeBattle(effect.shake * intensity);
+      }, 880 + Math.max(110, Math.round(effect.duration * .58)));
       if (attackPose) later(() => {
         attacker.classList.remove("attack-pose-active");
         if (originalSrc) attacker.src = originalSrc;
       }, 1810);
-      await wait(CUSTOM_ATTACK_DURATION);
+      await wait(Math.max(CUSTOM_ATTACK_DURATION, 880 + attackEffectTravelTail(effect) + 80));
     }
 
     timers.forEach((timer) => window.clearTimeout(timer));
@@ -7436,18 +8011,21 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     nodes.forEach((node) => node.remove());
   }
 
-  function fxOrigin(defender) {
-    const scene = elements.battleScene; if (!scene) return null;
+  function fxOrigin(defender, sceneOverride = null, offsetX = 0, offsetY = 0) {
+    const scene = sceneOverride || elements.battleScene; if (!scene) return null;
     const sceneRect = scene.getBoundingClientRect();
     const r = defender.getBoundingClientRect();
-    return { scene, x: r.left + r.width / 2 - sceneRect.left, y: r.top + r.height / 2 - sceneRect.top, top: r.top - sceneRect.top };
+    return { scene, x: r.left + r.width / 2 - sceneRect.left + offsetX, y: r.top + r.height / 2 - sceneRect.top + offsetY, top: r.top - sceneRect.top + offsetY };
   }
 
-  function spawnHitParticles(defender, moveType, intensity = 1) {
-    const origin = fxOrigin(defender); if (!origin) return;
+  function spawnHitParticles(defender, move, intensity = 1, sceneOverride = null, profileOverride = null) {
+    const safeMove = move && typeof move === "object" ? move : { type: String(move || "Normal") };
+    const effect = profileOverride || attackEffectForMove(safeMove);
+    if (!effect.enabled) return;
+    const origin = fxOrigin(defender, sceneOverride, effect.offsetX, effect.offsetY); if (!origin) return;
     const { scene, x, y } = origin;
-    const color = TYPE_COLORS[moveType] || "#ffffff";
-    const count = Math.round(9 * intensity);
+    const color = effect.color || TYPE_COLORS[safeMove.type] || "#ffffff";
+    const count = Math.round(effect.particles * intensity);
     for (let i = 0; i < count; i += 1) {
       const p = document.createElement("span");
       p.className = "fx-particle";
@@ -7458,26 +8036,32 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
       const size = 5 + Math.random() * 7;
       p.style.width = size + "px"; p.style.height = size + "px";
+      p.style.color = color;
+      p.style.setProperty("--fx-particle-duration", `${Math.max(320, Math.min(900, effect.duration + 150))}ms`);
       scene.appendChild(p);
-      window.setTimeout(() => p.remove(), 640);
+      window.setTimeout(() => p.remove(), Math.max(400, Math.min(980, effect.duration + 230)));
     }
-    spawnSpriteHitEffect(defender, moveType, intensity);
+    spawnSpriteHitEffect(defender, safeMove, intensity, sceneOverride, effect);
   }
 
-  function spawnSpriteHitEffect(defender, moveType, intensity = 1) {
-    const effect = BATTLE_SPRITE_HIT_FX[moveType];
-    const origin = fxOrigin(defender);
-    if (!effect || !origin) return null;
+  function spawnSpriteHitEffect(defender, move, intensity = 1, sceneOverride = null, profileOverride = null) {
+    const safeMove = move && typeof move === "object" ? move : { type: String(move || "Normal") };
+    const profile = profileOverride || attackEffectForMove(safeMove);
+    if (!profile.enabled || profile.impact === "none") return null;
+    const spriteEffect = profile.impact === "auto" ? BATTLE_SPRITE_HIT_FX[safeMove.type] : BATTLE_SPRITE_HIT_FX_BY_CLASS[profile.impact];
+    const origin = fxOrigin(defender, sceneOverride, profile.offsetX, profile.offsetY);
+    if (!spriteEffect || !origin) return null;
     const element = document.createElement("span");
-    element.className = `fx-sprite-hit fx-sprite-hit-${effect.className}`;
+    element.className = `fx-sprite-hit fx-sprite-hit-${spriteEffect.className}`;
     element.setAttribute("aria-hidden", "true");
     element.style.left = `${origin.x}px`;
     element.style.top = `${origin.y}px`;
-    element.style.setProperty("--fx-duration", `${effect.duration}ms`);
-    element.style.setProperty("--fx-scale", String((2.8 + Math.min(1.4, intensity) * .65).toFixed(2)));
-    element.dataset.frames = String(effect.frames);
+    element.style.setProperty("--fx-duration", `${spriteEffect.duration}ms`);
+    element.style.setProperty("--fx-scale", String((profile.impactScale * Math.min(1.4, intensity)).toFixed(2)));
+    element.style.filter = `drop-shadow(0 0 7px ${profile.color})`;
+    element.dataset.frames = String(spriteEffect.frames);
     origin.scene.appendChild(element);
-    window.setTimeout(() => element.remove(), effect.duration + 80);
+    window.setTimeout(() => element.remove(), spriteEffect.duration + 80);
     return element;
   }
 
@@ -7493,8 +8077,9 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     window.setTimeout(() => el.remove(), 900);
   }
 
-  function shakeBattle(intensity = 1) {
-    const scene = elements.battleScene; if (!scene) return;
+  function shakeBattle(intensity = 1, sceneOverride = null) {
+    const scene = sceneOverride || elements.battleScene; if (!scene) return;
+    if (!Number.isFinite(Number(intensity)) || Number(intensity) <= 0) return;
     scene.style.setProperty("--shake", String(Math.round(6 * intensity)));
     scene.classList.remove("shake"); void scene.offsetWidth;
     scene.classList.add("shake");
@@ -7522,15 +8107,15 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     const active = activePokemon(); const move = speciesOf(active).moves[index];
     setBattleBusy(true); elements.movesMenu.classList.add("hidden"); elements.battleMenu.classList.remove("hidden");
     setBattleMessage(`¡${speciesOf(active).name} usó ${move.name}!`);
-    playTone(move.type === "Eléctrico" ? 740 : 260, .12, "square", .04); await animateMove(elements.activeSprite, elements.enemySprite, move.type);
+    playTone(move.type === "Eléctrico" ? 740 : 260, .12, "square", .04); await animateMove(elements.activeSprite, elements.enemySprite, move);
     if (Math.random() * 100 > move.accuracy) { setBattleMessage("¡El ataque falló!"); await wait(700); await enemyTurn(); return; }
     const result = calculateDamage(active, battle.enemy, move);
     battle.enemy.hp = Math.max(0, battle.enemy.hp - result.damage);
     if (move.drain) active.hp = Math.min(active.maxHp, active.hp + Math.max(1, Math.floor(result.damage / 3)));
     updateBattleHealth();
     spawnDamageNumber(elements.enemySprite, result.damage, result.critical ? "#ffd24a" : "#ffffff");
-    if (result.critical) { setBattleMessage("¡Un golpe crítico!"); shakeBattle(1.5); spawnHitParticles(elements.enemySprite, move.type, 1.7); }
-    else if (result.multiplier > 1) { setBattleMessage("¡Es supereficaz!"); shakeBattle(1); spawnHitParticles(elements.enemySprite, move.type, 1.3); }
+    if (result.critical) { setBattleMessage("¡Un golpe crítico!"); shakeBattle(attackEffectForMove(move).shake * 1.8); spawnHitParticles(elements.enemySprite, move, 1.7); }
+    else if (result.multiplier > 1) { setBattleMessage("¡Es supereficaz!"); shakeBattle(attackEffectForMove(move).shake * 1.35); spawnHitParticles(elements.enemySprite, move, 1.3); }
     else if (result.multiplier < 1) setBattleMessage("No es muy eficaz…");
     await wait(700);
     if (battle.enemy.hp <= 0) { elements.enemySprite.classList.add("fainting"); await wait(640); await winBattle(); return; }
@@ -7541,14 +8126,14 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     if (!battle) return;
     const enemy = battle.enemy; const move = speciesOf(enemy).moves[Math.floor(Math.random() * speciesOf(enemy).moves.length)]; const active = activePokemon();
     setBattleMessage(`¡${speciesOf(enemy).name} salvaje usó ${move.name}!`); playTone(180, .11, "sawtooth", .03);
-    await animateMove(elements.enemySprite, elements.activeSprite, move.type);
+    await animateMove(elements.enemySprite, elements.activeSprite, move);
     if (Math.random() * 100 <= move.accuracy) {
       const result = calculateDamage(enemy, active, move); active.hp = Math.max(0, active.hp - result.damage);
       if (move.drain) enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.max(1, Math.floor(result.damage / 3)));
       updateBattleHealth();
       spawnDamageNumber(elements.activeSprite, result.damage, result.critical ? "#ffd24a" : "#ffe3e3");
-      if (result.critical) { shakeBattle(1.4); spawnHitParticles(elements.activeSprite, move.type, 1.5); }
-      else if (result.multiplier > 1) { shakeBattle(.8); spawnHitParticles(elements.activeSprite, move.type, 1.2); }
+      if (result.critical) { shakeBattle(attackEffectForMove(move).shake * 1.7); spawnHitParticles(elements.activeSprite, move, 1.5); }
+      else if (result.multiplier > 1) { shakeBattle(attackEffectForMove(move).shake * 1.25); spawnHitParticles(elements.activeSprite, move, 1.2); }
     } else setBattleMessage("¡El ataque enemigo falló!");
     await wait(700);
     if (active.hp <= 0) {
@@ -7710,6 +8295,238 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     elements.movesMenu.classList.add("hidden"); elements.battleMenu.classList.remove("hidden"); showWorld(); saveGame();
   }
 
+  function selectedAttackMove() {
+    return MOVES[selectedAttackMoveId] || MOVES[Object.keys(MOVES)[0]];
+  }
+
+  function normalizedSearchText(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  }
+
+  function setAttackDexStatus(message, stateName = "info") {
+    if (!elements.attackDexStatus) return;
+    elements.attackDexStatus.textContent = message;
+    if (stateName === "info") elements.attackDexStatus.removeAttribute("data-state");
+    else elements.attackDexStatus.dataset.state = stateName;
+  }
+
+  function configureAttackDexControls() {
+    if (!elements.attackEffectForm || elements.attackEffectForm.dataset.ready === "true") return;
+    elements.attackEffectPreset.innerHTML = Object.entries(ATTACK_EFFECTS.PRESETS)
+      .map(([id, preset]) => `<option value="${id}">${preset.name}</option>`).join("");
+    elements.attackEffectImpact.innerHTML = Object.entries(ATTACK_EFFECTS.IMPACTS)
+      .map(([id, name]) => `<option value="${id}">${name}</option>`).join("");
+    const types = [...new Set(Object.values(MOVES).map((move) => move.type))].sort((a, b) => a.localeCompare(b, "es"));
+    elements.attackDexTypeFilter.innerHTML = '<option value="">Todos</option>'
+      + types.map((type) => `<option value="${type}">${type}</option>`).join("");
+    const limits = ATTACK_EFFECTS.LIMITS;
+    [
+      [elements.attackEffectWidth, limits.width], [elements.attackEffectHeight, limits.height],
+      [elements.attackEffectOffsetX, limits.offsetX], [elements.attackEffectOffsetY, limits.offsetY],
+      [elements.attackEffectDuration, limits.duration], [elements.attackEffectParticles, limits.particles],
+      [elements.attackEffectRings, limits.rings], [elements.attackEffectShake, limits.shake],
+      [elements.attackEffectImpactScale, limits.impactScale],
+    ].forEach(([input, range]) => { input.min = String(range[0]); input.max = String(range[1]); });
+    elements.attackEffectForm.dataset.ready = "true";
+  }
+
+  function filteredAttackMoves() {
+    const query = normalizedSearchText(elements.attackDexSearch?.value);
+    const type = elements.attackDexTypeFilter?.value || "";
+    return Object.entries(MOVES).filter(([id, move]) => {
+      const matchesQuery = !query || normalizedSearchText(`${move.name} ${move.type} ${id}`).includes(query);
+      return matchesQuery && (!type || move.type === type);
+    });
+  }
+
+  function renderAttackDexCatalog() {
+    const moves = filteredAttackMoves();
+    if (moves.length && !moves.some(([id]) => id === selectedAttackMoveId)) selectedAttackMoveId = moves[0][0];
+    elements.attackDexCount.textContent = `${moves.length} ${moves.length === 1 ? "ataque" : "ataques"}`;
+    elements.attackDexList.innerHTML = moves.length ? moves.map(([id, move]) => {
+      const selected = id === selectedAttackMoveId;
+      const customized = Object.hasOwn(attackEffectOverrides, id);
+      return `<button type="button" class="attack-dex-entry ${selected ? "selected" : ""}" data-attack-move-id="${id}" role="option" aria-selected="${selected}">
+        <i class="attack-dex-entry-dot" style="--type-color:${TYPE_COLORS[move.type] || TYPE_COLORS.Normal}"></i>
+        <span><strong>${move.name}</strong><small>${move.type} · Pot. ${move.power} · ${move.accuracy}%</small></span>
+        ${customized ? '<i aria-label="Efecto personalizado" title="Efecto personalizado">✓</i>' : ""}
+      </button>`;
+    }).join("") : '<p class="attack-dex-empty">No hay movimientos que coincidan con este filtro.</p>';
+  }
+
+  function fillAttackEffectForm(profile) {
+    elements.attackEffectPreset.value = profile.preset;
+    elements.attackEffectImpact.value = profile.impact;
+    elements.attackEffectColor.value = profile.color;
+    elements.attackEffectColorValue.value = profile.color;
+    elements.attackEffectColorValue.textContent = profile.color;
+    elements.attackEffectEnabled.checked = profile.enabled;
+    elements.attackEffectTrail.checked = profile.trail;
+    elements.attackEffectWidth.value = profile.width;
+    elements.attackEffectHeight.value = profile.height;
+    elements.attackEffectOffsetX.value = profile.offsetX;
+    elements.attackEffectOffsetY.value = profile.offsetY;
+    elements.attackEffectDuration.value = profile.duration;
+    elements.attackEffectParticles.value = profile.particles;
+    elements.attackEffectRings.value = profile.rings;
+    elements.attackEffectShake.value = profile.shake;
+    elements.attackEffectImpactScale.value = profile.impactScale;
+  }
+
+  function readAttackEffectForm() {
+    const move = selectedAttackMove();
+    return ATTACK_EFFECTS.normalizeProfile({
+      enabled: elements.attackEffectEnabled.checked,
+      preset: elements.attackEffectPreset.value,
+      impact: elements.attackEffectImpact.value,
+      color: elements.attackEffectColor.value,
+      trail: elements.attackEffectTrail.checked,
+      width: elements.attackEffectWidth.value,
+      height: elements.attackEffectHeight.value,
+      offsetX: elements.attackEffectOffsetX.value,
+      offsetY: elements.attackEffectOffsetY.value,
+      duration: elements.attackEffectDuration.value,
+      particles: elements.attackEffectParticles.value,
+      rings: elements.attackEffectRings.value,
+      shake: elements.attackEffectShake.value,
+      impactScale: elements.attackEffectImpactScale.value,
+    }, move.type);
+  }
+
+  function renderAttackDexDetail() {
+    const move = selectedAttackMove();
+    if (!move) return;
+    elements.attackDexMoveSummary.innerHTML = `<div><small>MOV-${String(Object.keys(MOVES).indexOf(move.id) + 1).padStart(3, "0")} · ${move.id}</small><h3>${move.name}</h3></div>
+      <div class="attack-dex-move-stats">
+        <span class="attack-dex-type" style="--type-color:${TYPE_COLORS[move.type] || TYPE_COLORS.Normal}">${move.type}</span>
+        <span>POTENCIA<b>${move.power}</b></span><span>PRECISIÓN<b>${move.accuracy}%</b></span>
+      </div>`;
+    fillAttackEffectForm(attackEffectForMove(move));
+  }
+
+  function renderAttackDex() {
+    if (!elements.attackDexModal) return;
+    configureAttackDexControls();
+    renderAttackDexCatalog();
+    renderAttackDexDetail();
+  }
+
+  function clearAttackDexPreview() {
+    window.clearTimeout(attackDexLivePreviewTimer);
+    attackDexLivePreviewTimer = 0;
+    attackDexPreviewTimers.forEach((timer) => window.clearTimeout(timer));
+    attackDexPreviewTimers = [];
+    elements.attackDexPreview?.classList.remove("shake");
+    elements.attackDexPreviewAttacker?.classList.remove("preview-attacking");
+    elements.attackDexPreviewDefender?.classList.remove("preview-hit");
+    elements.attackDexPreview?.querySelectorAll(".fx-move-trail,.fx-move-projectile,.fx-move-ring,.fx-particle,.fx-sprite-hit").forEach((node) => node.remove());
+  }
+
+  function playAttackDexPreview() {
+    if (!elements.attackDexPreview || elements.attackDexModal.classList.contains("hidden")) return;
+    clearAttackDexPreview();
+    const move = selectedAttackMove();
+    const profile = readAttackEffectForm();
+    const attacker = elements.attackDexPreviewAttacker;
+    const defender = elements.attackDexPreviewDefender;
+    void attacker.offsetWidth;
+    attacker.classList.add("preview-attacking");
+    spawnMoveVisual(attacker, defender, move, elements.attackDexPreview, profile);
+    const hitDelay = Math.max(110, Math.round(profile.duration * .58));
+    attackDexPreviewTimers.push(window.setTimeout(() => {
+      defender.classList.add("preview-hit");
+      spawnHitParticles(defender, move, 1, elements.attackDexPreview, profile);
+      if (profile.enabled && profile.shake > 0) shakeBattle(profile.shake, elements.attackDexPreview);
+    }, hitDelay));
+    const particleTail = hitDelay + Math.max(400, Math.min(980, profile.duration + 230));
+    attackDexPreviewTimers.push(window.setTimeout(clearAttackDexPreview, Math.max(620, attackEffectTravelTail(profile) + 80, particleTail + 80)));
+  }
+
+  function scheduleAttackDexPreview() {
+    window.clearTimeout(attackDexLivePreviewTimer);
+    if (elements.attackDexModal.classList.contains("hidden")) return;
+    attackDexLivePreviewTimer = window.setTimeout(playAttackDexPreview, 180);
+  }
+
+  function selectAttackMove(id, focusSelected = false) {
+    if (!Object.hasOwn(MOVES, id)) return;
+    selectedAttackMoveId = id;
+    clearAttackDexPreview();
+    renderAttackDexCatalog();
+    renderAttackDexDetail();
+    if (focusSelected) elements.attackDexList.querySelector(`[data-attack-move-id="${id}"]`)?.focus({ preventScroll: true });
+    scheduleAttackDexPreview();
+  }
+
+  function saveSelectedAttackEffect() {
+    const profile = readAttackEffectForm();
+    attackEffectOverrides[selectedAttackMoveId] = profile;
+    persistAttackEffectOverrides();
+    renderAttackDexCatalog();
+    fillAttackEffectForm(profile);
+    setAttackDexStatus(`Efecto de ${selectedAttackMove().name} guardado y activo en combate.`, "success");
+    playAttackDexPreview();
+  }
+
+  function resetSelectedAttackEffect() {
+    delete attackEffectOverrides[selectedAttackMoveId];
+    persistAttackEffectOverrides();
+    renderAttackDexCatalog();
+    fillAttackEffectForm(attackEffectForMove(selectedAttackMove()));
+    setAttackDexStatus(`${selectedAttackMove().name} ha vuelto al efecto automático de su tipo.`, "success");
+    playAttackDexPreview();
+  }
+
+  function exportAttackEffects() {
+    const json = ATTACK_EFFECTS.serializePack(attackEffectOverrides, MOVE_TYPES_BY_ID);
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "pokemon-city-attack-effects.json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setAttackDexStatus(`${Object.keys(attackEffectOverrides).length} efectos exportados a JSON.`, "success");
+  }
+
+  async function importAttackEffects(file) {
+    if (!file) return;
+    try {
+      const imported = ATTACK_EFFECTS.parsePack(await file.text(), MOVE_TYPES_BY_ID);
+      attackEffectOverrides = Object.assign(Object.create(null), attackEffectOverrides, imported.effects);
+      persistAttackEffectOverrides();
+      renderAttackDex();
+      const ignoredMessage = imported.ignored.length ? ` · ${imported.ignored.length} entradas ignoradas` : "";
+      setAttackDexStatus(`${Object.keys(imported.effects).length} efectos importados${ignoredMessage}.`, "success");
+      playAttackDexPreview();
+    } catch (error) {
+      setAttackDexStatus(error?.message || "No se pudo importar el paquete de efectos.", "error");
+    } finally {
+      elements.attackEffectsImportInput.value = "";
+    }
+  }
+
+  function openAttackDex() {
+    if (!elements.attackDexModal) return;
+    lastAttackDexFocus = document.activeElement instanceof HTMLElement ? document.activeElement : elements.attackDexButton;
+    closeSanpledex(false); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); clearDirectionalInput();
+    renderAttackDex();
+    elements.attackDexModal.classList.remove("hidden");
+    elements.attackDexModal.setAttribute("aria-hidden", "false");
+    elements.attackDexSearch?.focus({ preventScroll: true });
+    scheduleAttackDexPreview();
+  }
+
+  function closeAttackDex(restoreFocus = true) {
+    if (!elements.attackDexModal || elements.attackDexModal.classList.contains("hidden")) return;
+    clearAttackDexPreview();
+    elements.attackDexModal.classList.add("hidden");
+    elements.attackDexModal.setAttribute("aria-hidden", "true");
+    if (restoreFocus) (lastAttackDexFocus?.isConnected ? lastAttackDexFocus : elements.attackDexButton)?.focus({ preventScroll: true });
+    lastAttackDexFocus = null;
+  }
+
   function sanpledexFamilyOf(id) {
     return SANPLEDEX_FAMILIES.find((family) => family.ids.includes(Number(id))) || SANPLEDEX_FAMILIES[0];
   }
@@ -7754,6 +8571,8 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     const family = sanpledexFamilyOf(selectedSanpledexId);
     const status = sanpledexStatus(selectedSanpledexId);
     const motion = CUSTOM_POKEMON_MOTIONS[selectedSanpledexId];
+    const animatedFront = Boolean(customPokemonFrameAsset(selectedSanpledexId, "front"));
+    const animatedBack = Boolean(customPokemonFrameAsset(selectedSanpledexId, "back"));
     const attack = customPokemonAttack(selectedSanpledexId);
     const attackFront = customPokemonAsset(selectedSanpledexId, "attackFront");
     const attackStyle = customAttackStyle(attack);
@@ -7774,12 +8593,12 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       <div class="sanpledex-types" aria-label="Tipos de ${species.name}">${sanpledexTypeBadges(species)}</div>
       <div class="sanpledex-sprites sanpledex-combat-preview ${attackFront ? "has-attack-pose" : ""}" data-attack-kind="${attack.kind}" style="${attackStyle}" aria-label="Animación frontal y trasera de ${species.name}">
         <figure><div class="sanpledex-platform" data-view="front">
-          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite" data-pokemon-motion="${motion}" data-view="front" src="${frontSpriteUrl(selectedSanpledexId)}" alt="${species.name} de frente" draggable="false" />
+          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite ${animatedFront ? "frame-animated" : ""}" data-pokemon-motion="${motion}" data-view="front" src="${frontSpriteUrl(selectedSanpledexId)}" alt="${species.name} de frente" draggable="false" />
           ${attackFront ? `<img class="sanpledex-sprite sanpledex-attack-pose custom-pokemon-sprite" src="${attackFront}" alt="" aria-hidden="true" draggable="false" />` : ""}
           <span class="sanpledex-anatomy-cue" aria-hidden="true"></span>
         </div><figcaption>Frontal · rival</figcaption></figure>
         <figure><div class="sanpledex-platform" data-view="back">
-          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite" data-pokemon-motion="${motion}" data-view="back" src="${backSpriteUrl(selectedSanpledexId)}" alt="${species.name} de espaldas" draggable="false" />
+          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite ${animatedBack ? "frame-animated" : ""}" data-pokemon-motion="${motion}" data-view="back" src="${backSpriteUrl(selectedSanpledexId)}" alt="${species.name} de espaldas" draggable="false" />
           <span class="sanpledex-anatomy-cue" aria-hidden="true"></span>
         </div><figcaption>Espalda · compañero</figcaption></figure>
       </div>
@@ -7790,6 +8609,9 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       <p class="sanpledex-description">${species.description}</p>
       <div class="sanpledex-evolution-title"><strong>CADENA EVOLUTIVA</strong><span>${family.name}</span></div>
       <div class="sanpledex-evolutions">${evolutionHtml}</div>`;
+    elements.sanpledexDetail.querySelectorAll(".sanpledex-base-sprite").forEach((image) => {
+      attachSpriteFallback(image, selectedSanpledexId, image.dataset.view === "back");
+    });
   }
 
   function previewSanpledexAttack() {
@@ -7823,7 +8645,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   function openSanpledex() {
     if (!elements.sanpledexModal) return;
     lastSanpledexFocus = document.activeElement instanceof HTMLElement ? document.activeElement : elements.sanpledexButton;
-    closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); clearDirectionalInput();
+    closeAttackDex(false); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); clearDirectionalInput();
     renderSanpledex();
     elements.sanpledexModal.classList.remove("hidden");
     elements.sanpledexModal.setAttribute("aria-hidden", "false");
@@ -7842,7 +8664,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
   function openTeam() {
     if (!state.started) return;
-    closeSanpledex(false); closeBuildingEditorPanel(); closeInventoryPanel(); clearDirectionalInput(); renderTeam(); elements.teamDrawer.classList.add("open"); elements.teamDrawer.setAttribute("aria-hidden", "false"); elements.drawerScrim.classList.remove("hidden");
+    closeAttackDex(false); closeSanpledex(false); closeBuildingEditorPanel(); closeInventoryPanel(); clearDirectionalInput(); renderTeam(); elements.teamDrawer.classList.add("open"); elements.teamDrawer.setAttribute("aria-hidden", "false"); elements.drawerScrim.classList.remove("hidden");
   }
   function closeTeam() { elements.teamDrawer.classList.remove("open"); elements.teamDrawer.setAttribute("aria-hidden", "true"); elements.drawerScrim.classList.add("hidden"); }
 
@@ -7936,6 +8758,14 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     }[normalized];
   }
 
+  function setDirectionalInput(control, active) {
+    if (!control) return;
+    if (active && PLAYER_MOVEMENT_CORE.CARDINAL_DIRECTIONS.includes(control) && !input[control]) {
+      preferredMovementDirection = control;
+    }
+    input[control] = active;
+  }
+
   function handleKeyDown(event) {
     if (starterIntroActive) {
       if (event.key === "Escape") {
@@ -7965,9 +8795,28 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       if (!typing && movementKey) {
         const control = keyToControl(event.key);
         if (control) {
-          event.preventDefault(); input[control] = true;
+          event.preventDefault(); setDirectionalInput(control, true);
           document.documentElement.dataset.editorMovementKey = event.key.toLowerCase();
           document.documentElement.dataset.editorMovementAccepted = "true";
+        }
+      }
+      return;
+    }
+    if (elements.attackDexModal && !elements.attackDexModal.classList.contains("hidden")) {
+      if (event.key === "Escape") closeAttackDex();
+      else if (event.key === "Tab") {
+        const focusable = [...elements.attackDexModal.querySelectorAll("button:not([disabled]),select:not([disabled]),input:not([disabled])")]
+          .filter((element) => element.offsetParent !== null);
+        if (!focusable.length) event.preventDefault();
+        else {
+          const first = focusable[0]; const last = focusable[focusable.length - 1];
+          if (!elements.attackDexModal.contains(document.activeElement)) {
+            event.preventDefault(); first.focus();
+          } else if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault(); last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault(); first.focus();
+          }
         }
       }
       return;
@@ -8011,7 +8860,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       return;
     }
     const control = keyToControl(event.key);
-    if (control) { event.preventDefault(); input[control] = true; }
+    if (control) { event.preventDefault(); setDirectionalInput(control, true); }
     if (!elements.dialogBox.classList.contains("hidden")) {
       if (["Enter", " ", "e", "E"].includes(event.key) && !event.repeat) advanceDialog();
       return;
@@ -8021,17 +8870,18 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       useFlashlight();
     }
     if ((event.key === "e" || event.key === "E" || event.key === "Enter") && !event.repeat) interact();
+    if ((event.key === "k" || event.key === "K") && !event.repeat) { event.preventDefault(); openAttackDex(); }
     if ((event.key === "p" || event.key === "P") && !event.repeat) { event.preventDefault(); openSanpledex(); }
     if ((event.key === "m" || event.key === "M") && !event.repeat) elements.teamDrawer.classList.contains("open") ? closeTeam() : openTeam();
-    if (event.key === "Escape") { closeSanpledex(); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); }
+    if (event.key === "Escape") { closeAttackDex(); closeSanpledex(); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); }
   }
 
-  function handleKeyUp(event) { const control = keyToControl(event.key); if (control) input[control] = false; }
+  function handleKeyUp(event) { const control = keyToControl(event.key); if (control) setDirectionalInput(control, false); }
 
   function bindTouchControl(button) {
     const control = button.dataset.control;
-    const press = (event) => { event.preventDefault(); input[control] = true; };
-    const release = (event) => { event.preventDefault(); input[control] = false; };
+    const press = (event) => { event.preventDefault(); setDirectionalInput(control, true); };
+    const release = (event) => { event.preventDefault(); setDirectionalInput(control, false); };
     button.addEventListener("pointerdown", press); button.addEventListener("pointerup", release); button.addEventListener("pointercancel", release); button.addEventListener("pointerleave", release);
   }
 
@@ -8056,8 +8906,45 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       const trigger = event.target instanceof Element ? event.target.closest("[data-sanpledex-id]") : null;
       if (trigger) selectSanpledexEntry(trigger.dataset.sanpledexId, true);
     });
+    elements.attackDexButton.addEventListener("click", openAttackDex);
+    elements.closeAttackDex.addEventListener("click", () => closeAttackDex());
+    elements.attackDexModal.addEventListener("click", (event) => {
+      if (event.target === elements.attackDexModal) { closeAttackDex(); return; }
+      const trigger = event.target instanceof Element ? event.target.closest("[data-attack-move-id]") : null;
+      if (trigger) selectAttackMove(trigger.dataset.attackMoveId, true);
+    });
+    elements.attackDexSearch.addEventListener("input", () => {
+      const previous = selectedAttackMoveId;
+      renderAttackDexCatalog();
+      if (previous !== selectedAttackMoveId) renderAttackDexDetail();
+    });
+    elements.attackDexTypeFilter.addEventListener("change", () => {
+      const previous = selectedAttackMoveId;
+      renderAttackDexCatalog();
+      if (previous !== selectedAttackMoveId) renderAttackDexDetail();
+    });
+    elements.attackDexPlay.addEventListener("click", playAttackDexPreview);
+    elements.attackEffectPreset.addEventListener("change", () => {
+      const move = selectedAttackMove();
+      fillAttackEffectForm(ATTACK_EFFECTS.normalizeProfile({ preset: elements.attackEffectPreset.value }, move.type));
+      scheduleAttackDexPreview();
+    });
+    elements.attackEffectForm.addEventListener("input", () => {
+      elements.attackEffectColorValue.value = elements.attackEffectColor.value;
+      elements.attackEffectColorValue.textContent = elements.attackEffectColor.value;
+      scheduleAttackDexPreview();
+    });
+    elements.attackEffectSave.addEventListener("click", saveSelectedAttackEffect);
+    elements.attackEffectReset.addEventListener("click", resetSelectedAttackEffect);
+    elements.attackEffectsExport.addEventListener("click", exportAttackEffects);
+    elements.attackEffectsImport.addEventListener("click", () => elements.attackEffectsImportInput.click());
+    elements.attackEffectsImportInput.addEventListener("change", () => importAttackEffects(elements.attackEffectsImportInput.files?.[0]));
     elements.saveButton.addEventListener("click", () => { closeTeam(); saveGame(true); });
-    elements.resetButton.addEventListener("click", () => { if (window.confirm("¿Quieres borrar la partida guardada y empezar de nuevo?")) { window.localStorage.removeItem(SAVE_KEY); window.location.reload(); } });
+    elements.resetButton.addEventListener("click", () => {
+      if (!window.confirm("¿Quieres borrar la partida guardada y empezar de nuevo?")) return;
+      window.localStorage.removeItem(SAVE_KEY);
+      window.location.assign(mapNavigationUrl(MAP_REGISTRY.defaultMapId));
+    });
     elements.soundButton.addEventListener("click", toggleSound);
     elements.fullscreenButton.addEventListener("click", toggleFullscreen);
     if (VOICE_NPC_ENABLED) elements.voiceNpcRetry?.addEventListener("click", () => requestVoiceNpcAccess(true));
@@ -8095,6 +8982,8 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     elements.bagButton.addEventListener("click", () => openInventory(true)); elements.runButton.addEventListener("click", attemptRun); elements.teamBattleButton.addEventListener("click", openTeam);
     if (elements.closeShop) elements.closeShop.addEventListener("click", closeShop);
     document.addEventListener("keydown", handleKeyDown); document.addEventListener("keyup", handleKeyUp); window.addEventListener("blur", clearDirectionalInput);
+    if (REDUCED_MOTION_QUERY?.addEventListener) REDUCED_MOTION_QUERY.addEventListener("change", refreshVisiblePokemonFrameAssets);
+    else REDUCED_MOTION_QUERY?.addListener?.(refreshVisiblePokemonFrameAssets);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) { scheduleVoiceRecognitionRestart(100); return; }
       clearDirectionalInput();
@@ -8389,6 +9278,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
 
   function applyRuntimeEditorData(value = {}) {
     if (!value || typeof value !== "object") return false;
+    const mapSize = resizeRuntimeWorld(value.mapSize?.cols, value.mapSize?.rows);
     const nextNpcs = buildRuntimeNpcs(value);
     const hiddenAssetIds = new Set((Array.isArray(value.hiddenAssets) ? value.hiddenAssets : []).map(String));
     const nextEntrances = buildRuntimeEntrances(value)
@@ -8401,6 +9291,7 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
     npcPatrolStates.clear();
     linkedEntrancePositions.clear();
     applyRuntimeTileOverrides(value.tileOverrides || {});
+    applyRuntimeGroundOverrides(value.groundOverrides || {});
     rebuildDefaultMapTiles();
     syncLinkedEntrancesFromAssets({ force: true, entrancesAreBaseline: true });
     updateNpcDeploymentDataset();
@@ -8412,6 +9303,8 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       events: cityEvents.length,
       assets: assetCount ?? cityWorldAssets.length,
       tiles: tileOverrides.size,
+      ground: groundOverrides.size,
+      mapSize,
     };
   }
 
@@ -8537,6 +9430,24 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       editorOverlayDirty = true;
       updateTileEditorInfo();
     },
+    groundType: (col, row) => groundOverrides.get(tileKey(Number(col), Number(row))) || "inherit",
+    groundOverrides: () => Object.fromEntries(groundOverrides),
+    setGround(col, row, type) {
+      const normalizedCol = Math.floor(Number(col)); const normalizedRow = Math.floor(Number(row));
+      if (!Number.isInteger(normalizedCol) || !Number.isInteger(normalizedRow)) return false;
+      if (normalizedCol < 0 || normalizedRow < 0 || normalizedCol >= CITY_GRID_COLS || normalizedRow >= CITY_GRID_ROWS) return false;
+      const key = tileKey(normalizedCol, normalizedRow);
+      if (type === "inherit") groundOverrides.delete(key);
+      else if (isGroundPaintType(type)) groundOverrides.set(key, type);
+      else return false;
+      return true;
+    },
+    clearGround() { groundOverrides.clear(); },
+    resizeMap(cols, rows) {
+      const result = resizeRuntimeWorld(cols, rows);
+      rebuildDefaultMapTiles();
+      return result;
+    },
     setEntity(kind, id, value) { return setRuntimeEntity(kind, id, value); },
     deleteEntity(kind, id) { return deleteRuntimeEntity(kind, id); },
     selectEntity(kind, id) {
@@ -8627,15 +9538,28 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
   });
 
   function initialize() {
+    let resumeMapId = "";
+    let beginNewGame = false;
+    try {
+      resumeMapId = window.sessionStorage.getItem("pokemon-map-transfer-resume") || "";
+      beginNewGame = window.sessionStorage.getItem("pokemon-new-game") === "1";
+      window.sessionStorage.removeItem("pokemon-map-transfer-resume");
+      window.sessionStorage.removeItem("pokemon-new-game");
+    } catch { /* sessionStorage es opcional. */ }
     mazeDefinition = generateMaze();
-    initializeMapTiles(); renderStarters(); bindEvents(); loadAssets();
+    initializeMapTiles(); renderStarters(); loadAttackEffectOverrides(); bindEvents(); loadAssets();
     document.documentElement.dataset.doctorPotatoScene = "idle";
     document.documentElement.dataset.fragmentCinematic = "idle";
     document.documentElement.dataset.cityMapReady = "loading";
     const hasSave = loadGame(); elements.continueButton.classList.toggle("hidden", !hasSave);
     updateFullscreenButton(); renderHud(); updateAreaLabel(); updateInteractPrompt(); updateVoiceNpcUi(); window.requestAnimationFrame(gameLoop);
     if (VOICE_NPC_ENABLED) window.setTimeout(() => requestVoiceNpcAccess(), 0);
-    if (VOICE_NPC_ENABLED && LOCAL_DEBUG_VOICE) {
+    if (beginNewGame) {
+      window.setTimeout(startNewGame, 0);
+    } else if (resumeMapId === ACTIVE_MAP_ID && hasSave) {
+      showWorld();
+      showAreaToast((CITY_MAP.name || ACTIVE_MAP_ID).toUpperCase());
+    } else if (VOICE_NPC_ENABLED && LOCAL_DEBUG_VOICE) {
       if (!hasSave) {
         state = defaultState();
         state.started = true; state.starterChosen = true;
@@ -8657,6 +9581,9 @@ import { MAP_EDITOR_RULES } from "./map-editor-contract.js?v=3";
       if (LOCAL_DEBUG_BATTLE.wildId && POKEMON[LOCAL_DEBUG_BATTLE.wildId]) window.setTimeout(beginEncounter, 120);
     }
     window.__pokemonCityDebug = Object.freeze({
+      attackEffects: () => ({ selected: selectedAttackMoveId, customized: JSON.parse(JSON.stringify(attackEffectOverrides)) }),
+      openAttackDex: () => { openAttackDex(); return true; },
+      activeMap: () => ({ id: ACTIVE_MAP_ID, name: CITY_MAP.name || ACTIVE_MAP_ID, registered: MAP_REGISTRY.list().map((map) => map.id) }),
       tileType: (col, row) => mapTileType(Number(col), Number(row)),
       canOccupy: (x, y) => cityMapCanOccupy(Number(x), Number(y)),
       worldAssets: () => cityWorldAssets.map((asset) => ({

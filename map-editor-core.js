@@ -1,4 +1,4 @@
-import { MAP_EDITOR_RULES, editorOperationKey, tileInBounds } from "./map-editor-contract.js?v=2";
+import { groundPaintLayers, MAP_EDITOR_RULES, editorOperationKey, tileInBounds } from "./map-editor-contract.js?v=3";
 
 const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
 
@@ -45,6 +45,52 @@ export function boundedBrushCells({ col, row, size = 1, cols = MAP_EDITOR_RULES.
     }
   }
   return cells;
+}
+
+export const GROUND_PATH_PREFIX = "path-";
+
+export function groundPathType(surface) {
+  const normalized = String(surface || "").replace(/^path-/, "");
+  return MAP_EDITOR_RULES.types.ground.includes(normalized)
+    && MAP_EDITOR_RULES.types.ground.includes(`${GROUND_PATH_PREFIX}${normalized}`)
+    ? `${GROUND_PATH_PREFIX}${normalized}`
+    : null;
+}
+
+export function groundPathSurface(type) {
+  const path = groundPaintLayers(type)?.path;
+  return path ? path.slice(GROUND_PATH_PREFIX.length) : null;
+}
+
+export function isGroundPathType(type) {
+  return groundPathSurface(type) !== null;
+}
+
+export function mergeGroundPaintValue(current, selected) {
+  if (selected == null || selected === "inherit") return null;
+  const next = groundPaintLayers(selected);
+  if (!next) return null;
+  if (next.base && next.path) return selected;
+  const previous = groundPaintLayers(current) || { base: null, path: null };
+  const base = next.base || previous.base;
+  const path = next.path || previous.path;
+  return base && path ? `${base}|${path}` : (base || path || null);
+}
+
+export function groundPathConnectionMask({ col, row, getValue, bounds = MAP_EDITOR_RULES.world }) {
+  if (!Number.isInteger(col) || !Number.isInteger(row) || typeof getValue !== "function" || !isGroundPathType(getValue(col, row))) return 0;
+  const directions = [
+    { bit: 1, col: 0, row: -1 },
+    { bit: 2, col: 1, row: 0 },
+    { bit: 4, col: 0, row: 1 },
+    { bit: 8, col: -1, row: 0 },
+  ];
+  return directions.reduce((mask, direction) => {
+    const neighborCol = col + direction.col; const neighborRow = row + direction.row;
+    return tileInBounds(neighborCol, neighborRow, { world: bounds }) && isGroundPathType(getValue(neighborCol, neighborRow))
+      ? mask | direction.bit
+      : mask;
+  }, 0);
 }
 
 export function lineCells(start, end, bounds = MAP_EDITOR_RULES.world) {

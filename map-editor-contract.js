@@ -1,66 +1,37 @@
-export const MAP_EDITOR_RULES = Object.freeze({
-  version: 2,
-  world: Object.freeze({
-    width: 2508,
-    height: 2508,
-    tileSize: 32,
-    cols: Math.ceil(2508 / 32),
-    rows: Math.ceil(2508 / 32),
-  }),
-  types: Object.freeze({
-    terrain: Object.freeze(["walkable", "blocked", "door", "encounter", "event"]),
-    event: Object.freeze(["dialogue", "thought", "vibration", "teleport", "transition"]),
-    trigger: Object.freeze(["interact", "step"]),
-    entranceAction: Object.freeze(["transition", "house", "heal", "shop", "lab", "route", "closed", "prism"]),
-    direction: Object.freeze(["up", "down", "left", "right"]),
-    effect: Object.freeze(["fade", "flash", "none"]),
-  }),
-  lengths: Object.freeze({
-    id: 80,
-    label: 120,
-    assetLabel: 80,
-    npcName: 80,
-    npcLines: 12,
-    npcLine: 500,
-    eventMessage: 1000,
-    actorName: 32,
-  }),
-  ranges: Object.freeze({
-    scale: Object.freeze([0.25, 4]),
-    rotation: Object.freeze([-360, 360]),
-    depthY: Object.freeze([-2508, 5016]),
-    patrolSpeed: Object.freeze([0.05, 10]),
-    duration: Object.freeze([0, 60000]),
-    intensity: Object.freeze([0, 10]),
-    targetCoordinate: Object.freeze([0, 100000]),
-  }),
-  limits: Object.freeze({
-    operationsPerBatch: 256,
-    historyCommands: 80,
-    tileOverrides: 7000,
-    assetOverrides: 1000,
-    addedAssets: 500,
-    hiddenAssets: 1000,
-    npcOverrides: 500,
-    addedNpcs: 500,
-    hiddenNpcs: 1000,
-    entrances: 500,
-    events: 1000,
-  }),
-  timing: Object.freeze({
-    presenceMovementMs: 110,
-    presenceHeartbeatMs: 12000,
-    flushDelayMs: 180,
-    reconnectMaximumMs: 30000,
-  }),
-});
+import "./map-editor-rules.js";
+
+export const MAP_EDITOR_RULES = globalThis.MAP_EDITOR_RULES;
 
 const ID_PATTERN = new RegExp(`^[a-z0-9][a-z0-9_-]{0,${MAP_EDITOR_RULES.lengths.id - 1}}$`, "i");
 const plainObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+const CONTRACT_GROUND_PATH_PREFIX = "path-";
+const CONTRACT_GROUND_LAYER_SEPARATOR = "|";
+
+export function groundPaintLayers(value) {
+  if (typeof value !== "string" || !value) return null;
+  const parts = value.split(CONTRACT_GROUND_LAYER_SEPARATOR);
+  if (parts.length > 2) return null;
+  const isBase = (entry) => MAP_EDITOR_RULES.types.ground.includes(entry) && !entry.startsWith(CONTRACT_GROUND_PATH_PREFIX);
+  const isPath = (entry) => entry.startsWith(CONTRACT_GROUND_PATH_PREFIX)
+    && MAP_EDITOR_RULES.types.ground.includes(entry)
+    && isBase(entry.slice(CONTRACT_GROUND_PATH_PREFIX.length));
+  if (parts.length === 1) {
+    if (isBase(parts[0])) return { base: parts[0], path: null };
+    if (isPath(parts[0])) return { base: null, path: parts[0] };
+    return null;
+  }
+  return isBase(parts[0]) && isPath(parts[1]) ? { base: parts[0], path: parts[1] } : null;
+}
+
+export function isGroundPaintValue(value) {
+  return groundPaintLayers(value) !== null;
+}
 
 export function editorOperationKey(operation) {
   if (operation?.type === "tile.set") return `tile:${operation.key}`;
+  if (operation?.type === "ground.set") return `ground:${operation.key}`;
+  if (operation?.type === "map.resize") return "map:size";
   if (operation?.type === "list.set") return `list:${operation.list}`;
   return `entity:${operation?.entity || ""}:${operation?.id || ""}`;
 }
@@ -71,7 +42,7 @@ export function isEditorId(value) {
 
 export function tileInBounds(col, row, rules = MAP_EDITOR_RULES) {
   return Number.isInteger(col) && Number.isInteger(row)
-    && col >= 0 && row >= 0 && col < rules.world.cols && row < rules.world.rows;
+    && col >= 0 && row >= 0 && col < rules.world.maxCols && row < rules.world.maxRows;
 }
 
 function numberError(value, [minimum, maximum], label, { integer = false, optional = false } = {}) {
@@ -100,13 +71,19 @@ function pushIf(errors, message) {
 
 function validateLocalDestination(value, errors) {
   if (!value?.targetMap || !["san-pablo", "city", "current"].includes(String(value.targetMap).toLowerCase())) return;
-  if (Number(value.targetX) > MAP_EDITOR_RULES.world.width) errors.push(`Destino X debe estar entre 0 y ${MAP_EDITOR_RULES.world.width} para este mapa.`);
-  if (Number(value.targetY) > MAP_EDITOR_RULES.world.height) errors.push(`Destino Y debe estar entre 0 y ${MAP_EDITOR_RULES.world.height} para este mapa.`);
+  if (Number(value.targetX) > MAP_EDITOR_RULES.world.maxWidth) errors.push(`Destino X debe estar entre 0 y ${MAP_EDITOR_RULES.world.maxWidth} para este mapa.`);
+  if (Number(value.targetY) > MAP_EDITOR_RULES.world.maxHeight) errors.push(`Destino Y debe estar entre 0 y ${MAP_EDITOR_RULES.world.maxHeight} para este mapa.`);
+}
+
+function registeredTargetMap(value) {
+  const target = String(value || "").toLowerCase().replace(/_/g, "-");
+  if (["san-pablo", "city", "current"].includes(target)) return true;
+  return Boolean(globalThis.GAME_MAP_REGISTRY?.has?.(target));
 }
 
 function validateGridPosition(value, errors) {
-  pushIf(errors, numberError(value.col, [0, MAP_EDITOR_RULES.world.cols - 1], "La columna", { integer: true }));
-  pushIf(errors, numberError(value.row, [0, MAP_EDITOR_RULES.world.rows - 1], "La fila", { integer: true }));
+  pushIf(errors, numberError(value.col, [0, MAP_EDITOR_RULES.world.maxCols - 1], "La columna", { integer: true }));
+  pushIf(errors, numberError(value.row, [0, MAP_EDITOR_RULES.world.maxRows - 1], "La fila", { integer: true }));
 }
 
 export function validateEditorEntity(kind, value, { requireIdentity = true } = {}) {
@@ -116,8 +93,8 @@ export function validateEditorEntity(kind, value, { requireIdentity = true } = {
   if (requireIdentity) pushIf(errors, idError(value.id, "El ID"));
 
   if (kind === "asset") {
-    pushIf(errors, numberError(value.x, [0, MAP_EDITOR_RULES.world.width], "X", { optional: !requireIdentity }));
-    pushIf(errors, numberError(value.y, [0, MAP_EDITOR_RULES.world.height], "Y", { optional: !requireIdentity }));
+    pushIf(errors, numberError(value.x, [0, MAP_EDITOR_RULES.world.maxWidth], "X", { optional: !requireIdentity }));
+    pushIf(errors, numberError(value.y, [0, MAP_EDITOR_RULES.world.maxHeight], "Y", { optional: !requireIdentity }));
     pushIf(errors, numberError(value.scale, MAP_EDITOR_RULES.ranges.scale, "La escala", { optional: true }));
     pushIf(errors, numberError(value.rotation, MAP_EDITOR_RULES.ranges.rotation, "La rotación", { optional: true }));
     pushIf(errors, numberError(value.depthY, MAP_EDITOR_RULES.ranges.depthY, "La profundidad", { optional: true }));
@@ -138,8 +115,8 @@ export function validateEditorEntity(kind, value, { requireIdentity = true } = {
     if (value.patrol !== undefined) {
       if (!plainObject(value.patrol) || !Array.isArray(value.patrol.to) || value.patrol.to.length !== 2) errors.push("La patrulla necesita una casilla de destino.");
       else {
-        pushIf(errors, numberError(value.patrol.to[0], [0, MAP_EDITOR_RULES.world.cols - 1], "La columna de patrulla", { integer: true }));
-        pushIf(errors, numberError(value.patrol.to[1], [0, MAP_EDITOR_RULES.world.rows - 1], "La fila de patrulla", { integer: true }));
+        pushIf(errors, numberError(value.patrol.to[0], [0, MAP_EDITOR_RULES.world.maxCols - 1], "La columna de patrulla", { integer: true }));
+        pushIf(errors, numberError(value.patrol.to[1], [0, MAP_EDITOR_RULES.world.maxRows - 1], "La fila de patrulla", { integer: true }));
         pushIf(errors, numberError(value.patrol.tilesPerSecond, MAP_EDITOR_RULES.ranges.patrolSpeed, "La velocidad de patrulla"));
       }
     }
@@ -154,7 +131,7 @@ export function validateEditorEntity(kind, value, { requireIdentity = true } = {
     if (value.targetDirection !== undefined && !MAP_EDITOR_RULES.types.direction.includes(value.targetDirection)) errors.push("La dirección de llegada no es válida.");
     if (value.effect !== undefined && !MAP_EDITOR_RULES.types.effect.includes(value.effect)) errors.push("El efecto no es válido.");
     pushIf(errors, idError(value.linkedAssetId, "El edificio vinculado", { optional: true }));
-    if (value.targetMap && !["san-pablo", "city", "current"].includes(String(value.targetMap).toLowerCase())) warnings.push("El destino se validará cuando ese mapa esté registrado.");
+    if (value.targetMap && !registeredTargetMap(value.targetMap)) warnings.push("El destino se validará cuando ese mapa esté registrado.");
   } else if (kind === "event") {
     validateGridPosition(value, errors);
     if (!MAP_EDITOR_RULES.types.event.includes(value.type)) errors.push("El tipo de evento no es válido.");
@@ -170,7 +147,7 @@ export function validateEditorEntity(kind, value, { requireIdentity = true } = {
     if (value.effect !== undefined && !MAP_EDITOR_RULES.types.effect.includes(value.effect)) errors.push("El efecto no es válido.");
     pushIf(errors, numberError(value.duration, MAP_EDITOR_RULES.ranges.duration, "La duración", { optional: value.type !== "vibration" }));
     pushIf(errors, numberError(value.intensity, MAP_EDITOR_RULES.ranges.intensity, "La intensidad", { optional: value.type !== "vibration" }));
-    if (needsTarget && value.targetMap && !["san-pablo", "city", "current"].includes(String(value.targetMap).toLowerCase())) warnings.push("El destino se validará cuando ese mapa esté registrado.");
+    if (needsTarget && value.targetMap && !registeredTargetMap(value.targetMap)) warnings.push("El destino se validará cuando ese mapa esté registrado.");
   } else {
     errors.push("El tipo de entidad no es válido.");
   }
@@ -187,10 +164,21 @@ const ENTITY_COLLECTIONS = Object.freeze({
 export function validateEditorOperation(operation) {
   const errors = [];
   if (!plainObject(operation)) return { valid: false, errors: ["La operación debe ser un objeto."], warnings: [] };
-  if (operation.type === "tile.set") {
+  if (operation.type === "tile.set" || operation.type === "ground.set") {
     const match = /^(\d+),(\d+)$/.exec(String(operation.key || ""));
     if (!match || !tileInBounds(Number(match[1]), Number(match[2]))) errors.push("La casilla está fuera del mapa.");
-    if (operation.value !== null && !MAP_EDITOR_RULES.types.terrain.includes(operation.value)) errors.push("El tipo de terreno no es válido.");
+    const validValue = operation.type === "ground.set"
+      ? isGroundPaintValue(operation.value)
+      : MAP_EDITOR_RULES.types.terrain.includes(operation.value);
+    if (operation.value !== null && !validValue) errors.push(operation.type === "ground.set" ? "El tipo de suelo no es válido." : "El tipo de terreno no es válido.");
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  if (operation.type === "map.resize") {
+    if (!plainObject(operation.value)) errors.push("El tamaño del mapa debe ser un objeto.");
+    else {
+      pushIf(errors, numberError(operation.value.cols, [MAP_EDITOR_RULES.world.minCols, MAP_EDITOR_RULES.world.maxCols], "Las columnas", { integer: true }));
+      pushIf(errors, numberError(operation.value.rows, [MAP_EDITOR_RULES.world.minRows, MAP_EDITOR_RULES.world.maxRows], "Las filas", { integer: true }));
+    }
     return { valid: errors.length === 0, errors, warnings: [] };
   }
   if (operation.type === "list.set") {
@@ -220,6 +208,7 @@ export function validateMapEditorData(value) {
   if (!plainObject(value)) return { valid: false, errors: ["Los datos del editor deben ser un objeto."], warnings: [] };
   const collections = [
     ["tileOverrides", value.tileOverrides, MAP_EDITOR_RULES.limits.tileOverrides],
+    ["groundOverrides", value.groundOverrides, MAP_EDITOR_RULES.limits.groundOverrides],
     ["assetOverrides", value.assetOverrides, MAP_EDITOR_RULES.limits.assetOverrides],
     ["addedAssets", value.addedAssets, MAP_EDITOR_RULES.limits.addedAssets],
     ["hiddenAssets", value.hiddenAssets, MAP_EDITOR_RULES.limits.hiddenAssets],
@@ -239,6 +228,14 @@ export function validateMapEditorData(value) {
     const result = validateEditorOperation({ type: "tile.set", key, value: terrain });
     errors.push(...result.errors.map((message) => `${key}: ${message}`));
   });
+  Object.entries(plainObject(value.groundOverrides) ? value.groundOverrides : {}).forEach(([key, ground]) => {
+    const result = validateEditorOperation({ type: "ground.set", key, value: ground });
+    errors.push(...result.errors.map((message) => `${key}: ${message}`));
+  });
+  if (value.mapSize != null) {
+    const result = validateEditorOperation({ type: "map.resize", value: value.mapSize });
+    errors.push(...result.errors);
+  }
   const validateRecord = (record, kind, collection) => Object.entries(plainObject(record) ? record : {}).forEach(([id, entry]) => {
     const result = validateEditorOperation({ type: "entity.set", entity: kind, collection, id, value: entry });
     errors.push(...result.errors.map((message) => `${id}: ${message}`));
