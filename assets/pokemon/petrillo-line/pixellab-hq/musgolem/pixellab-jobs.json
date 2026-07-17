@@ -1,0 +1,21 @@
+{
+  "provider": "PixelLab MCP v3",
+  "status": "completed_and_reviewed_from_official_archive",
+  "character_id": "54cec007-a8d0-4bcd-9476-b271cd1c26d8",
+  "biological_manifest": "../../../../../tools/pixellab-first10-combat-manifest.json#musgolem",
+  "source_archive": "../musgolem-pixellab.zip",
+  "accepted_animation_labels": ["Musgolem_idle_front", "Musgolem_idle_back", "Musgolem_melee_front", "Musgolem_melee_back", "Musgolem_ranged_front", "Musgolem_ranged_back"],
+  "directions": { "front": "south", "back": "north" },
+  "frame_count": 8,
+  "idle_frame_ms": 120,
+  "attack_frame_ms": 90,
+  "selected_frames": {
+    "idle_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "idle_back": [0, 1, 2, 3, 4, 5, 6, 7],
+    "melee_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "melee_back": [0, 1, 2, 3, 4, 5, 6, 7],
+    "ranged_front": [0, 1, 2, 3, 4, 5, 6, 6],
+    "ranged_back": [0, 1, 2, 3, 4, 5, 6, 7]
+  },
+  "review": "The official PixelLab archive contains all six completed sequences even though the parent character record later reported a failed state. Giant fists drive melee; core, crystals and roots drive ranged."
+}

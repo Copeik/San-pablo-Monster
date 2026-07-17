@@ -1,0 +1,24 @@
+{
+  "provider": "PixelLab MCP v3",
+  "status": "completed_and_reviewed",
+  "character_id": "9ce255c4-2070-40a5-bf55-533204b7d300",
+  "biological_manifest": "../../../../../tools/pixellab-first10-combat-manifest.json#peyote",
+  "directions": { "front": "south", "back": "north" },
+  "frame_count": 8,
+  "idle_frame_ms": 120,
+  "attack_frame_ms": 90,
+  "animation_jobs": {
+    "idle": { "front": "446fa434-f0a8-4104-b2f9-5c3327dceeae", "back": "c533c01b-93cd-4852-990c-3d53f5d69825" },
+    "melee": { "front": "86bf8a8a-0f97-4787-99d2-0e4a3ac7b494", "back": "909bfb07-5ec9-436b-852e-2919fb3159c6" },
+    "ranged": { "front": "53b68e7d-a28f-4225-a88d-85625056c697", "back": "a97f29e6-ae33-4196-8c51-cee603ee3c65" }
+  },
+  "selected_frames": {
+    "idle_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "idle_back": [0, 1, 2, 3, 2, 1, 0, 1],
+    "melee_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "melee_back": [0, 1, 2, 3, 4, 5, 5, 5],
+    "ranged_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "ranged_back": [0, 1, 2, 3, 4, 5, 5, 5]
+  },
+  "review": "The rigid adobe body only pivots at its feet for melee. The carved seal charges and fires at range. Rear frames that invented facial features were excluded."
+}

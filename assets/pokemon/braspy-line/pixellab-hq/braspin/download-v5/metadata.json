@@ -1,0 +1,234 @@
+{
+  "group_id": "7c085084-88ad-4546-84a7-039c75bc3d2d",
+  "states": [
+    {
+      "character": {
+        "id": "0be36885-7d0d-4f61-9fd3-808375bba131",
+        "name": "Brasp\u00edn",
+        "prompt": "Brasp\u00edn is a cute young quadrupedal brown hedgehog fire monster. Preserve the exact identity and animal anatomy in the supplied south-facing reference: it stays low on exactly four short paws, never standing upright; a small tan-brown friendly hedgehog face with one visible large amber eye, round ears and a dark little nose; warm brown fur; and one enormous attached fan of layered orange, scarlet and golden flame quills forming the entire back. The fire quills are part of its body, never a separate aura or projectiles. Create a crisp game-ready pixel-art character on a fully transparent background with stable bottom-center ground contact. No human body, no hands, no extra limbs, wings, horns, tail, clothes, props, scenery, text, shadow, smoke or loose effects.",
+        "size": {
+          "width": 256,
+          "height": 256
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-07-17T11:47:52.391723+00:00"
+      },
+      "folder": "Braspn",
+      "frames": {
+        "rotations": {
+          "south": "Braspn/rotations/south.png",
+          "south-east": "Braspn/rotations/south-east.png",
+          "east": "Braspn/rotations/east.png",
+          "north-east": "Braspn/rotations/north-east.png",
+          "north": "Braspn/rotations/north.png",
+          "north-west": "Braspn/rotations/north-west.png",
+          "west": "Braspn/rotations/west.png",
+          "south-west": "Braspn/rotations/south-west.png"
+        },
+        "animations": {
+          "attack-front-v2-aggressive": {
+            "south": [
+              "Braspn/animations/attack-front-v2-aggressive/south/frame_000.png",
+              "Braspn/animations/attack-front-v2-aggressive/south/frame_001.png",
+              "Braspn/animations/attack-front-v2-aggressive/south/frame_002.png",
+              "Braspn/animations/attack-front-v2-aggressive/south/frame_003.png",
+              "Braspn/animations/attack-front-v2-aggressive/south/frame_004.png",
+              "Braspn/animations/attack-front-v2-aggressive/south/frame_005.png",
+              "Braspn/animations/attack-front-v2-aggressive/south/frame_006.png",
+              "Braspn/animations/attack-front-v2-aggressive/south/frame_007.png"
+            ]
+          },
+          "attack-ranged-front-v2-catapult": {
+            "south": [
+              "Braspn/animations/attack-ranged-front-v2-catapult/south/frame_000.png",
+              "Braspn/animations/attack-ranged-front-v2-catapult/south/frame_001.png",
+              "Braspn/animations/attack-ranged-front-v2-catapult/south/frame_002.png",
+              "Braspn/animations/attack-ranged-front-v2-catapult/south/frame_003.png",
+              "Braspn/animations/attack-ranged-front-v2-catapult/south/frame_004.png",
+              "Braspn/animations/attack-ranged-front-v2-catapult/south/frame_005.png",
+              "Braspn/animations/attack-ranged-front-v2-catapult/south/frame_006.png",
+              "Braspn/animations/attack-ranged-front-v2-catapult/south/frame_007.png"
+            ]
+          },
+          "attack-back": {
+            "north": [
+              "Braspn/animations/attack-back/north/frame_000.png",
+              "Braspn/animations/attack-back/north/frame_001.png",
+              "Braspn/animations/attack-back/north/frame_002.png",
+              "Braspn/animations/attack-back/north/frame_003.png",
+              "Braspn/animations/attack-back/north/frame_004.png",
+              "Braspn/animations/attack-back/north/frame_005.png",
+              "Braspn/animations/attack-back/north/frame_006.png",
+              "Braspn/animations/attack-back/north/frame_007.png"
+            ]
+          },
+          "attack-front": {
+            "south": [
+              "Braspn/animations/attack-front/south/frame_000.png",
+              "Braspn/animations/attack-front/south/frame_001.png",
+              "Braspn/animations/attack-front/south/frame_002.png",
+              "Braspn/animations/attack-front/south/frame_003.png",
+              "Braspn/animations/attack-front/south/frame_004.png",
+              "Braspn/animations/attack-front/south/frame_005.png",
+              "Braspn/animations/attack-front/south/frame_006.png",
+              "Braspn/animations/attack-front/south/frame_007.png"
+            ]
+          },
+          "idle-back": {
+            "north": [
+              "Braspn/animations/idle-back/north/frame_000.png",
+              "Braspn/animations/idle-back/north/frame_001.png",
+              "Braspn/animations/idle-back/north/frame_002.png",
+              "Braspn/animations/idle-back/north/frame_003.png",
+              "Braspn/animations/idle-back/north/frame_004.png",
+              "Braspn/animations/idle-back/north/frame_005.png",
+              "Braspn/animations/idle-back/north/frame_006.png",
+              "Braspn/animations/idle-back/north/frame_007.png"
+            ]
+          },
+          "attack-melee-front-v3-biological": {
+            "south": [
+              "Braspn/animations/attack-melee-front-v3-biological/south/frame_000.png",
+              "Braspn/animations/attack-melee-front-v3-biological/south/frame_001.png",
+              "Braspn/animations/attack-melee-front-v3-biological/south/frame_002.png",
+              "Braspn/animations/attack-melee-front-v3-biological/south/frame_003.png",
+              "Braspn/animations/attack-melee-front-v3-biological/south/frame_004.png",
+              "Braspn/animations/attack-melee-front-v3-biological/south/frame_005.png",
+              "Braspn/animations/attack-melee-front-v3-biological/south/frame_006.png",
+              "Braspn/animations/attack-melee-front-v3-biological/south/frame_007.png"
+            ]
+          },
+          "attack-melee-back-v3-biological": {
+            "north": [
+              "Braspn/animations/attack-melee-back-v3-biological/north/frame_000.png",
+              "Braspn/animations/attack-melee-back-v3-biological/north/frame_001.png",
+              "Braspn/animations/attack-melee-back-v3-biological/north/frame_002.png",
+              "Braspn/animations/attack-melee-back-v3-biological/north/frame_003.png",
+              "Braspn/animations/attack-melee-back-v3-biological/north/frame_004.png",
+              "Braspn/animations/attack-melee-back-v3-biological/north/frame_005.png",
+              "Braspn/animations/attack-melee-back-v3-biological/north/frame_006.png",
+              "Braspn/animations/attack-melee-back-v3-biological/north/frame_007.png"
+            ]
+          },
+          "attack-back-v2-aggressive": {
+            "north": [
+              "Braspn/animations/attack-back-v2-aggressive/north/frame_000.png",
+              "Braspn/animations/attack-back-v2-aggressive/north/frame_001.png",
+              "Braspn/animations/attack-back-v2-aggressive/north/frame_002.png",
+              "Braspn/animations/attack-back-v2-aggressive/north/frame_003.png",
+              "Braspn/animations/attack-back-v2-aggressive/north/frame_004.png",
+              "Braspn/animations/attack-back-v2-aggressive/north/frame_005.png",
+              "Braspn/animations/attack-back-v2-aggressive/north/frame_006.png",
+              "Braspn/animations/attack-back-v2-aggressive/north/frame_007.png"
+            ]
+          },
+          "attack-ranged-front-v3-target-pose": {
+            "south": [
+              "Braspn/animations/attack-ranged-front-v3-target-pose/south/frame_000.png",
+              "Braspn/animations/attack-ranged-front-v3-target-pose/south/frame_001.png",
+              "Braspn/animations/attack-ranged-front-v3-target-pose/south/frame_002.png",
+              "Braspn/animations/attack-ranged-front-v3-target-pose/south/frame_003.png",
+              "Braspn/animations/attack-ranged-front-v3-target-pose/south/frame_004.png",
+              "Braspn/animations/attack-ranged-front-v3-target-pose/south/frame_005.png",
+              "Braspn/animations/attack-ranged-front-v3-target-pose/south/frame_006.png",
+              "Braspn/animations/attack-ranged-front-v3-target-pose/south/frame_007.png"
+            ]
+          },
+          "idle-front": {
+            "south": [
+              "Braspn/animations/idle-front/south/frame_000.png",
+              "Braspn/animations/idle-front/south/frame_001.png",
+              "Braspn/animations/idle-front/south/frame_002.png",
+              "Braspn/animations/idle-front/south/frame_003.png",
+              "Braspn/animations/idle-front/south/frame_004.png",
+              "Braspn/animations/idle-front/south/frame_005.png",
+              "Braspn/animations/idle-front/south/frame_006.png",
+              "Braspn/animations/idle-front/south/frame_007.png"
+            ]
+          },
+          "attack-ranged-back-v1-biological": {
+            "north": [
+              "Braspn/animations/attack-ranged-back-v1-biological/north/frame_000.png",
+              "Braspn/animations/attack-ranged-back-v1-biological/north/frame_001.png",
+              "Braspn/animations/attack-ranged-back-v1-biological/north/frame_002.png",
+              "Braspn/animations/attack-ranged-back-v1-biological/north/frame_003.png",
+              "Braspn/animations/attack-ranged-back-v1-biological/north/frame_004.png",
+              "Braspn/animations/attack-ranged-back-v1-biological/north/frame_005.png",
+              "Braspn/animations/attack-ranged-back-v1-biological/north/frame_006.png",
+              "Braspn/animations/attack-ranged-back-v1-biological/north/frame_007.png"
+            ]
+          },
+          "attack-ranged-back-v2-catapult-true-rear": {
+            "north": [
+              "Braspn/animations/attack-ranged-back-v2-catapult-true-rear/north/frame_000.png",
+              "Braspn/animations/attack-ranged-back-v2-catapult-true-rear/north/frame_001.png",
+              "Braspn/animations/attack-ranged-back-v2-catapult-true-rear/north/frame_002.png",
+              "Braspn/animations/attack-ranged-back-v2-catapult-true-rear/north/frame_003.png",
+              "Braspn/animations/attack-ranged-back-v2-catapult-true-rear/north/frame_004.png",
+              "Braspn/animations/attack-ranged-back-v2-catapult-true-rear/north/frame_005.png",
+              "Braspn/animations/attack-ranged-back-v2-catapult-true-rear/north/frame_006.png",
+              "Braspn/animations/attack-ranged-back-v2-catapult-true-rear/north/frame_007.png"
+            ]
+          },
+          "attack-ranged-front-v1-biological": {
+            "south": [
+              "Braspn/animations/attack-ranged-front-v1-biological/south/frame_000.png",
+              "Braspn/animations/attack-ranged-front-v1-biological/south/frame_001.png",
+              "Braspn/animations/attack-ranged-front-v1-biological/south/frame_002.png",
+              "Braspn/animations/attack-ranged-front-v1-biological/south/frame_003.png",
+              "Braspn/animations/attack-ranged-front-v1-biological/south/frame_004.png",
+              "Braspn/animations/attack-ranged-front-v1-biological/south/frame_005.png",
+              "Braspn/animations/attack-ranged-front-v1-biological/south/frame_006.png",
+              "Braspn/animations/attack-ranged-front-v1-biological/south/frame_007.png"
+            ]
+          },
+          "attack-melee-back-v4-true-rear": {
+            "north": [
+              "Braspn/animations/attack-melee-back-v4-true-rear/north/frame_000.png",
+              "Braspn/animations/attack-melee-back-v4-true-rear/north/frame_001.png",
+              "Braspn/animations/attack-melee-back-v4-true-rear/north/frame_002.png",
+              "Braspn/animations/attack-melee-back-v4-true-rear/north/frame_003.png",
+              "Braspn/animations/attack-melee-back-v4-true-rear/north/frame_004.png",
+              "Braspn/animations/attack-melee-back-v4-true-rear/north/frame_005.png",
+              "Braspn/animations/attack-melee-back-v4-true-rear/north/frame_006.png",
+              "Braspn/animations/attack-melee-back-v4-true-rear/north/frame_007.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "2e6ffbf0-a10b-4a34-8cbe-9971c1e177fa",
+        "name": "Biologically plausib",
+        "prompt": "Brasp\u00edn is a cute young quadrupedal brown hedgehog fire monster. Preserve the exact identity and animal anatomy in the supplied south-facing reference: it stays low on exactly four short paws, never standing upright; a small tan-brown friendly hedgehog face with one visible large amber eye, round ears and a dark little nose; warm brown fur; and one enormous attached fan of layered orange, scarlet and golden flame quills forming the entire back. The fire quills are part of its body, never a separate aura or projectiles. Create a crisp game-ready pixel-art character on a fully transparent background with stable bottom-center ground contact. No human body, no hands, no extra limbs, wings, horns, tail, clothes, props, scenery, text, shadow, smoke or loose effects.",
+        "size": {
+          "width": 256,
+          "height": 256
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-07-17T13:12:29.735065+00:00"
+      },
+      "folder": "Biologically_plausib",
+      "frames": {
+        "rotations": {
+          "south": "Biologically_plausib/rotations/south.png",
+          "south-east": "Biologically_plausib/rotations/south-east.png",
+          "east": "Biologically_plausib/rotations/east.png",
+          "north-east": "Biologically_plausib/rotations/north-east.png",
+          "north": "Biologically_plausib/rotations/north.png",
+          "north-west": "Biologically_plausib/rotations/north-west.png",
+          "west": "Biologically_plausib/rotations/west.png",
+          "south-west": "Biologically_plausib/rotations/south-west.png"
+        },
+        "animations": {}
+      }
+    }
+  ],
+  "export_version": "3.1",
+  "export_date": "2026-07-17T13:20:45.339759"
+}

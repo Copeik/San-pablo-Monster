@@ -71,7 +71,7 @@ python tools/compile-san-pablo-map.py
 Validar sprites, colocaciones, colliders, corredores y accesos a puertas:
 
 ```powershell
-node tools/validate-world-assets.mjs
+node --test tests/map-editor-layout.test.mjs tests/map-registry.test.mjs
 ```
 
 Al cambiar un sprite, su tamaño lógico, sus colliders o una zona de captura en `map-layout.js`, hay que volver a ejecutar los comandos correspondientes. La lámina es solo un artefacto de revisión visual; el runtime siempre consume las rutas declaradas en el layout.

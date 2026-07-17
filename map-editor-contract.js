@@ -207,21 +207,22 @@ export function validateMapEditorData(value) {
   const errors = [];
   if (!plainObject(value)) return { valid: false, errors: ["Los datos del editor deben ser un objeto."], warnings: [] };
   const collections = [
-    ["tileOverrides", value.tileOverrides, MAP_EDITOR_RULES.limits.tileOverrides],
-    ["groundOverrides", value.groundOverrides, MAP_EDITOR_RULES.limits.groundOverrides],
-    ["assetOverrides", value.assetOverrides, MAP_EDITOR_RULES.limits.assetOverrides],
-    ["addedAssets", value.addedAssets, MAP_EDITOR_RULES.limits.addedAssets],
-    ["hiddenAssets", value.hiddenAssets, MAP_EDITOR_RULES.limits.hiddenAssets],
-    ["npcOverrides", value.npcOverrides, MAP_EDITOR_RULES.limits.npcOverrides],
-    ["addedNpcs", value.addedNpcs, MAP_EDITOR_RULES.limits.addedNpcs],
-    ["hiddenNpcs", value.hiddenNpcs, MAP_EDITOR_RULES.limits.hiddenNpcs],
-    ["entrances", value.entrances, MAP_EDITOR_RULES.limits.entrances],
-    ["events", value.events, MAP_EDITOR_RULES.limits.events],
+    ["tileOverrides", value.tileOverrides, MAP_EDITOR_RULES.limits.tileOverrides, "record"],
+    ["groundOverrides", value.groundOverrides, MAP_EDITOR_RULES.limits.groundOverrides, "record"],
+    ["assetOverrides", value.assetOverrides, MAP_EDITOR_RULES.limits.assetOverrides, "record"],
+    ["addedAssets", value.addedAssets, MAP_EDITOR_RULES.limits.addedAssets, "array"],
+    ["hiddenAssets", value.hiddenAssets, MAP_EDITOR_RULES.limits.hiddenAssets, "array"],
+    ["npcOverrides", value.npcOverrides, MAP_EDITOR_RULES.limits.npcOverrides, "record"],
+    ["addedNpcs", value.addedNpcs, MAP_EDITOR_RULES.limits.addedNpcs, "array"],
+    ["hiddenNpcs", value.hiddenNpcs, MAP_EDITOR_RULES.limits.hiddenNpcs, "array"],
+    ["entrances", value.entrances, MAP_EDITOR_RULES.limits.entrances, "array"],
+    ["events", value.events, MAP_EDITOR_RULES.limits.events, "array"],
   ];
-  collections.forEach(([name, collection, maximum]) => {
+  collections.forEach(([name, collection, maximum, expectedType]) => {
     if (collection == null) return;
-    const count = Array.isArray(collection) ? collection.length : plainObject(collection) ? Object.keys(collection).length : Infinity;
-    if (!Number.isFinite(count)) errors.push(`${name} no tiene el formato esperado.`);
+    const validType = expectedType === "array" ? Array.isArray(collection) : plainObject(collection);
+    const count = validType ? (Array.isArray(collection) ? collection.length : Object.keys(collection).length) : Infinity;
+    if (!validType || !Number.isFinite(count)) errors.push(`${name} no tiene el formato esperado.`);
     else if (count > maximum) errors.push(`${name} admite como máximo ${maximum} elementos.`);
   });
   Object.entries(plainObject(value.tileOverrides) ? value.tileOverrides : {}).forEach(([key, terrain]) => {

@@ -1,0 +1,24 @@
+{
+  "provider": "PixelLab MCP v3",
+  "status": "completed_and_reviewed",
+  "character_id": "25fc27ea-4161-4e00-a50e-a21f2ee48496",
+  "biological_manifest": "../../../../../tools/pixellab-first10-combat-manifest.json#dracoscama",
+  "directions": { "front": "south", "back": "north" },
+  "frame_count": 8,
+  "idle_frame_ms": 120,
+  "attack_frame_ms": 90,
+  "animation_jobs": {
+    "idle": { "front": "044ce697-557a-4de3-84bd-a3d7dd1b9840", "back": "3283cfd1-b062-4a53-a739-41df3330d688" },
+    "melee": { "front": "45c080b5-fa5d-43f1-af43-e7891b9c941e", "back": "a561c719-222a-40b9-92f6-0d1796448bcc" },
+    "ranged": { "front": "40c06777-6e26-4525-a26b-3d29bd61ea0c", "back": "e44e5e11-f068-4d02-b150-df50775472b0" }
+  },
+  "selected_frames": {
+    "idle_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "idle_back": [0, 1, 2, 3, 4, 5, 6, 7],
+    "melee_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "melee_back": [0, 1, 2, 3, 4, 5, 5, 5],
+    "ranged_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "ranged_back": [0, 1, 2, 3, 4, 5, 6, 7]
+  },
+  "review": "Hooked foreclaws and the bladed tail converge for melee. Jaw, chest and four wings drive the ranged vortex. Overbright rear recovery frames were excluded and the strike pose is held."
+}

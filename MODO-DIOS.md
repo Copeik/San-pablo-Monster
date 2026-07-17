@@ -57,6 +57,12 @@ El catálogo de objetos ofrece miniaturas, categorías, búsqueda, recientes y f
 
 Colocar, mover, escalar, rotar, renombrar, duplicar, copiar/pegar, voltear, agrupar, bloquear, ocultar o eliminar edificios y decorado. Las puertas base vinculadas siguen a su edificio.
 
+### Interiores de casas
+
+Entra en cualquier casa, centro, tienda o laboratorio y pulsa `G`. El editor cambia automáticamente a **Decorar interior**, deja disponible únicamente la herramienta Objetos y muestra un catálogo separado con 20 muebles PixelLab: camas, literas, armario, estanterías y escritorios frontales/laterales, mesas, sofás, alfombras, escalera, puerta decorativa, chimenea, cocina, planta y lavabo.
+
+Cada entrada posee una escena estable e independiente. Los objetos guardan su identificador de escena en `addedAssets`, por lo que un mueble colocado dentro de una casa no aparece en otra ni en el exterior. Las alfombras se dibujan bajo personajes y muebles sin bloquear el paso; los demás objetos usan colisiones ajustadas a la base y profundidad por coordenada Y. Los PNG y su procedencia están documentados en `assets/interiors/pixellab-house/README.md`.
+
 ### Terreno
 
 Lápiz, **Original** (borrador), cuentagotas, rectángulo y relleno conectado. `Shift` dibuja una línea recta. Hay pinceles 1×1, 3×3, 5×5, 7×7 y 9×9, con huella previa y recorte seguro en los bordes. Un trazo completo —aunque toque muchas casillas— ocupa un único paso de historial.

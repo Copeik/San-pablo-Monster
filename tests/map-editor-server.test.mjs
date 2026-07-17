@@ -71,7 +71,7 @@ test("normaliza y migra los datos del editor al esquema v3", () => {
   assert.deepEqual(sanitizeMapEditorData({
     tileOverrides: { "2,3": "encounter", "199,1": "blocked", nope: "walkable" },
     assetOverrides: { house: { x: 9000, y: 40, scale: 9, solid: false, label: "Casa editada" } },
-    addedAssets: [{ id: "editor-bench-1", sprite: "bench", x: 120, y: 200, scale: .1 }],
+    addedAssets: [{ id: "editor-bench-1", sprite: "bench", scene: "interior:house-1:abc", x: 120, y: 200, scale: .1 }],
     hiddenAssets: ["old-house", "old-house", "../bad"],
     npcOverrides: { guide: { col: 4, row: 5, direction: "left", name: "Guía" } },
     addedNpcs: [{ id: "npc-new", col: 7, row: 8, direction: "down", name: "Sol", sprite: "guide", lines: ["Hola"] }],
@@ -84,7 +84,7 @@ test("normaliza y migra los datos del editor al esquema v3", () => {
     groundOverrides: {},
     mapSize: { cols: 79, rows: 79 },
     assetOverrides: { house: { x: 4096, y: 40, scale: 4, rotation: 0, solid: false, label: "Casa editada" } },
-    addedAssets: [{ x: 120, y: 200, scale: .25, rotation: 0, solid: true, id: "editor-bench-1", sprite: "bench" }],
+    addedAssets: [{ x: 120, y: 200, scale: .25, rotation: 0, solid: true, scene: "interior:house-1:abc", id: "editor-bench-1", sprite: "bench" }],
     hiddenAssets: ["old-house"],
     npcOverrides: { guide: { col: 4, row: 5, direction: "left", name: "Guía" } },
     addedNpcs: [{ id: "npc-new", col: 7, row: 8, direction: "down", name: "Sol", sprite: "guide", lines: ["Hola"] }],

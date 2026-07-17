@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Una aventura Pokémon web sobre un mapa de estilo HeartGold y SoulSilver." />
     <title>Pokémon · Ciudad Pokémon</title>
-  <link rel="stylesheet" href="styles.css?v=38" />
+  <link rel="stylesheet" href="styles.css?v=48" />
   </head>
   <body>
     <main class="app-shell">
@@ -29,6 +29,7 @@
           <button id="sanpledexButton" type="button" aria-label="Abrir Sanpledex" title="Sanpledex (P)">S</button>
           <button id="buildingEditorButton" type="button" aria-label="Abrir modo dios" title="Modo dios de desarrollo" hidden>✦</button>
           <button id="teamButton" type="button" aria-label="Abrir equipo" title="Equipo">☰</button>
+          <button id="musicButton" type="button" aria-label="Abrir biblioteca musical" title="Biblioteca musical (L)">♫</button>
           <button id="soundButton" type="button" aria-label="Activar o desactivar sonido" title="Sonido"><span id="soundIcon">♪</span></button>
         </div>
       </header>
@@ -311,98 +312,72 @@
         </section>
 
         <aside id="buildingEditor" class="building-editor" aria-hidden="true">
-          <header>
-            <div><small>MODO DIOS · SOLO DESARROLLO</small><h2>Editor del mundo</h2></div>
-            <div class="map-editor-header-actions">
-              <button id="mapEditorSheetToggle" type="button" aria-label="Plegar inspector" aria-expanded="true" title="Plegar o expandir inspector">⌄</button>
-              <button id="mapEditorExpandSheetButton" type="button" aria-label="Inspector a pantalla completa" title="Inspector a pantalla completa">⛶</button>
-              <button id="closeBuildingEditor" type="button" aria-label="Cerrar editor">×</button>
-            </div>
-          </header>
-          <section class="map-editor-collaboration" aria-label="Sesión colaborativa">
-            <div class="map-editor-identity">
-              <label for="mapEditorMapSelect">Mapa</label>
-              <select id="mapEditorMapSelect" aria-label="Mapa que se está editando"></select>
-              <label for="mapEditorNameInput">Tu nombre</label>
-              <input id="mapEditorNameInput" type="text" maxlength="32" autocomplete="nickname" placeholder="Editor" />
-              <button id="copyEditorInviteButton" type="button" title="Copiar enlace de esta sesión">Compartir</button>
-            </div>
-            <div class="map-editor-session-row">
-              <span id="mapEditorConnectionStatus" class="map-editor-connection-status" data-state="connecting" role="status">Conectando…</span>
-              <div id="mapEditorPresenceList" class="map-editor-presence-list" role="list" aria-label="Editores conectados"></div>
-            </div>
-          </section>
-          <div id="mapEditorSaveStatus" class="map-editor-save-status" data-state="saved" aria-live="polite"><i></i><span>Conectando con el archivo…</span></div>
-          <div class="map-editor-toolbar" role="toolbar" aria-label="Historial de edición">
-            <button id="mapEditorUndoButton" type="button" aria-label="Deshacer" title="Deshacer (Ctrl+Z)" disabled>↶ <span>Deshacer</span></button>
-            <button id="mapEditorRedoButton" type="button" aria-label="Rehacer" title="Rehacer (Ctrl+Shift+Z)" disabled>↷ <span>Rehacer</span></button>
-            <span id="mapEditorRevision" class="map-editor-revision">rev —</span>
-          </div>
-          <div class="map-editor-navigation" role="toolbar" aria-label="Navegación del mapa">
-            <button id="mapEditorCenterButton" type="button" title="Centrar selección">◎ <span>Centrar</span></button>
-            <button id="mapEditorFitButton" type="button" title="Ver todo el mapa">⊡ <span>Ver todo</span></button>
-            <button id="mapEditorZoomOutButton" type="button" aria-label="Alejar">−</button>
-            <output id="mapEditorZoomLevel" aria-label="Nivel de zoom">100%</output>
-            <button id="mapEditorZoomInButton" type="button" aria-label="Acercar">+</button>
-            <button id="mapEditorZoomResetButton" type="button" title="Restablecer zoom">1:1</button>
-          </div>
-          <form id="mapEditorJumpForm" class="map-editor-jump" aria-label="Saltar a coordenadas">
-            <label>C <input id="mapEditorJumpCol" type="number" inputmode="numeric" /></label>
-            <label>F <input id="mapEditorJumpRow" type="number" inputmode="numeric" /></label>
-            <button type="submit">Ir</button>
-          </form>
-          <section id="mapEditorConflictPanel" class="map-editor-conflict hidden" aria-labelledby="mapEditorConflictTitle" hidden>
-            <h3 id="mapEditorConflictTitle">Hay dos versiones del mismo cambio</h3>
-            <p>Tu trabajo permanece en la bandeja local hasta que elijas.</p>
-            <div><section><strong>Mi cambio</strong><pre id="mapEditorConflictLocal"></pre></section><section><strong>Servidor</strong><pre id="mapEditorConflictServer"></pre></section></div>
-            <footer>
-              <button id="mapEditorConflictKeepServer" type="button">Conservar servidor</button>
-              <button id="mapEditorConflictReapply" class="editor-primary" type="button">Reaplicar mi cambio</button>
-              <button id="mapEditorConflictCancel" type="button">Decidir después</button>
-            </footer>
-          </section>
-          <details id="mapEditorActivity" class="map-editor-activity">
-            <summary>Actividad compartida</summary>
-            <ol id="mapEditorActivityList" aria-live="polite"><li>Aún no hay cambios en esta sesión.</li></ol>
-          </details>
-          <details id="mapEditorOutliner" class="map-editor-outliner">
-            <summary>Objetos del mapa <span id="mapEditorOutlinerCount">0</span></summary>
-            <div class="map-editor-search-row">
-              <label class="sr-only" for="mapEditorSearchInput">Buscar entidades</label>
-              <input id="mapEditorSearchInput" type="search" placeholder="Nombre, ID, tipo o casilla…" />
-              <select id="mapEditorFilterInput" aria-label="Filtrar entidades"><option value="all">Todo</option><option value="asset">Objetos</option><option value="npc">NPC</option><option value="entrance">Entradas</option><option value="event">Eventos</option></select>
-            </div>
-            <div id="mapEditorOutlinerList" class="map-editor-outliner-list" role="list" aria-label="Entidades del mapa"></div>
-          </details>
-          <details id="mapEditorOverlayPanel" class="map-editor-overlays">
-            <summary>Capas visibles</summary>
-            <div role="group" aria-label="Capas del editor">
-              <label><input type="checkbox" data-editor-overlay="grid" checked /> Cuadrícula</label>
-              <label><input type="checkbox" data-editor-overlay="coordinates" /> Coordenadas</label>
-              <label><input type="checkbox" data-editor-overlay="collisions" /> Colisiones</label>
-              <label><input type="checkbox" data-editor-overlay="npcs" /> NPC</label>
-              <label><input type="checkbox" data-editor-overlay="entrances" /> Entradas</label>
-              <label><input type="checkbox" data-editor-overlay="events" /> Eventos</label>
-              <label><input type="checkbox" data-editor-overlay="routes" /> Rutas</label>
-            </div>
-          </details>
-          <div class="map-editor-tabs" role="tablist" aria-label="Herramientas del mapa">
-            <button id="mapEditorTabObjects" class="selected" type="button" role="tab" data-editor-mode="objects" aria-controls="objectEditorPanel" aria-selected="true" tabindex="0"><span aria-hidden="true">◆</span><b>Objetos</b></button>
-            <button id="mapEditorTabTerrain" type="button" role="tab" data-editor-mode="terrain" aria-controls="terrainEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">▦</span><b>Terreno</b></button>
-            <button id="mapEditorTabGround" type="button" role="tab" data-editor-mode="ground" aria-controls="groundEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">▧</span><b>Suelo</b></button>
-            <button id="mapEditorTabNpcs" type="button" role="tab" data-editor-mode="npcs" aria-controls="npcEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">♟</span><b>NPC</b></button>
-            <button id="mapEditorTabEntrances" type="button" role="tab" data-editor-mode="entrances" aria-controls="entranceEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">⇥</span><b>Entradas</b></button>
-            <button id="mapEditorTabEvents" type="button" role="tab" data-editor-mode="events" aria-controls="eventEditorPanel" aria-selected="false" tabindex="-1"><span aria-hidden="true">✦</span><b>Eventos</b></button>
-          </div>
+          <div id="mapEditorWorkspace" class="map-editor-workspace">
+            <header class="map-editor-topbar">
+              <div><small id="mapEditorEyebrow">MODO DIOS · SOLO DESARROLLO</small><h2 id="mapEditorTitle">Editor del mundo</h2></div>
+              <div class="map-editor-header-actions">
+                <button id="mapEditorSheetToggle" type="button" aria-label="Plegar inspector" aria-expanded="true" title="Plegar o expandir inspector">⌄</button>
+                <button id="mapEditorExpandSheetButton" type="button" aria-label="Ampliar inspector" aria-pressed="false" title="Ampliar o reducir inspector">⛶</button>
+                <button id="closeBuildingEditor" type="button" aria-label="Cerrar editor">×</button>
+              </div>
+            </header>
+
+            <section class="map-editor-commandbar" aria-label="Estado y navegación del editor">
+              <div id="mapEditorSaveStatus" class="map-editor-save-status" data-state="saved" aria-live="polite"><i></i><span>Conectando con el archivo…</span></div>
+              <div class="map-editor-toolbar" role="toolbar" aria-label="Historial de edición">
+                <button id="mapEditorUndoButton" type="button" aria-label="Deshacer" title="Deshacer (Ctrl+Z)" disabled>↶ <span>Deshacer</span></button>
+                <button id="mapEditorRedoButton" type="button" aria-label="Rehacer" title="Rehacer (Ctrl+Shift+Z)" disabled>↷ <span>Rehacer</span></button>
+                <span id="mapEditorRevision" class="map-editor-revision">rev —</span>
+              </div>
+              <details class="map-editor-view-controls">
+                <summary>Vista y coordenadas <span aria-hidden="true">⌄</span></summary>
+                <div class="map-editor-navigation" role="toolbar" aria-label="Navegación del mapa">
+                  <button id="mapEditorCenterButton" type="button" title="Centrar selección">◎ <span>Centrar</span></button>
+                  <button id="mapEditorFitButton" type="button" title="Ver todo el mapa">⊡ <span>Ver todo</span></button>
+                  <button id="mapEditorZoomOutButton" type="button" aria-label="Alejar">−</button>
+                  <output id="mapEditorZoomLevel" aria-label="Nivel de zoom">100%</output>
+                  <button id="mapEditorZoomInButton" type="button" aria-label="Acercar">+</button>
+                  <button id="mapEditorZoomResetButton" type="button" title="Restablecer zoom">1:1</button>
+                </div>
+                <form id="mapEditorJumpForm" class="map-editor-jump" aria-label="Saltar a coordenadas">
+                  <label>C <input id="mapEditorJumpCol" type="number" inputmode="numeric" /></label>
+                  <label>F <input id="mapEditorJumpRow" type="number" inputmode="numeric" /></label>
+                  <button type="submit">Ir</button>
+                </form>
+              </details>
+              <section id="mapEditorConflictPanel" class="map-editor-conflict hidden" aria-labelledby="mapEditorConflictTitle" hidden>
+                <h3 id="mapEditorConflictTitle">Hay dos versiones del mismo cambio</h3>
+                <p>Tu trabajo permanece en la bandeja local hasta que elijas.</p>
+                <div><section><strong>Mi cambio</strong><pre id="mapEditorConflictLocal"></pre></section><section><strong>Servidor</strong><pre id="mapEditorConflictServer"></pre></section></div>
+                <footer>
+                  <button id="mapEditorConflictKeepServer" type="button">Conservar servidor</button>
+                  <button id="mapEditorConflictReapply" class="editor-primary" type="button">Reaplicar mi cambio</button>
+                  <button id="mapEditorConflictCancel" type="button">Decidir después</button>
+                </footer>
+              </section>
+            </section>
+
+            <nav class="map-editor-modebar" aria-label="Modos de edición">
+              <div class="map-editor-tabs" role="tablist" aria-label="Herramientas del mapa">
+                <button id="mapEditorTabObjects" class="selected" type="button" role="tab" data-editor-mode="objects" aria-controls="objectEditorPanel" aria-selected="true" tabindex="0" title="Objetos (1)"><span aria-hidden="true">◆</span><b>Objetos</b></button>
+                <button id="mapEditorTabTerrain" type="button" role="tab" data-editor-mode="terrain" aria-controls="terrainEditorPanel" aria-selected="false" tabindex="-1" title="Terreno (2)"><span aria-hidden="true">▦</span><b>Terreno</b></button>
+                <button id="mapEditorTabGround" type="button" role="tab" data-editor-mode="ground" aria-controls="groundEditorPanel" aria-selected="false" tabindex="-1" title="Suelo (3)"><span aria-hidden="true">▧</span><b>Suelo</b></button>
+                <button id="mapEditorTabNpcs" type="button" role="tab" data-editor-mode="npcs" aria-controls="npcEditorPanel" aria-selected="false" tabindex="-1" title="NPC (4)"><span aria-hidden="true">♟</span><b>NPC</b></button>
+                <button id="mapEditorTabEntrances" type="button" role="tab" data-editor-mode="entrances" aria-controls="entranceEditorPanel" aria-selected="false" tabindex="-1" title="Entradas (5)"><span aria-hidden="true">⇥</span><b>Entradas</b></button>
+                <button id="mapEditorTabEvents" type="button" role="tab" data-editor-mode="events" aria-controls="eventEditorPanel" aria-selected="false" tabindex="-1" title="Eventos (6)"><span aria-hidden="true">✦</span><b>Eventos</b></button>
+              </div>
+            </nav>
+
+            <div class="map-editor-tool-stage" role="region" aria-label="Herramienta activa">
 
           <section id="objectEditorPanel" class="map-editor-panel" data-editor-panel="objects" role="tabpanel" aria-labelledby="mapEditorTabObjects">
-            <p class="editor-help">Selecciona y arrastra cualquier edificio u objeto. Usa las flechas para ajustar; <strong>Shift + flecha</strong> mueve una casilla completa.</p>
+            <p class="editor-help">Selecciona y arrastra cualquier objeto. También puedes arrastrarlo desde el catálogo al mapa o pulsarlo dos veces para colocarlo en el centro.</p>
             <details class="map-editor-create" open>
               <summary>Catálogo de objetos</summary>
               <div class="map-editor-catalog-filters">
                 <input id="assetCatalogSearch" type="search" placeholder="Buscar objeto" aria-label="Buscar en el catálogo" />
-                <select id="assetCatalogCategory" aria-label="Categoría"><option value="all">Todas</option><option value="building">Edificios</option><option value="tree">Árboles</option><option value="prop">Mobiliario</option><option value="blocker">Obstáculos</option></select>
-                <button id="assetCatalogFavorites" type="button" aria-pressed="false" title="Mostrar favoritos">☆ Favoritos</button>
+                <select id="assetCatalogCategory" aria-label="Categoría"><option value="all">Todas</option><option value="building">Edificios</option><option value="tree">Árboles</option><option value="prop">Mobiliario urbano</option><option value="furniture">Muebles de interior</option><option value="blocker">Obstáculos</option></select>
+                <button id="assetCatalogFavorites" type="button" aria-label="Mostrar solo favoritos" aria-pressed="false" title="Mostrar favoritos">☆ Favoritos</button>
               </div>
               <div id="assetCatalogGrid" class="map-editor-catalog-grid" role="listbox" aria-label="Objetos disponibles"></div>
               <label class="editor-field">Identificador avanzado
@@ -442,12 +417,12 @@
           <section id="groundEditorPanel" class="map-editor-panel hidden" data-editor-panel="ground" role="tabpanel" aria-labelledby="mapEditorTabGround" hidden>
             <p class="editor-help">Pinta el aspecto del suelo sin cambiar por dónde puede caminar el jugador. “Sendero” se superpone al acabado existente y une rectas, curvas y cruces automáticamente.</p>
             <div class="terrain-toolbox ground-toolbox" role="toolbar" aria-label="Herramientas de suelo">
-              <button type="button" class="selected" data-ground-tool="pencil">✎ <span>Lápiz</span></button>
-              <button type="button" data-ground-tool="path" aria-pressed="false">╋ <span>Sendero</span></button>
-              <button type="button" data-ground-tool="eraser">⌫ <span>Original</span></button>
-              <button type="button" data-ground-tool="eyedropper">◉ <span>Cuentagotas</span></button>
-              <button type="button" data-ground-tool="rectangle">▭ <span>Rectángulo</span></button>
-              <button type="button" data-ground-tool="fill">▧ <span>Relleno</span></button>
+              <button type="button" class="selected" data-ground-tool="pencil" title="Lápiz (B)">✎ <span>Lápiz</span></button>
+              <button type="button" data-ground-tool="path" aria-pressed="false" title="Sendero (P)">╋ <span>Sendero</span></button>
+              <button type="button" data-ground-tool="eraser" title="Original (E) · también clic derecho">⌫ <span>Original</span></button>
+              <button type="button" data-ground-tool="eyedropper" title="Cuentagotas (I)">◉ <span>Cuentagotas</span></button>
+              <button type="button" data-ground-tool="rectangle" title="Rectángulo (R)">▭ <span>Rectángulo</span></button>
+              <button type="button" data-ground-tool="fill" title="Relleno (F)">▧ <span>Relleno</span></button>
             </div>
             <div class="sprite-options-title"><strong>Acabado</strong><small>Tierra, asfalto con acera, hierba y más</small></div>
             <div id="groundPalette" class="tile-palette ground-palette" role="group" aria-label="Tipo de suelo">
@@ -476,13 +451,13 @@
           </section>
 
           <section id="terrainEditorPanel" class="map-editor-panel hidden" data-editor-panel="terrain" role="tabpanel" aria-labelledby="mapEditorTabTerrain" hidden>
-            <p class="editor-help">Pulsa o arrastra para pintar casillas de 32×32. La hierba crea encuentros visibles; “Original” elimina una corrección.</p>
+            <p class="editor-help">Pulsa o arrastra para pintar. Mantén <strong>Shift</strong> para una línea y usa <strong>clic derecho</strong> como borrador temporal.</p>
             <div class="terrain-toolbox" role="toolbar" aria-label="Herramientas de terreno">
-              <button type="button" class="selected" data-terrain-tool="pencil">✎ <span>Lápiz</span></button>
-              <button type="button" data-terrain-tool="eraser">⌫ <span>Original</span></button>
-              <button type="button" data-terrain-tool="eyedropper">◉ <span>Cuentagotas</span></button>
-              <button type="button" data-terrain-tool="rectangle">▭ <span>Rectángulo</span></button>
-              <button type="button" data-terrain-tool="fill">▧ <span>Relleno</span></button>
+              <button type="button" class="selected" data-terrain-tool="pencil" title="Lápiz (B)">✎ <span>Lápiz</span></button>
+              <button type="button" data-terrain-tool="eraser" title="Original (E) · también clic derecho">⌫ <span>Original</span></button>
+              <button type="button" data-terrain-tool="eyedropper" title="Cuentagotas (I)">◉ <span>Cuentagotas</span></button>
+              <button type="button" data-terrain-tool="rectangle" title="Rectángulo (R)">▭ <span>Rectángulo</span></button>
+              <button type="button" data-terrain-tool="fill" title="Relleno (F)">▧ <span>Relleno</span></button>
             </div>
             <div id="tileSelectionInfo" class="selected-building-info"><span>Selecciona una casilla</span><span>C— · F—</span></div>
             <div class="sprite-options-title"><strong>Comportamiento</strong><small>Arrastra para pintar</small></div>
@@ -624,10 +599,68 @@
               </div>
             </fieldset>
           </section>
+            </div>
 
-          <details class="map-editor-shortcuts"><summary>Atajos y ayuda</summary><p><kbd>Ctrl</kbd>+<kbd>Z</kbd> deshacer · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> rehacer · <kbd>Ctrl</kbd>+<kbd>S</kbd> sincronizar · <kbd>Ctrl</kbd>+<kbd>C/V</kbd> copiar/pegar · <kbd>Espacio</kbd>+arrastrar desplazar · rueda zoom · <kbd>Alt</kbd>+clic alternar solapados · <kbd>G</kbd> abrir/cerrar</p></details>
-          <datalist id="mapEditorMapOptions"><option value="san-pablo"></option><option value="city"></option><option value="current"></option><option value="new-map"></option></datalist>
-          <datalist id="mapEditorBuildingOptions"></datalist>
+            <details id="mapEditorSecondaryPanel" class="map-editor-secondary">
+              <summary><span>Proyecto y utilidades</span><small>Sesión, actividad, objetos y capas</small></summary>
+              <div class="map-editor-secondary-content">
+                <details class="map-editor-session-tools">
+                  <summary>Mapa y colaboración</summary>
+                  <section class="map-editor-collaboration" aria-label="Sesión colaborativa">
+                    <div class="map-editor-identity">
+                      <label for="mapEditorMapSelect">Mapa</label>
+                      <select id="mapEditorMapSelect" aria-label="Mapa que se está editando"></select>
+                      <label for="mapEditorNameInput">Tu nombre</label>
+                      <input id="mapEditorNameInput" type="text" maxlength="32" autocomplete="nickname" placeholder="Editor" />
+                      <button id="copyEditorInviteButton" type="button" title="Copiar enlace de esta sesión">Compartir</button>
+                    </div>
+                    <div class="map-editor-session-row">
+                      <span id="mapEditorConnectionStatus" class="map-editor-connection-status" data-state="connecting" role="status">Conectando…</span>
+                      <div id="mapEditorPresenceList" class="map-editor-presence-list" role="list" aria-label="Editores conectados"></div>
+                    </div>
+                  </section>
+                </details>
+                <details id="mapEditorActivity" class="map-editor-activity">
+                  <summary>Actividad compartida</summary>
+                  <ol id="mapEditorActivityList" aria-live="polite"><li>Aún no hay cambios en esta sesión.</li></ol>
+                </details>
+                <details id="mapEditorOutliner" class="map-editor-outliner">
+                  <summary>Objetos del mapa <span id="mapEditorOutlinerCount">0</span></summary>
+                  <div class="map-editor-search-row">
+                    <label class="sr-only" for="mapEditorSearchInput">Buscar entidades</label>
+                    <input id="mapEditorSearchInput" type="search" placeholder="Nombre, ID, tipo o casilla…" />
+                    <select id="mapEditorFilterInput" aria-label="Filtrar entidades"><option value="all">Todo</option><option value="asset">Objetos</option><option value="npc">NPC</option><option value="entrance">Entradas</option><option value="event">Eventos</option></select>
+                  </div>
+                  <div id="mapEditorOutlinerList" class="map-editor-outliner-list" role="list" aria-label="Entidades del mapa"></div>
+                </details>
+                <details id="mapEditorDiagnostics" class="map-editor-diagnostics" open>
+                  <summary>Estado del mapa <span id="mapEditorDiagnosticsCount" data-state="ok">0</span></summary>
+                  <div class="map-editor-diagnostics-body">
+                    <div class="map-editor-diagnostics-heading">
+                      <p id="mapEditorDiagnosticsStatus" data-state="ok" role="status">Comprobando el mapa…</p>
+                      <button id="mapEditorDiagnosticsRefresh" type="button">Revisar</button>
+                    </div>
+                    <ol id="mapEditorDiagnosticsList" aria-live="polite"></ol>
+                  </div>
+                </details>
+                <details id="mapEditorOverlayPanel" class="map-editor-overlays">
+                  <summary>Capas visibles</summary>
+                  <div role="group" aria-label="Capas del editor">
+                    <label><input type="checkbox" data-editor-overlay="grid" checked /> Cuadrícula</label>
+                    <label><input type="checkbox" data-editor-overlay="coordinates" /> Coordenadas</label>
+                    <label><input type="checkbox" data-editor-overlay="collisions" /> Colisiones</label>
+                    <label><input type="checkbox" data-editor-overlay="npcs" /> NPC</label>
+                    <label><input type="checkbox" data-editor-overlay="entrances" /> Entradas</label>
+                    <label><input type="checkbox" data-editor-overlay="events" /> Eventos</label>
+                    <label><input type="checkbox" data-editor-overlay="routes" /> Rutas</label>
+                  </div>
+                </details>
+                <details class="map-editor-shortcuts"><summary>Atajos y ayuda</summary><p><kbd>1–6</kbd> cambiar modo · <kbd>B/E/I/R/F</kbd> herramientas · <kbd>P</kbd> sendero · <kbd>−/+</kbd> pincel · clic derecho borrar · <kbd>/</kbd> buscar · <kbd>Esc</kbd> cancelar · <kbd>Ctrl</kbd>+<kbd>Z</kbd> deshacer · <kbd>Ctrl</kbd>+<kbd>S</kbd> sincronizar · <kbd>Ctrl</kbd>+<kbd>C/V</kbd> copiar/pegar · <kbd>Espacio</kbd>+arrastrar desplazar · rueda zoom · <kbd>G</kbd> abrir/cerrar</p></details>
+              </div>
+            </details>
+            <datalist id="mapEditorMapOptions"><option value="san-pablo"></option><option value="city"></option><option value="current"></option><option value="new-map"></option></datalist>
+            <datalist id="mapEditorBuildingOptions"></datalist>
+          </div>
         </aside>
         <div id="editorScrim" class="drawer-scrim editor-scrim hidden"></div>
 
@@ -648,6 +681,23 @@
           <img class="jump-shadow-sprite" src="assets/images/shadow-stalker.png" alt="" draggable="false" />
           <strong>TE HA ENCONTRADO</strong>
           <span>NO HAGAS RUIDO</span>
+        </div>
+
+        <div id="musicModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="musicTitle">
+          <section class="music-library">
+            <button id="closeMusic" class="modal-close" type="button" aria-label="Cerrar biblioteca musical">×</button>
+            <header class="music-library-heading">
+              <span class="eyebrow">BANDA SONORA · 8 BITS</span>
+              <h2 id="musicTitle">Radio Cartucho</h2>
+              <p>20 temas originales organizados por los lugares y momentos de la aventura.</p>
+            </header>
+            <div class="music-now-playing" aria-live="polite">
+              <span class="music-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <div><small>SONANDO AHORA</small><strong id="musicNowTitle">Sin reproducción</strong><span id="musicNowMeta">Modo automático</span></div>
+              <button id="musicAutoButton" class="selected" type="button" aria-pressed="true">AUTO</button>
+            </div>
+            <div id="musicCatalog" class="music-catalog"></div>
+          </section>
         </div>
 
         <div id="shopModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
@@ -676,11 +726,16 @@
     <script src="maps/san-pablo/register.js?v=1"></script>
     <script src="maps/route-test/editor-data.js?v=1"></script>
     <script src="maps/route-test/map.js?v=2"></script>
+    <script src="maps/ciudad-azahar/editor-data.js?v=1"></script>
+    <script src="maps/ciudad-azahar/layout.js?v=1"></script>
+    <script src="maps/ciudad-azahar/map.js?v=1"></script>
     <!-- GAME_MAP_PACKAGES -->
     <script src="map-bootstrap.js?v=1"></script>
     <script src="player-movement.js?v=3"></script>
     <script src="attack-effects.js?v=1"></script>
-    <script src="script.js?v=96"></script>
-    <script src="map-editor-standalone.js?v=1"></script>
+    <script src="sanpledex-animation-data.js?v=5"></script>
+    <script src="game-music.js?v=2"></script>
+    <script src="script.js?v=106"></script>
+    <script src="map-editor-standalone.js?v=2"></script>
   </body>
 </html>

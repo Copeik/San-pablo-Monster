@@ -60,8 +60,8 @@ if (maze) {
 
 check(script.includes('black_market: "Entrar al mercado negro"'), "Falta el prompt del mercado negro.");
 check(script.includes('door.action === "prism"'), "La puerta Prisma no está conectada a la interacción del mapa.");
-check(script.includes('drawPortal(context, PORTAL_POSITION.x, PORTAL_POSITION.y'), "El portal Prisma no se dibuja en el mundo.");
-check(script.includes('PORTAL_DOOR.col + .5'), "El portal visual no está alineado con la puerta Prisma activa.");
+check(script.includes('draw: () => drawPortal(context, portalPosition.x, portalPosition.y'), "El portal Prisma no se dibuja en el mundo.");
+check(script.includes('(entrance.col + .5) * CITY_MAP.tileSize'), "El portal visual no está alineado con la puerta Prisma activa.");
 check(script.includes('? "Examinar portal"'), "La puerta Prisma no tiene un prompt reconocible.");
 check(script.includes("drawMazeBlackMarket(context, fov, wallDepths)"), "El puesto no está conectado al render 3D.");
 check(script.includes("const chance = master ? 1"), "La Master Ball no garantiza la captura.");

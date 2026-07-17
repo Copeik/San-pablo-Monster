@@ -1,0 +1,22 @@
+{
+  "provider": "PixelLab MCP v3",
+  "status": "completed_and_reviewed_from_official_archive",
+  "character_id": "40e8a875-1672-4844-a0b6-fd2b73019a51",
+  "biological_manifest": "../../../../../tools/pixellab-first10-combat-manifest.json#terravordeo",
+  "source_archive": "../terravordeo-pixellab-v3.zip",
+  "accepted_animation_labels": ["Terravrdeo_idle_front", "Terravrdeo_idle_back", "Terravrdeo_melee_front_v2_strict", "terravordeo_melee_back_v3_joints-only", "Terravrdeo_ranged_front", "Terravrdeo_ranged_back"],
+  "known_accepted_job": { "melee_back": "e79bd831-4bc2-4613-aaad-da491733cccd" },
+  "directions": { "front": "south", "back": "north" },
+  "frame_count": 8,
+  "idle_frame_ms": 120,
+  "attack_frame_ms": 90,
+  "selected_frames": {
+    "idle_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "idle_back": [0, 1, 2, 3, 4, 5, 6, 7],
+    "melee_front": [0, 1, 2, 3, 4, 5, 6, 6],
+    "melee_back": [0, 1, 2, 3, 4, 5, 5, 5],
+    "ranged_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "ranged_back": [0, 1, 2, 3, 4, 5, 5, 5]
+  },
+  "review": "Feet remain rooted while shoulder and elbow joints drive the mountain-fist smash. Core, free arm, boulders and roots drive the ranged release. Recovery frames were replaced by held attack poses."
+}

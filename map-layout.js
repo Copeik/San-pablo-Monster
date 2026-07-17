@@ -112,6 +112,86 @@
       src: "assets/generated/san-pablo-rebuilt/runtime/prop-white-wall-vertical.png",
       kind: "prop", label: "Muro blanco vertical", tags: ["muro", "blanco"], w: 146, h: 1923, colliders: [[-36, -900, 72, 1800]],
     },
+    interiorBedSingleVertical: {
+      src: "assets/interiors/pixellab-house/bed-single-vertical.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Cama individual vertical", tags: ["cama", "dormitorio", "vertical"], w: 85, h: 85, colliders: [[-18, -48, 36, 48]],
+    },
+    interiorBedDoubleHorizontal: {
+      src: "assets/interiors/pixellab-house/bed-double-horizontal.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Cama doble lateral", tags: ["cama", "dormitorio", "lateral"], w: 85, h: 85, colliders: [[-34, -30, 68, 30]],
+    },
+    interiorBedBunkVertical: {
+      src: "assets/interiors/pixellab-house/bed-bunk-vertical.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Litera vertical", tags: ["cama", "litera", "dormitorio", "vertical"], w: 85, h: 85, colliders: [[-19, -52, 38, 52]],
+    },
+    interiorWardrobeFront: {
+      src: "assets/interiors/pixellab-house/wardrobe-front.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Armario frontal", tags: ["armario", "dormitorio", "frontal"], w: 85, h: 85, colliders: [[-24, -17, 48, 17]],
+    },
+    interiorBookshelfFront: {
+      src: "assets/interiors/pixellab-house/bookshelf-front.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Estanteria frontal", tags: ["estanteria", "libros", "frontal"], w: 85, h: 85, colliders: [[-27, -16, 54, 16]],
+    },
+    interiorBookshelfSide: {
+      src: "assets/interiors/pixellab-house/bookshelf-side.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Estanteria lateral", tags: ["estanteria", "libros", "lateral"], w: 85, h: 85, colliders: [[-7, -47, 14, 47]],
+    },
+    interiorDeskFront: {
+      src: "assets/interiors/pixellab-house/desk-front.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Escritorio frontal", tags: ["escritorio", "estudio", "frontal"], w: 85, h: 85, colliders: [[-31, -20, 62, 20]],
+    },
+    interiorDeskSide: {
+      src: "assets/interiors/pixellab-house/desk-side.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Escritorio lateral", tags: ["escritorio", "estudio", "lateral"], w: 85, h: 85, colliders: [[-18, -43, 36, 43]],
+    },
+    interiorDiningTableVertical: {
+      src: "assets/interiors/pixellab-house/dining-table-vertical.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Mesa de comedor vertical", tags: ["mesa", "comedor", "sillas", "vertical"], w: 85, h: 85, colliders: [[-26, -47, 52, 47]],
+    },
+    interiorCoffeeTableHorizontal: {
+      src: "assets/interiors/pixellab-house/coffee-table-horizontal.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Mesa baja lateral", tags: ["mesa", "salon", "lateral"], w: 85, h: 85, colliders: [[-34, -20, 68, 20]],
+    },
+    interiorSofaFront: {
+      src: "assets/interiors/pixellab-house/sofa-front.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Sofa frontal", tags: ["sofa", "salon", "frontal"], w: 85, h: 85, colliders: [[-35, -24, 70, 24]],
+    },
+    interiorSofaSide: {
+      src: "assets/interiors/pixellab-house/sofa-side.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Sofa lateral", tags: ["sofa", "salon", "lateral"], w: 85, h: 85, colliders: [[-18, -45, 36, 45]],
+    },
+    interiorRugRectangular: {
+      src: "assets/interiors/pixellab-house/rug-rectangular.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Alfombra rectangular", tags: ["alfombra", "suelo", "rectangular"], layer: "floor", solid: false, w: 85, h: 85, colliders: [],
+    },
+    interiorRugOval: {
+      src: "assets/interiors/pixellab-house/rug-oval.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Alfombra ovalada", tags: ["alfombra", "suelo", "ovalada"], layer: "floor", solid: false, w: 85, h: 85, colliders: [],
+    },
+    interiorStairsVertical: {
+      src: "assets/interiors/pixellab-house/stairs-vertical.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Escalera vertical", tags: ["escalera", "vertical", "decoracion"], w: 85, h: 85, colliders: [[-18, -54, 36, 54]],
+    },
+    interiorDoorDecorativeFront: {
+      src: "assets/interiors/pixellab-house/door-decorative-front.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Puerta decorativa frontal", tags: ["puerta", "decoracion", "frontal"], w: 85, h: 85, colliders: [[-23, -16, 46, 16]],
+    },
+    interiorFireplaceFront: {
+      src: "assets/interiors/pixellab-house/fireplace-front.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Chimenea frontal", tags: ["chimenea", "salon", "frontal"], w: 85, h: 85, colliders: [[-27, -19, 54, 19]],
+    },
+    interiorKitchenStoveFront: {
+      src: "assets/interiors/pixellab-house/kitchen-stove-front.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Cocina frontal", tags: ["cocina", "fogones", "frontal"], w: 85, h: 85, colliders: [[-27, -18, 54, 18]],
+    },
+    interiorPlantPotted: {
+      src: "assets/interiors/pixellab-house/plant-potted.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Planta en maceta", tags: ["planta", "maceta", "decoracion"], w: 85, h: 85, colliders: [[-13, -15, 26, 15]],
+    },
+    interiorSinkCabinetFront: {
+      src: "assets/interiors/pixellab-house/sink-cabinet-front.png", kind: "furniture", interior: true, pixelated: true,
+      label: "Lavabo con mueble frontal", tags: ["lavabo", "mueble", "cocina", "frontal"], w: 85, h: 85, colliders: [[-28, -18, 56, 18]],
+    },
     ...(window.CITY_NEIGHBORHOOD_ASSET_CATALOG || {}),
   });
 
@@ -129,7 +209,7 @@
       depthY: options.depthY ?? (y - (prototype.kind === "building" ? 10 : 2)),
       w: options.w || prototype.w,
       h: options.h || prototype.h,
-      solid: options.solid ?? true,
+      solid: options.solid ?? prototype.solid ?? true,
       colliders: options.colliders || prototype.colliders,
     };
     for (const key of ["door", "approach", "interaction", "rotation", "flipX", "label", "district"]) {
@@ -481,6 +561,7 @@
   });
   const knownIds = new Set(worldAssets.map((asset) => asset.id));
   (Array.isArray(editorData.addedAssets) ? editorData.addedAssets : []).forEach((entry) => {
+    if (entry?.scene && entry.scene !== "world") return;
     if (!entry || typeof entry.id !== "string" || knownIds.has(entry.id) || !assetCatalog[entry.sprite]) return;
     const asset = addAsset(entry.id, entry.sprite, Number(entry.x), Number(entry.y), {
       label: entry.label || `Objeto ${entry.sprite}`,

@@ -155,7 +155,7 @@ Todos usan el asset visible `thornBarrier`, son sólidos, muestran el prompt exa
 
 - `node --check map-layout.js`, `node --check map-data.js` y `node --check script.js`: finalizan con código 0.
 - `python -m py_compile tools/compile-san-pablo-map.py`: finaliza con código 0.
-- `node tools/validate-world-assets.mjs`: **«OK: 245 colocaciones, 16 sprites, 47 corredores completos, 2 accesos visuales y 16/16 puertas alcanzables.»**
+- `node --test tests/map-editor-layout.test.mjs tests/map-registry.test.mjs`: valida el catálogo, las colocaciones, las puertas y el registro jugable vigentes.
 - El informe del compilador registra **0 fallos** en 10 sondas de bloqueo y **0 fallos** de aproximación en 16 puertas.
 - Las 16 puertas tienen al menos una baldosa adyacente alcanzable. Ocho centros de puerta quedan bajo geometría sólida y ocho están abiertos en la máscara; esa división no es un fallo, porque la prueba de acceso se hace desde la baldosa adyacente.
 - La máscara compacta existe con **314 columnas × 314 filas** y celda de 8 px.
@@ -173,4 +173,3 @@ La principal limitación de esta auditoría es que el porcentaje mide geometría
 - [Assets nuevos de la reconstrucción](assets/generated/san-pablo-rebuilt/runtime)
 - [Assets AI reutilizados](assets/generated/san-pablo-derived/runtime)
 - [Reporte JSON reproducible](assets/maps/san-pablo-rebuilt-report-v2.json)
-

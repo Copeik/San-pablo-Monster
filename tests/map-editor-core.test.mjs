@@ -1,19 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { groundPaintLayers, isGroundPaintValue, MAP_EDITOR_RULES, validateEditorEntity, validateEditorOperation } from "../map-editor-contract.js";
+import { groundPaintLayers, isGroundPaintValue, MAP_EDITOR_RULES, validateEditorEntity, validateEditorOperation, validateMapEditorData } from "../map-editor-contract.js";
 import {
   boundedBrushCells,
   changedKeysSince,
   chunkOperationBatches,
   CommandBuilder,
   DurableOutboxQueue,
+  floodFillCells,
   groundPathConnectionMask,
   groundPathSurface,
   groundPathType,
   isGroundPathType,
+  lineCells,
   mergeGroundPaintValue,
   MemoryOutboxAdapter,
   PresenceGate,
+  resolveEditorShortcut,
   resolveConflictQueue,
   TransactionHistory,
 } from "../map-editor-core.js";
@@ -25,7 +28,7 @@ function tileOperation(col, row, value) {
 test("los senderos orientan rectas, curvas, cruces y uniones entre acabados", () => {
   const values = new Map();
   const getValue = (col, row) => values.get(`${col},${row}`) || "grass";
-  const maskAt = (col, row) => groundPathConnectionMask({ col, row, getValue, bounds: { cols: 12, rows: 12, maxCols: 12, maxRows: 12 } });
+  const maskAt = (col, row) => groundPathConnectionMask({ col, row, getValue, bounds: { cols: 12, rows: 12 } });
   const paint = (col, row, surface = "dirt") => values.set(`${col},${row}`, groundPathType(surface));
 
   paint(5, 5); paint(5, 4, "grass"); paint(6, 5, "asphalt");
@@ -193,4 +196,67 @@ test("cliente y servidor comparten límites y rechazan sin truncar", () => {
   });
   assert.equal(outside.valid, false);
   assert.match(outside.errors.join(" "), /Destino X/);
+});
+
+test("el snapshot exige arrays y diccionarios en sus colecciones publicas", () => {
+  const valid = validateMapEditorData({
+    addedAssets: [],
+    hiddenAssets: [],
+    entrances: [],
+    events: [],
+    tileOverrides: {},
+    groundOverrides: {},
+    assetOverrides: {},
+    npcOverrides: {},
+  });
+  assert.equal(valid.valid, true, valid.errors.join("\n"));
+
+  for (const name of ["addedAssets", "hiddenAssets", "entrances", "events"]) {
+    const result = validateMapEditorData({ [name]: {} });
+    assert.equal(result.valid, false, name + " debe rechazar un objeto");
+    assert.match(result.errors.join(" "), new RegExp(name));
+  }
+  for (const name of ["tileOverrides", "groundOverrides", "assetOverrides", "npcOverrides"]) {
+    const result = validateMapEditorData({ [name]: [] });
+    assert.equal(result.valid, false, name + " debe rechazar un array");
+    assert.match(result.errors.join(" "), new RegExp(name));
+  }
+});
+
+test("los atajos del espacio de trabajo son contextuales y no pisan modificadores", () => {
+  assert.deepEqual(resolveEditorShortcut({ key: "2" }), { type: "mode", value: "terrain" });
+  assert.deepEqual(resolveEditorShortcut({ key: "E", mode: "terrain" }), { type: "paint.tool", value: "eraser" });
+  assert.deepEqual(resolveEditorShortcut({ key: "P", mode: "ground" }), { type: "paint.tool", value: "path" });
+  assert.deepEqual(resolveEditorShortcut({ key: "]", mode: "ground" }), { type: "brush.size", value: 1 });
+  assert.deepEqual(resolveEditorShortcut({ key: "-", mode: "terrain" }), { type: "brush.size", value: -1 });
+  assert.deepEqual(resolveEditorShortcut({ key: "+", mode: "terrain", shift: true }), { type: "brush.size", value: 1 });
+  assert.deepEqual(resolveEditorShortcut({ key: "a", mode: "objects", modifier: true }), { type: "selection.all" });
+  assert.deepEqual(resolveEditorShortcut({ key: "a", mode: "objects", modifier: true, shift: true }), { type: "selection.clear" });
+  assert.deepEqual(resolveEditorShortcut({ key: "g", mode: "objects", modifier: true }), { type: "selection.group" });
+  assert.equal(resolveEditorShortcut({ key: "p", mode: "terrain" }), null);
+  assert.equal(resolveEditorShortcut({ key: "e", mode: "objects" }), null);
+  assert.equal(resolveEditorShortcut({ key: "e", mode: "terrain", alt: true }), null);
+});
+
+test("líneas y relleno respetan bounds {cols, rows} y rechazan extremos inválidos", () => {
+  const bounds = { cols: 4, rows: 3 };
+  assert.deepEqual(lineCells({ col: 0, row: 0 }, { col: 3, row: 2 }, bounds), [
+    { col: 0, row: 0 }, { col: 1, row: 1 }, { col: 2, row: 1 }, { col: 3, row: 2 },
+  ]);
+  assert.deepEqual(lineCells({ col: 3, row: 2 }, { col: 3, row: 0 }, bounds), [
+    { col: 3, row: 2 }, { col: 3, row: 1 }, { col: 3, row: 0 },
+  ]);
+
+  const filled = floodFillCells({
+    start: { col: 0, row: 0 },
+    bounds,
+    getValue: (col) => col < 2 ? "grass" : "blocked",
+  });
+  assert.equal(filled.length, 6);
+  assert.ok(filled.every(({ col, row }) => col >= 0 && col < 2 && row >= 0 && row < bounds.rows));
+
+  assert.deepEqual(lineCells({ col: 0, row: 0 }, { col: bounds.cols, row: 2 }, bounds), []);
+  assert.deepEqual(lineCells({ col: 0, row: 0 }, { col: 3, row: bounds.rows }, bounds), []);
+  assert.deepEqual(floodFillCells({ start: { col: bounds.cols, row: 0 }, bounds, getValue: () => "grass" }), []);
+  assert.deepEqual(lineCells({ col: 1, row: 1 }, { col: Number.NaN, row: 2 }, bounds), []);
 });

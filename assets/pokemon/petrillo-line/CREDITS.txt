@@ -12,3 +12,10 @@ Poses frontales de ataque: editadas en julio de 2026 con OpenAI ImageGen a parti
 - petrillo-attack-front.png
 - musgolem-attack-front.png
 - terravordeo-attack-front.png
+
+Animaciones de combate PixelLab de Petrillo, Musgólem y Terravórdeo (julio de 2026): seis secuencias necesarias por criatura, cada una con 8 fotogramas: reposo frontal/trasero, ataque cuerpo a cuerpo frontal/trasero y ataque a distancia frontal/trasero. Generadas exclusivamente con PixelLab MCP v3, revisadas cuadro a cuadro y empaquetadas como WebP RGBA de 384 × 384. Petrillo combate con pies, caparazón y brote; Musgólem con puños, núcleo, cristales y raíces; Terravórdeo con brazos, núcleo, rocas y raíces. El cuerpo permanece anclado y los ataques terminan sosteniendo su pose fuerte.
+
+Trazabilidad:
+- pixellab-hq/petrillo/pixellab-jobs.json
+- pixellab-hq/musgolem/pixellab-jobs.json
+- pixellab-hq/terravordeo/pixellab-jobs.json

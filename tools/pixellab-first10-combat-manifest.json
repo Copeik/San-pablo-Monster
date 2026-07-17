@@ -1,0 +1,115 @@
+{
+  "frameCount": 8,
+  "species": [
+    {
+      "id": 5,
+      "slug": "ascuero",
+      "name": "Ascuero",
+      "root": "assets/pokemon/braspy-line",
+      "characterId": "8d45c3e1-130e-4110-bf06-57cb71031dfd",
+      "creation": "Exact Ascuero sprite: low stocky fire-and-earth quadruped, clay-rock back armor, fiery dorsal ridge, four legs and two exceptionally large pale digging foreclaws. Preserve the supplied identity, silhouette, colors, anatomy and pixel-art style.",
+      "idle": "Alive combat idle: all four feet stay planted at fixed canvas coordinates; chest breathes, shoulders shift weight slightly, huge foreclaws flex, dorsal fire and quills flicker, head makes one alert micro-motion. Preserve anatomy and facing. No walking, translation, camera turn, scaling, squash/stretch, warping or extra limbs; seamless anchored loop.",
+      "melee": "Explosive melee in place: hind legs brace, hips and shoulders coil, head lowers into a furious narrow-eyed snarl, then one massive forelimb drives a claw rake forward and down while support feet stay planted; dorsal fire lags and flares at impact. Preserve anatomy. No translation, turn, scaling, deformation or duplicate limbs. End holding peak impact, no recovery.",
+      "ranged": "Aggressive dorsal-quill volley in place: all claws anchor, forequarters lower and rear armor lifts through natural hip articulation, heat travels along the dorsal ridge, eyes narrow and mouth snarls, then burning quills fire toward the opponent; shoulders recoil but feet stay fixed. Only projectiles travel. Preserve anatomy and facing. End holding peak release, no recovery."
+    },
+    {
+      "id": 6,
+      "slug": "volcazote",
+      "name": "Volcazote",
+      "root": "assets/pokemon/braspy-line",
+      "characterId": "54985209-48f1-4d6f-9d82-f6b6a92323dd",
+      "creation": "Exact Volcazote sprite: massive low volcanic quadruped, four powerful short legs, enormous pale foreclaws, broad rock-and-magma shell, dorsal flames and heavy armored head. Preserve supplied identity, silhouette, colors, anatomy and pixel-art style.",
+      "idle": "Heavy alive combat idle: four massive feet remain planted at fixed canvas coordinates; deep breathing lifts shoulders and settles the volcanic shell, one claw flexes, head scans once, dorsal fissures pulse and flames flicker. Preserve anatomy and facing. No translation, camera turn, scaling, squash/stretch, warping or extra limbs; seamless anchored loop.",
+      "melee": "Brutal volcanic claw smash in place: rear legs and one foreclaw brace, shoulders coil low, eyes narrow and mouth bares, then the free enormous foreclaw rakes forward and down with full shoulder drive; heavy shell and flames lag and flare. Support feet remain fixed. No translation, turn, scaling, deformation or duplicate limbs. End holding peak impact, no recovery.",
+      "ranged": "Aggressive magma barrage in place: all four legs anchor, chest compresses and head snarls, heat surges through shell fissures, then dorsal vents eject focused molten-rock chunks and fire; shoulders absorb recoil. Only projectiles travel. Preserve anatomy, silhouette and facing. No translation, scaling or warping. End holding maximum release, no recovery."
+    },
+    {
+      "id": 9001,
+      "slug": "petrillo",
+      "name": "Petrillo",
+      "root": "assets/pokemon/petrillo-line",
+      "characterId": "668c8f81-2358-4804-b8ed-4843173be711",
+      "creation": "Exact Petrillo sprite: round living stone seed, spherical cracked shell, dark face with golden eyes, four tiny pebble feet and a two-leaf sprout; no arms. Preserve supplied identity, anatomy, silhouette, colors and pixel-art style.",
+      "idle": "Small alive combat idle: all four pebble feet stay fixed; shell settles with a breath-like weight shift, golden eyes blink and track, two-leaf sprout sways with elastic lag. Preserve arm-less anatomy and facing. No hopping, translation, turn, scaling, squash/stretch, warping or extra limbs; seamless anchored loop.",
+      "melee": "Compact aggressive body slam in place: four pebble feet brace, round shell twists back locally, golden eyes narrow, then shell snaps forward into a hard head-and-body impact while sprout leaves lag. No arms and no translation, turn, scaling or deformation. End holding strongest impact tilt, no recovery.",
+      "ranged": "Living-sprout catapult in place: four feet root, golden eyes narrow, two-leaf sprout bends backward under tension and mineral energy rises through the shell, then leaves whip forward to launch sharp leaf and stone splinters. Only projectiles travel. Preserve arm-less anatomy and facing. End holding peak release, no recovery."
+    },
+    {
+      "id": 9002,
+      "slug": "musgolem",
+      "name": "Musgólem",
+      "root": "assets/pokemon/petrillo-line",
+      "characterId": "54cec007-a8d0-4bcd-9476-b271cd1c26d8",
+      "creation": "Exact Musgólem sprite: crouched gorilla-like living rock golem, two short legs, two enormous rock forearms and fists, dark face, bright green eyes and core, moss, vines, flowers and shoulder crystals. Preserve supplied identity, anatomy, silhouette, colors and pixel-art style.",
+      "idle": "Heavy living-golem combat idle: both feet and one knuckle stay grounded at fixed coordinates; stone weight shifts through shoulders, green core pulses, fingers tighten, moss and vines settle and eyes blink alertly. Preserve anatomy and facing. No translation, turn, scaling, squash/stretch, warping or extra limbs; seamless anchored loop.",
+      "melee": "Savage giant-fist smash in place: short legs and one fist brace, hips and torso rotate, green eyes narrow and core flares, then the free massive fist drives forward and down; moss, vines and crystals trail and snap at impact. No translation, turn, scaling, deformation or duplicate limbs. End holding deepest impact, no recovery.",
+      "ranged": "Aggressive mineral-root volley in place: both fists and feet root, green eyes narrow, core and crystals charge and vines coil, then crystals and hardened root splinters launch toward the opponent while plants recoil. Only projectiles travel. Preserve anatomy and facing. End holding maximum release, no recovery."
+    },
+    {
+      "id": 9003,
+      "slug": "terravordeo",
+      "name": "Terravórdeo",
+      "root": "assets/pokemon/petrillo-line",
+      "characterId": "40e8a875-1672-4844-a0b6-fd2b73019a51",
+      "creation": "Exact Terravórdeo sprite: upright mountain-like rock golem, two massive arms and fists, two sturdy legs, dark face, luminous green chest core, cliff plates, vines, moss, flowers and crystals. Preserve supplied identity, anatomy, silhouette, colors and pixel-art style.",
+      "idle": "Monumental living-mountain idle: both feet stay planted at fixed coordinates; stone chest expands slightly, shoulders settle, fists tighten, green core pulses, vines and flowers sway and crystals glint. Preserve anatomy and facing. No translation, turn, scaling, squash/stretch, warping or extra limbs; seamless anchored loop.",
+      "melee": "Epic mountain-fist ground smash in place: both legs and one arm brace, hips and torso torque, green face and core flare angrily, then the free huge fist punches forward and down; plants and crystals trail and snap. Feet stay fixed. No translation, turn, scaling, deformation or duplicate limbs. End holding strongest impact, no recovery.",
+      "ranged": "Aggressive boulder-and-root cannon in place: legs and one hand root, green eyes narrow, core channels through shoulder and vines, then the free forearm thrusts to launch a focused boulder, seed and hardened-root volley; plants recoil. Only projectiles travel. Preserve anatomy and facing. End holding peak launch, no recovery."
+    },
+    {
+      "id": 9101,
+      "slug": "peyote",
+      "name": "Peyote",
+      "root": "assets/pokemon/peyote-line",
+      "characterId": "9ce255c4-2070-40a5-bf55-533204b7d300",
+      "creation": "Exact Peyote sprite: living square adobe-brick block, layered tan stone, two round eyes and small mouth, carved green leaf seal and two tiny block feet; no arms. Preserve supplied identity, anatomy, silhouette, colors and pixel-art style.",
+      "idle": "Subtle living-adobe idle: both feet stay planted at fixed coordinates; compact internal pressure gives a restrained breath, eyes blink and focus, mouth tightens and surface grains settle around the seal. Preserve rigid arm-less anatomy. No translation, turn, scaling, squash/stretch, warping or extra limbs; seamless anchored loop.",
+      "melee": "Aggressive adobe body strike in place: tiny feet piston and brace, rigid block tilts back only at ankles, eyes become sharply slanted and mouth snarls, then the rigid body snaps into a short crushing slam. Preserve hard block shape and no arms. No translation, turn, scaling or deformation. End holding impact tilt, no recovery.",
+      "ranged": "Aggressive stone-seal shot in place: feet remain planted, eyes turn angry and mouth snarls, mineral pressure pulses into the carved seal, which releases a focused spinning stone glyph and rock-chip burst; rigid block recoils only at ankle joints. Only projectile travels. No translation, scaling or deformation. End holding peak release, no recovery."
+    },
+    {
+      "id": 9102,
+      "slug": "prensalito",
+      "name": "Prensalito",
+      "root": "assets/pokemon/peyote-line",
+      "characterId": "b3b572f4-711c-42a3-ba11-6723dfb6069e",
+      "creation": "Exact Prensalito sprite: squat adobe fortress golem, wide layered tan block torso, two long rectangular pillar arms, two short block legs, angry white eyes in a dark slit and a carved green leaf seal. Preserve supplied identity, anatomy, silhouette, colors and pixel-art style.",
+      "idle": "Dense fortress-golem idle: both short feet stay planted at fixed coordinates; pillar arms settle with heavy joint motion, internal pressure creates a restrained breath, angry eyes track and dust falls. Preserve rigid architecture and anatomy. No translation, turn, scaling, squash/stretch, warping or extra limbs; seamless anchored loop.",
+      "melee": "Brutal pillar-arm crusher in place: short feet brace, rigid torso moves only through leg and shoulder joints, angry eyes narrow, both pillar arms retract and rise, then one hammers down while the other closes inward. Preserve rigid blocks and limb count. No translation, scaling or warping. End holding maximum impact, no recovery.",
+      "ranged": "Aggressive earth-press shockwave in place: pillar arms slam down and brace with feet fixed, eyes blaze and leaf seal charges, then compressed mineral force erupts forward as stone slabs and earthen shockwave; shoulders recoil but fortress stays anchored. Only projectile travels. Preserve anatomy and facing. End holding peak release, no recovery."
+    },
+    {
+      "id": 9201,
+      "slug": "criascama",
+      "name": "Criascama",
+      "root": "assets/pokemon/dracoscama-line",
+      "characterId": "bbc36f85-613b-4ef0-8460-273e0142f268",
+      "creation": "Exact Criascama sprite: baby green quadruped dragon, four clawed feet, large expressive head, small folded winglets, orange belly plates, curled spiked tail, horns and bright eyes. Preserve supplied identity, anatomy, silhouette, colors and pixel-art style.",
+      "idle": "Alert baby-dragon idle: all four feet stay planted at fixed coordinates; belly breathes, head tracks, eyes blink, winglets flutter once and curled tail counterbalances. Preserve anatomy and facing. No translation, turn, scaling, squash/stretch, warping or extra limbs; seamless anchored loop.",
+      "melee": "Fierce claw-and-bite strike in place: hind legs load and anchor, brow lowers and eyes narrow, mouth snarls, one foreclaw rakes as head snaps into a bite, winglets flare and tail counterbalances. Preserve four-legged anatomy. No translation, turn, scaling or deformation. End holding strongest contact, no recovery.",
+      "ranged": "Aggressive dragon-breath blast in place: all paws brace at fixed coordinates, belly and chest expand, head draws back, brow lowers and winglets flare, then jaws drive forward to release focused dragon energy while wings and tail absorb recoil. Only breath travels. Preserve anatomy and facing. End holding open-jaw release, no recovery."
+    },
+    {
+      "id": 9202,
+      "slug": "aliscama",
+      "name": "Aliscama",
+      "root": "assets/pokemon/dracoscama-line",
+      "characterId": "7976bcc1-d131-4fa3-9fac-33ff0d88afdc",
+      "creation": "Exact Aliscama sprite: slender green dragonfly-dragon, two clawed forearms, two hind legs, four translucent wings, long antennae, orange belly plates and long segmented abdomen-tail. Preserve supplied identity, anatomy, silhouette, colors and pixel-art style.",
+      "idle": "Grounded insect-dragon idle: hind claws stay planted at fixed coordinates; four wings hum in alternating pairs without lifting the body, chest breathes, foreclaws flex, antennae sample air and abdomen counterbalances. Preserve exact limb and wing count. No translation, turn, scaling, warping or extra limbs; seamless anchored loop.",
+      "melee": "Razor-fast scissoring melee in place: hind claws anchor, four wings flare, eyes narrow and antennae sweep back, shoulders rotate as foreclaws slash in a crossing pattern reinforced by a wing-edge cut; abdomen counterbalances. Preserve two arms, two legs and four wings. No translation or deformation. End holding peak slash, no recovery.",
+      "ranged": "Violent four-wing air-blade volley in place: hind claws anchor, angry eyes narrow, four wings draw back in paired tension and abdomen stiffens, then both pairs snap forward to compress air into razor gusts; antennae and abdomen recoil. Only air blades travel. Preserve anatomy and facing. End holding maximum release, no recovery."
+    },
+    {
+      "id": 9203,
+      "slug": "dracoscama",
+      "name": "Dracoscama",
+      "root": "assets/pokemon/dracoscama-line",
+      "characterId": "25fc27ea-4161-4e00-a50e-a21f2ee48496",
+      "creation": "Exact Dracoscama sprite: large adult green dragonfly-dragon, two hooked foreclaws, two hind legs, four broad translucent wings, long antennae, orange belly plates and long segmented bladed tail. Preserve supplied identity, anatomy, silhouette, colors and pixel-art style.",
+      "idle": "Dominant grounded dragon-insect idle: hind claws stay planted; chest breathes deeply, four wings pulse in alternating pairs, foreclaws flex, antennae track and bladed tail counterbalances. Preserve exact limb and wing count. No translation, turn, scaling, warping or extra limbs; seamless anchored loop.",
+      "melee": "Epic hooked-claw and tail strike in place: hind claws root, four wings flare, eyes become fierce, shoulders coil and one foreclaw tears forward while bladed tail arcs through a second slash; limbs counterbalance. Preserve two arms, two legs and four wings. No translation or deformation. End holding most aggressive contact, no recovery.",
+      "ranged": "Cataclysmic dragon-breath air vortex in place: hind claws anchor, four wings draw back, chest and neck inhale, antennae sweep back and face becomes a furious open-jaw snarl, then jaws and wings release dragon energy wrapped in razor air blades; wings and tail recoil. Only blast travels. Preserve anatomy. End holding peak release, no recovery."
+    }
+  ]
+}

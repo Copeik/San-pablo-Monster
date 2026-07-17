@@ -16,3 +16,9 @@ Animaciones idle de Peyote: poses clave editadas con OpenAI ImageGen y fotograma
 - peyote-idle-back.webp
 
 Modelo y código de referencia: https://github.com/Lightricks/LTX-Video
+
+Animaciones de combate PixelLab de Peyote y Prensalito (julio de 2026): seis secuencias necesarias por criatura, cada una con 8 fotogramas: reposo frontal/trasero, ataque cuerpo a cuerpo frontal/trasero y ataque a distancia frontal/trasero. Generadas exclusivamente con PixelLab MCP v3, revisadas cuadro a cuadro y empaquetadas como WebP RGBA de 384 × 384. Peyote conserva su bloque rígido y ataca mediante pies y sello; Prensalito usa los brazos-prensa y conduce la descarga por el terreno. No se trasladan, escalan, giran ni deforman en combate.
+
+Trazabilidad:
+- pixellab-hq/peyote/pixellab-jobs.json
+- pixellab-hq/prensalito/pixellab-jobs.json

@@ -1,0 +1,24 @@
+{
+  "provider": "PixelLab MCP v3",
+  "status": "completed_and_reviewed",
+  "character_id": "bbc36f85-613b-4ef0-8460-273e0142f268",
+  "biological_manifest": "../../../../../tools/pixellab-first10-combat-manifest.json#criascama",
+  "directions": { "front": "south", "back": "north" },
+  "frame_count": 8,
+  "idle_frame_ms": 120,
+  "attack_frame_ms": 90,
+  "animation_jobs": {
+    "idle": { "front": "284ac427-cc04-40b0-b690-b214533cf7b2", "back": "c4b8d58b-7722-4263-a6e2-c7903f504fda" },
+    "melee": { "front": "84089099-c60a-41d1-8ec8-81ffce262898", "back": "ff8d9e86-6b80-4582-b6e7-eaa32455c78f" },
+    "ranged": { "front": "abd9a175-d72d-4124-9578-ebc67b8eb317", "back": "4fdc69e5-ffe8-4b63-b7cd-4a18db622142" }
+  },
+  "selected_frames": {
+    "idle_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "idle_back": [0, 1, 2, 3, 2, 1, 0, 1],
+    "melee_front": [0, 1, 2, 3, 4, 5, 6, 6],
+    "melee_back": [0, 1, 2, 3, 4, 5, 5, 5],
+    "ranged_front": [0, 1, 2, 3, 4, 5, 6, 7],
+    "ranged_back": [0, 1, 2, 3, 4, 5, 6, 7]
+  },
+  "review": "Hind legs stay loaded while a foreclaw, bite and tail drive melee. Belly, jaw and winglets produce and absorb the ranged breath. The face becomes visibly angry in front attacks."
+}

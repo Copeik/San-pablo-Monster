@@ -1,0 +1,628 @@
+{
+  "chunks": {
+    "chunkSize": 512,
+    "columns": 5,
+    "count": 0,
+    "enabled": false,
+    "gutter": 2,
+    "items": [],
+    "rows": 5
+  },
+  "comparison": {
+    "generated": false,
+    "reference": "maps/ciudad-azahar/no-reference.png",
+    "referenceExists": false
+  },
+  "compiler": "tools/compile-san-pablo-map.py",
+  "determinism": {
+    "losslessWebp": true,
+    "seed": 17072026
+  },
+  "dimensions": {
+    "density": 2,
+    "logicalHeight": 2304,
+    "logicalWidth": 2560,
+    "pixelHeight": 4608,
+    "pixelWidth": 5120,
+    "tileSize": 32
+  },
+  "doorMarkers": {
+    "closed": 0,
+    "outOfBounds": 0,
+    "prism": 0,
+    "total": 0,
+    "usable": 0
+  },
+  "encounters": {
+    "areaCount": 2,
+    "areaIds": [
+      "orange-grove-west",
+      "orange-grove-east"
+    ],
+    "grassTilesComposited": 0
+  },
+  "geometry": {
+    "barrierGatePolicy": "solid",
+    "blockedPixelsByClassApprox": {
+      "barrier": 7704
+    },
+    "counts": {
+      "assetColliders": 155,
+      "ignoredNonSolidAssetColliders": 0,
+      "solidBarrierSegments": 5,
+      "surface:dirt": 3,
+      "surface:grass": 3,
+      "surface:road": 12,
+      "surface:sidewalk": 13
+    },
+    "features": [
+      {
+        "collection": "surfaceRects",
+        "id": "clinic-forecourt",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "institute-forecourt",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "culture-forecourt",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "central-civic-plaza",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "football-pitch",
+        "render": true,
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "south-linear-park",
+        "render": true,
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "southeast-commercial-square",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "orange-grove-west",
+        "render": true,
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "surfaceRects",
+        "id": "orange-grove-east",
+        "render": true,
+        "surface": "grass",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "clinic-access",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "institute-access",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "culture-access",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "plaza-north",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "plaza-south",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "plaza-west",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "plaza-east",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "field-access",
+        "render": true,
+        "surface": "sidewalk",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "south-park-walk",
+        "render": true,
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "paths",
+        "id": "south-park-link",
+        "render": true,
+        "surface": "dirt",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "ring-north",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "ring-east",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "ring-south",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "ring-west",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "avenue-north",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "avenue-south",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "avenue-west",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "avenue-east",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "west-lane-north",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "west-lane-south",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "east-lane-south",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "roads",
+        "id": "diagonal-southeast",
+        "render": true,
+        "surface": "road",
+        "walkable": true
+      },
+      {
+        "collection": "barrierSegments",
+        "id": "field-fence-top",
+        "kind": "fence",
+        "solid": true,
+        "surface": "barrier",
+        "walkable": false
+      },
+      {
+        "collection": "barrierSegments",
+        "id": "field-fence-left",
+        "kind": "fence",
+        "solid": true,
+        "surface": "barrier",
+        "walkable": false
+      },
+      {
+        "collection": "barrierSegments",
+        "id": "field-fence-right",
+        "kind": "fence",
+        "solid": true,
+        "surface": "barrier",
+        "walkable": false
+      },
+      {
+        "collection": "barrierSegments",
+        "id": "field-fence-bottom-left",
+        "kind": "fence",
+        "solid": true,
+        "surface": "barrier",
+        "walkable": false
+      },
+      {
+        "collection": "barrierSegments",
+        "id": "field-fence-bottom-right",
+        "kind": "fence",
+        "solid": true,
+        "surface": "barrier",
+        "walkable": false
+      }
+    ],
+    "ids": {
+      "barrierSegments": [
+        "field-fence-top",
+        "field-fence-left",
+        "field-fence-right",
+        "field-fence-bottom-left",
+        "field-fence-bottom-right"
+      ],
+      "blockers": [],
+      "buildingFootprints": [],
+      "greens": [],
+      "municipalSurfaces": [],
+      "paths": [
+        "clinic-access",
+        "institute-access",
+        "culture-access",
+        "plaza-north",
+        "plaza-south",
+        "plaza-west",
+        "plaza-east",
+        "field-access",
+        "south-park-walk",
+        "south-park-link"
+      ],
+      "roads": [
+        "ring-north",
+        "ring-east",
+        "ring-south",
+        "ring-west",
+        "avenue-north",
+        "avenue-south",
+        "avenue-west",
+        "avenue-east",
+        "west-lane-north",
+        "west-lane-south",
+        "east-lane-south",
+        "diagonal-southeast"
+      ],
+      "sidewalks": [],
+      "streetSurfaces": [],
+      "surfacePolygons": [],
+      "surfaceRects": [
+        "clinic-forecourt",
+        "institute-forecourt",
+        "culture-forecourt",
+        "central-civic-plaza",
+        "football-pitch",
+        "south-linear-park",
+        "southeast-commercial-square",
+        "orange-grove-west",
+        "orange-grove-east"
+      ]
+    },
+    "legacyWalkabilityIncluded": false,
+    "nonWalkableGroundFeatureIds": [],
+    "openExceptSolids": false,
+    "semanticWalkableShapes": 31,
+    "walkableFeatureIds": [
+      "clinic-forecourt",
+      "institute-forecourt",
+      "culture-forecourt",
+      "central-civic-plaza",
+      "football-pitch",
+      "south-linear-park",
+      "southeast-commercial-square",
+      "orange-grove-west",
+      "orange-grove-east",
+      "clinic-access",
+      "institute-access",
+      "culture-access",
+      "plaza-north",
+      "plaza-south",
+      "plaza-west",
+      "plaza-east",
+      "field-access",
+      "south-park-walk",
+      "south-park-link",
+      "ring-north",
+      "ring-east",
+      "ring-south",
+      "ring-west",
+      "avenue-north",
+      "avenue-south",
+      "avenue-west",
+      "avenue-east",
+      "west-lane-north",
+      "west-lane-south",
+      "east-lane-south",
+      "diagonal-southeast"
+    ]
+  },
+  "inputs": {
+    "assets/generated/san-pablo-derived/tileset-grass-dirt.png": "4d4f5941a49d6f1c1ab002e9f2a83febc106dc26ee11ce86127090aafec9243f",
+    "assets/generated/san-pablo-derived/tileset-road-sidewalk.png": "8eceec88d699d765a8a2e5d0ff90daf787fb72bff6abdfe6e8656eb027cded47",
+    "maps/ciudad-azahar/compile-config.js": "9873b02cf15ff35d8156e7f69fd2acc2aedb2e4ddfe99ab07c4ba937dc6eeda6",
+    "maps/ciudad-azahar/layout.js": "a2bf980d6406aad68d01fae709a72ffd47c5e8313f14e25e65def321a5db4744"
+  },
+  "outputs": {
+    "base": "assets/maps/ciudad-azahar-base-hd.webp",
+    "chunks": null,
+    "comparisonSheet": null,
+    "navigationMask": "assets/maps/ciudad-azahar-navigation.png",
+    "preview": "assets/maps/ciudad-azahar-preview.webp",
+    "report": "assets/maps/ciudad-azahar-report.json",
+    "sectorSheet": null,
+    "walkabilityOverlay": "assets/maps/ciudad-azahar-walkability.png"
+  },
+  "schemaVersion": 1,
+  "sections": [
+    {
+      "h": 768,
+      "id": "northwest",
+      "name": "Barrio de la Clínica",
+      "w": 853,
+      "walkablePercent": 15.033,
+      "walkablePixelsApprox": 98484,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "h": 768,
+      "id": "north",
+      "name": "Campus Azahar",
+      "w": 854,
+      "walkablePercent": 35.505,
+      "walkablePixelsApprox": 232864,
+      "x": 853,
+      "y": 0
+    },
+    {
+      "h": 768,
+      "id": "northeast",
+      "name": "Jardines del Este",
+      "w": 853,
+      "walkablePercent": 27.574,
+      "walkablePixelsApprox": 180636,
+      "x": 1707,
+      "y": 0
+    },
+    {
+      "h": 936,
+      "id": "west",
+      "name": "Barrio de los Patios",
+      "w": 720,
+      "walkablePercent": 44.561,
+      "walkablePixelsApprox": 300308,
+      "x": 0,
+      "y": 768
+    },
+    {
+      "h": 936,
+      "id": "central",
+      "name": "Plaza del Azahar",
+      "w": 1120,
+      "walkablePercent": 95.515,
+      "walkablePixelsApprox": 1001303,
+      "x": 720,
+      "y": 768
+    },
+    {
+      "h": 936,
+      "id": "east",
+      "name": "Estadio y Mercado",
+      "w": 720,
+      "walkablePercent": 48.721,
+      "walkablePixelsApprox": 328339,
+      "x": 1840,
+      "y": 768
+    },
+    {
+      "h": 600,
+      "id": "south",
+      "name": "Parque Lineal",
+      "w": 1280,
+      "walkablePercent": 58.743,
+      "walkablePixelsApprox": 451143,
+      "x": 0,
+      "y": 1704
+    },
+    {
+      "h": 600,
+      "id": "southeast",
+      "name": "Paseo de los Cerezos",
+      "w": 1280,
+      "walkablePercent": 48.181,
+      "walkablePixelsApprox": 370028,
+      "x": 1280,
+      "y": 1704
+    }
+  ],
+  "swatches": {
+    "dirt": {
+      "cell": [
+        1,
+        0
+      ],
+      "height": 290,
+      "width": 289
+    },
+    "grass": {
+      "cell": [
+        0,
+        0
+      ],
+      "height": 290,
+      "width": 290
+    },
+    "road": {
+      "cell": [
+        0,
+        0
+      ],
+      "height": 290,
+      "width": 290
+    },
+    "sidewalk": {
+      "cell": [
+        1,
+        0
+      ],
+      "height": 290,
+      "width": 289
+    }
+  },
+  "walkability": {
+    "blockedProbeFailures": 0,
+    "blockedProbes": [
+      {
+        "label": "fachada del Centro de Salud",
+        "passes": true,
+        "walkable": false,
+        "x": 350.0,
+        "y": 496.0
+      },
+      {
+        "label": "fachada de la Casa Consistorial",
+        "passes": true,
+        "walkable": false,
+        "x": 1280.0,
+        "y": 892.0
+      },
+      {
+        "label": "vaso de la fuente",
+        "passes": true,
+        "walkable": false,
+        "x": 1280.0,
+        "y": 1258.0
+      },
+      {
+        "label": "zócalo residencial oeste norte",
+        "passes": true,
+        "walkable": false,
+        "x": 384.0,
+        "y": 798.0
+      },
+      {
+        "label": "zócalo residencial oeste sur",
+        "passes": true,
+        "walkable": false,
+        "x": 384.0,
+        "y": 1618.0
+      },
+      {
+        "label": "valla oeste del campo",
+        "passes": true,
+        "walkable": false,
+        "x": 2032.0,
+        "y": 880.0
+      },
+      {
+        "label": "valla norte del campo",
+        "passes": true,
+        "walkable": false,
+        "x": 2208.0,
+        "y": 720.0
+      },
+      {
+        "label": "banco occidental de la plaza",
+        "passes": true,
+        "walkable": false,
+        "x": 1080.0,
+        "y": 1300.0
+      },
+      {
+        "label": "tronco del borde norte",
+        "passes": true,
+        "walkable": false,
+        "x": 72.0,
+        "y": 104.0
+      },
+      {
+        "label": "farola de la ronda",
+        "passes": true,
+        "walkable": false,
+        "x": 706.0,
+        "y": 1038.0
+      }
+    ],
+    "doorApproachFailures": 0,
+    "doorCentersBlockedByGeometry": 0,
+    "doorCentersOpenInMask": 0,
+    "doors": [],
+    "navigationMask": {
+      "cellSize": 8,
+      "columns": 320,
+      "rows": 288
+    },
+    "totalPixels": 5898240,
+    "walkablePercent": 50.237,
+    "walkablePixelsApprox": 2963107
+  }
+}

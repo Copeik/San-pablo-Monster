@@ -1,9 +1,11 @@
 # Project instructions
 
-## Required skill system
+## PixelLab MCP workflow
 
-For every task in this repository, invoke `superpowers:using-superpowers` before any response or action. Read and follow its current instructions, then invoke every other applicable Superpowers skill before continuing.
+Do not invoke or use `superpowers:*` skills for tasks in this repository.
 
-If `superpowers:using-superpowers` is unavailable, report the missing skill dependency and do not claim the Superpowers workflow was followed.
+For pixel-art and game-asset generation, use only the configured `pixellab` MCP tools and follow the official guide:
 
-Dispatched subagents must follow the exception defined by `superpowers:using-superpowers`.
+https://api.pixellab.ai/mcp/docs
+
+If the PixelLab MCP tools are unavailable, report that the MCP server is not configured. Do not substitute PixelLab REST endpoints or another image-generation system.

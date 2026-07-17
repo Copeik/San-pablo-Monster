@@ -38,14 +38,29 @@ test("ocultar un edificio retira también su puerta base", () => {
   assert.equal(window.CITY_MAP_CONFIG.doors.some((entry) => entry.col === 18 && entry.row === 21), false);
 });
 
-test("el catálogo expone los 40 assets nuevos y los recursos urbanos anteriores", () => {
+test("el catálogo expone los recursos urbanos y 20 muebles ortogonales de interior", () => {
   const window = buildMap({ version: 3 });
   const catalog = window.CITY_MAP_LAYOUT.assetCatalog;
   assert.equal(Object.keys(window.CITY_NEIGHBORHOOD_ASSET_CATALOG).length, 40);
-  assert.equal(Object.keys(catalog).length, 65);
+  assert.equal(Object.keys(catalog).length, 85);
+  const furniture = Object.values(catalog).filter((asset) => asset.interior === true);
+  assert.equal(furniture.length, 20);
+  assert.equal(furniture.every((asset) => asset.kind === "furniture" && asset.pixelated === true), true);
+  assert.equal(furniture.filter((asset) => asset.solid === false).length, 2);
   assert.equal(catalog.orangeTreeMature.label, "Naranjo adulto");
   assert.equal(catalog.civicUNorth.label, "Centro civico norte");
   assert.equal(catalog.whiteWallVertical.kind, "prop");
+});
+
+test("los muebles guardados para una casa no se filtran al exterior", () => {
+  const window = buildMap({
+    version: 3,
+    addedAssets: [{
+      id: "editor-bed-house-1", sprite: "interiorBedSingleVertical", scene: "interior:house-1:abc",
+      x: 180, y: 220, scale: 1, solid: true,
+    }],
+  });
+  assert.equal(window.CITY_MAP_LAYOUT.worldAssets.some((asset) => asset.id === "editor-bed-house-1"), false);
 });
 
 test("los reemplazos urbanos usan alzados ortogonales y respetan las correcciones", () => {

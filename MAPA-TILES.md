@@ -101,7 +101,7 @@ Para regenerar y verificar todo después de cambiar el layout:
 ```powershell
 python tools/compile-san-pablo-map.py
 python tools/build-san-pablo-asset-sheet.py
-node tools/validate-world-assets.mjs
+node --test tests/map-editor-layout.test.mjs tests/map-registry.test.mjs
 ```
 
 El compilador es determinista: usa la semilla declarada, tilesets fijos y WebP sin pérdida. El informe registra hashes de entradas y rutas de todas las salidas.

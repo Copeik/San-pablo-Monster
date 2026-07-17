@@ -1,9 +1,9 @@
-import { MAP_EDITOR_RULES, editorOperationKey, validateEditorEntity, validateEditorOperation } from "./map-editor-contract.js?v=3";
+import { MAP_EDITOR_RULES, editorOperationKey, validateEditorEntity, validateEditorOperation, validateMapEditorData } from "./map-editor-contract.js?v=3";
 import {
   boundedBrushCells, changedKeysSince, chunkOperationBatches, CommandBuilder, DurableOutboxQueue, floodFillCells,
-  groundPathSurface, groundPathType, IndexedDbOutboxAdapter, isGroundPathType, lineCells, mergeGroundPaintValue, PresenceGate, rectangleCells, TransactionHistory,
-  resolveConflictQueue,
-} from "./map-editor-core.js?v=6";
+  EDITOR_MODE_ORDER, groundPathSurface, groundPathType, IndexedDbOutboxAdapter, isGroundPathType, lineCells, mergeGroundPaintValue, PresenceGate,
+  rectangleCells, resolveConflictQueue, resolveEditorShortcut, TransactionHistory,
+} from "./map-editor-core.js?v=8";
 
 (() => {
   "use strict";
@@ -17,6 +17,8 @@ import {
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
+  const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+  const isPlainRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const randomIdentifier = () => {
     if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
     const values = new Uint32Array(4);
@@ -40,25 +42,30 @@ import {
     assetOverrides: {}, addedAssets: [], hiddenAssets: [],
     npcOverrides: {}, addedNpcs: [], hiddenNpcs: [], entrances: [], events: [],
   });
-  const normalizeData = (value = {}) => ({
-    ...emptyData(),
-    tileOverrides: { ...(value.tileOverrides || {}) },
-    groundOverrides: { ...(value.groundOverrides || {}) },
-    mapSize: {
-      cols: clamp(value.mapSize?.cols, MAP_EDITOR_RULES.world.minCols, MAP_EDITOR_RULES.world.maxCols, Number(initialGrid.cols) || MAP_EDITOR_RULES.world.cols),
-      rows: clamp(value.mapSize?.rows, MAP_EDITOR_RULES.world.minRows, MAP_EDITOR_RULES.world.maxRows, Number(initialGrid.rows) || MAP_EDITOR_RULES.world.rows),
-    },
-    assetOverrides: clone(value.assetOverrides || {}),
-    addedAssets: clone(Array.isArray(value.addedAssets) ? value.addedAssets : []),
-    hiddenAssets: [...new Set(Array.isArray(value.hiddenAssets) ? value.hiddenAssets : [])],
-    npcOverrides: clone(value.npcOverrides || {}),
-    addedNpcs: clone(Array.isArray(value.addedNpcs) ? value.addedNpcs : []),
-    hiddenNpcs: [...new Set(Array.isArray(value.hiddenNpcs) ? value.hiddenNpcs : [])],
-    entrances: clone(Array.isArray(value.entrances) ? value.entrances : []),
-    events: clone(Array.isArray(value.events) ? value.events : []),
-  });
+  const normalizeData = (value = {}) => {
+    const source = isPlainRecord(value) ? value : {};
+    const mapSize = isPlainRecord(source.mapSize) ? source.mapSize : {};
+    return {
+      ...emptyData(),
+      tileOverrides: { ...(isPlainRecord(source.tileOverrides) ? source.tileOverrides : {}) },
+      groundOverrides: { ...(isPlainRecord(source.groundOverrides) ? source.groundOverrides : {}) },
+      mapSize: {
+        cols: clamp(mapSize.cols, MAP_EDITOR_RULES.world.minCols, MAP_EDITOR_RULES.world.maxCols, Number(initialGrid.cols) || MAP_EDITOR_RULES.world.cols),
+        rows: clamp(mapSize.rows, MAP_EDITOR_RULES.world.minRows, MAP_EDITOR_RULES.world.maxRows, Number(initialGrid.rows) || MAP_EDITOR_RULES.world.rows),
+      },
+      assetOverrides: clone(isPlainRecord(source.assetOverrides) ? source.assetOverrides : {}),
+      addedAssets: clone(Array.isArray(source.addedAssets) ? source.addedAssets.filter(isPlainRecord) : []),
+      hiddenAssets: [...new Set(Array.isArray(source.hiddenAssets) ? source.hiddenAssets.filter((id) => typeof id === "string") : [])],
+      npcOverrides: clone(isPlainRecord(source.npcOverrides) ? source.npcOverrides : {}),
+      addedNpcs: clone(Array.isArray(source.addedNpcs) ? source.addedNpcs.filter(isPlainRecord) : []),
+      hiddenNpcs: [...new Set(Array.isArray(source.hiddenNpcs) ? source.hiddenNpcs.filter((id) => typeof id === "string") : [])],
+      entrances: clone(Array.isArray(source.entrances) ? source.entrances.filter(isPlainRecord) : []),
+      events: clone(Array.isArray(source.events) ? source.events.filter(isPlainRecord) : []),
+    };
+  };
 
-  let data = normalizeData(window.CITY_MAP_EDITOR_DATA || {});
+  let rawDataSnapshot = clone(window.CITY_MAP_EDITOR_DATA || {});
+  let data = normalizeData(rawDataSnapshot);
   let revision = 0;
   let enabled = false;
   let bound = false;
@@ -76,6 +83,7 @@ import {
   let reconnectTimer = 0;
   let reconnectAttempt = 0;
   let flushTimer = 0;
+  let diagnosticsTimer = 0;
   let sending = false;
   let presenceRequestInFlight = false;
   let pollingOnline = false;
@@ -119,16 +127,33 @@ import {
   const token = new URLSearchParams(window.location.search).get("editorToken") || "";
   const storage = (() => { try { return window.sessionStorage; } catch { return null; } })();
   const persistentStorage = (() => { try { return window.localStorage; } catch { return null; } })();
+  const safelyStore = (target, key, value) => {
+    try { target?.setItem(key, value); return Boolean(target); }
+    catch { return false; }
+  };
   const storedStringList = (key) => { try { const value = JSON.parse(persistentStorage?.getItem(key) || "[]"); return Array.isArray(value) ? value.map(String) : []; } catch { return []; } };
+  const workspacePreferencesKey = `pokemon-map-editor-workspace-v1:${activeMapId}`;
+  const workspacePreferences = (() => {
+    try {
+      const value = JSON.parse(persistentStorage?.getItem(workspacePreferencesKey) || "null");
+      return value && typeof value === "object" ? value : {};
+    } catch { return {}; }
+  })();
+  if (EDITOR_MODE_ORDER.includes(workspacePreferences.mode)) mode = workspacePreferences.mode;
+  if (["pencil", "eraser", "eyedropper", "rectangle", "fill"].includes(workspacePreferences.terrainTool)) terrainTool = workspacePreferences.terrainTool;
+  if (["pencil", "path", "eraser", "eyedropper", "rectangle", "fill"].includes(workspacePreferences.groundTool)) groundTool = workspacePreferences.groundTool;
   const favoriteAssetSprites = new Set(storedStringList("pokemon-map-editor-favorite-assets"));
   let recentAssetSprites = storedStringList("pokemon-map-editor-recent-assets");
   let favoritesOnly = false;
+  let catalogLastActivation = { id: "", at: 0 };
+  let draggedCatalogAssetId = "";
   const actorId = (() => {
-    const existing = storage?.getItem("pokemon-map-editor-actor");
+    let existing = "";
+    try { existing = storage?.getItem("pokemon-map-editor-actor") || ""; } catch { /* La sesión puede bloquear escritura y lectura. */ }
     const actorPattern = new RegExp(`^[a-z0-9][a-z0-9_-]{0,${MAP_EDITOR_RULES.lengths.id - 1}}$`, "i");
     if (actorPattern.test(existing || "")) return existing;
     const generated = `editor-${randomIdentifier()}`;
-    storage?.setItem("pokemon-map-editor-actor", generated);
+    safelyStore(storage, "pokemon-map-editor-actor", generated);
     return generated;
   })();
   const legacyOutboxId = `pending:${window.location.pathname}:${activeMapId}`;
@@ -255,13 +280,13 @@ import {
   }
 
   function arrayUpsert(list, value) {
-    const index = list.findIndex((entry) => entry.id === value.id);
+    const index = list.findIndex((entry) => entry?.id === value.id);
     if (index < 0) list.push(clone(value));
     else list[index] = clone(value);
   }
 
   function arrayDelete(list, id) {
-    const index = list.findIndex((entry) => entry.id === id);
+    const index = list.findIndex((entry) => entry?.id === id);
     if (index >= 0) list.splice(index, 1);
   }
 
@@ -285,6 +310,7 @@ import {
     if (operation.type === "map.resize") {
       data.mapSize = { ...operation.value };
       updateMapSizeUi();
+      scheduleMapDiagnostics();
       return;
     }
     if (operation.type === "list.set") {
@@ -327,7 +353,9 @@ import {
       bridge.applyEditorData?.(data);
       return;
     }
-    if (operation.type === "entity.set") {
+    if (operation.rebuildRuntime) {
+      bridge.applyEditorData?.(data);
+    } else if (operation.type === "entity.set") {
       bridge.setEntity?.(operation.entity, operation.id, { ...clone(operation.value), id: operation.id });
     } else {
       bridge.deleteEntity?.(operation.entity, operation.id);
@@ -348,13 +376,6 @@ import {
     activityList.replaceChildren(...activity.map((entry) => {
       const item = document.createElement("li"); item.textContent = entry; return item;
     }));
-  }
-
-  function describeOperation(operation) {
-    if (operation.type === "tile.set") return `casilla ${operation.key} → ${operation.value || "original"}`;
-    if (operation.type === "list.set") return `actualizó ${operation.list}`;
-    const labels = { asset: "objeto", npc: "NPC", entrance: "entrada", event: "evento" };
-    return `${operation.type === "entity.delete" ? "eliminó" : "editó"} ${labels[operation.entity] || operation.entity} ${operation.id}`;
   }
 
   function updateHistoryButtons() {
@@ -422,15 +443,28 @@ import {
   }
 
   function applySnapshot(snapshot, { preservePending = false } = {}) {
+    if (drag || activeTransaction || keyboardTransaction || formTransaction || pinchGesture || touchPointers.size) {
+      cancelCurrentAction({ clearSelection: false });
+    }
     const pending = preservePending ? pendingBatches.flatMap((batch) => batch.operations).map(clone) : [];
-    data = normalizeData(snapshot.data || snapshot);
+    rawDataSnapshot = clone(snapshot.data || snapshot);
+    data = normalizeData(rawDataSnapshot);
     setRevision(snapshot.revision ?? revision, true);
     bridge.applyEditorData?.(data);
     pending.forEach((operation) => {
       applyDataOperation(operation);
       applyBridgeOperation(operation);
     });
-    updateMapSizeUi(); applyInputRules(); renderSelection();
+    [...multiSelection].forEach((key) => {
+      const separator = key.indexOf(":");
+      if (separator <= 0 || !entityById(key.slice(0, separator), key.slice(separator + 1))) multiSelection.delete(key);
+    });
+    if (selected && !entityById(selected.kind, selected.id)) selected = null;
+    bridge.selectEntity?.(selected?.kind || null, selected?.id || null);
+    bridge.setSelections?.([...multiSelection].map((key) => {
+      const separator = key.indexOf(":"); return { kind: key.slice(0, separator), id: key.slice(separator + 1) };
+    }));
+    updateMapSizeUi(); applyInputRules(); renderSelection(); renderOutliner();
   }
 
   async function resyncAfterConflict(result) {
@@ -448,6 +482,8 @@ import {
       const changeCount = pendingOperationCount();
       setRevision(revision + 1);
       const stored = persistSoloSnapshot();
+      rawDataSnapshot = clone(data);
+      scheduleMapDiagnostics();
       pendingBatches = [];
       try { await persistPendingBatches(); } catch { /* La copia principal ya se intentó en localStorage. */ }
       setSaveStatus("saved", stored
@@ -472,6 +508,8 @@ import {
       if (response.status === 409) { await resyncAfterConflict(result); return; }
       if (!response.ok) throw new Error(result.error || `Error ${response.status}`);
       setRevision(result.revision);
+      rawDataSnapshot = clone(data);
+      scheduleMapDiagnostics();
       pendingBatches.shift();
       pendingBatches.forEach((entry) => { if (entry.baseRevision === baseRevision) entry.baseRevision = revision; });
       await persistPendingBatches();
@@ -493,18 +531,29 @@ import {
     setRevision(payload.revision);
     if (payload.actorId === actorId) return;
     const operations = payload.operations || [];
+    const incomingKeys = new Set(operations.map(operationKey));
+    const activeBuilders = new Set([drag?.transaction, activeTransaction, keyboardTransaction?.builder, formTransaction?.builder].filter(Boolean));
+    const activeKeys = new Set([...activeBuilders].flatMap((builder) => builder.command().keys));
+    [drag?.beforeOperation, keyboardTransaction?.before, formTransaction?.before].filter(Boolean)
+      .forEach((operation) => activeKeys.add(operationKey(operation)));
+    (drag?.groupBefore || []).forEach((entity) => activeKeys.add(operationKey({ type: "entity.set", entity: "asset", id: entity.id })));
+    const interrupted = [...incomingKeys].some((key) => activeKeys.has(key));
+    if (interrupted) cancelCurrentAction({ clearSelection: false });
     operations.forEach((operation) => {
       applyDataOperation(operation);
       applyBridgeOperation(operation);
       remoteChangedKeys.add(operationKey(operation));
       remoteKeyRevisions.set(operationKey(operation), Number(payload.revision) || revision);
     });
+    rawDataSnapshot = clone(data);
+    scheduleMapDiagnostics();
     const terrainCount = operations.filter((operation) => operation.type === "tile.set").length;
     const groupId = payload.groupId || payload.transactionId || "";
     const grouped = remoteActivityGroups.get(groupId) || { operations: 0, terrain: 0 };
     grouped.operations += operations.length; grouped.terrain += terrainCount; remoteActivityGroups.set(groupId, grouped);
     const description = grouped.terrain ? `pintó ${grouped.terrain} casilla${grouped.terrain === 1 ? "" : "s"}` : payload.label || `${grouped.operations} cambios`;
     recordActivity(description, payload.name || "Otro editor", groupId);
+    if (interrupted) setSaveStatus(pendingBatches.length ? "pending" : "saved", "Un cambio remoto tocó tu edición activa; el gesto local se canceló.");
     renderSelection();
     renderOutliner();
   }
@@ -625,8 +674,8 @@ import {
   }
 
   function entityCollection(kind, id) {
-    if (kind === "asset") return data.addedAssets.some((entry) => entry.id === id) ? "addedAssets" : "assetOverrides";
-    if (kind === "npc") return data.addedNpcs.some((entry) => entry.id === id) ? "addedNpcs" : "npcOverrides";
+    if (kind === "asset") return data.addedAssets.some((entry) => entry?.id === id) ? "addedAssets" : "assetOverrides";
+    if (kind === "npc") return data.addedNpcs.some((entry) => entry?.id === id) ? "addedNpcs" : "npcOverrides";
     return kind === "entrance" ? "entrances" : "events";
   }
 
@@ -649,7 +698,11 @@ import {
       flipX: Boolean(asset.flipX),
     };
     if (asset.label) record.label = String(asset.label).slice(0, MAP_EDITOR_RULES.lengths.assetLabel);
-    if (added) { record.id = asset.id; record.sprite = asset.sprite; }
+    if (added) {
+      record.id = asset.id;
+      record.sprite = asset.sprite;
+      record.scene = String(asset.scene || bridge.sceneInfo?.().id || "world").slice(0, 64);
+    }
     return record;
   }
 
@@ -676,6 +729,13 @@ import {
   }
 
   function setSelected(kind, id, { add = false } = {}) {
+    const selectionChanges = selected?.kind !== kind || selected?.id !== id;
+    if (selectionChanges && keyboardTransaction) {
+      commitTransaction(keyboardTransaction.builder); keyboardTransaction = null;
+    }
+    if (selectionChanges && formTransaction) {
+      commitTransaction(formTransaction.builder); formTransaction = null;
+    }
     if (!add || kind !== "asset") multiSelection.clear();
     if (kind && id) {
       const key = selectionKey(kind, id);
@@ -727,6 +787,85 @@ import {
       const lockButton = document.createElement("button"); lockButton.type = "button"; lockButton.dataset.outlinerLock = key; lockButton.title = "Bloquear"; lockButton.setAttribute("aria-pressed", String(lockedEntities.has(key))); lockButton.textContent = lockedEntities.has(key) ? "▣" : "▢";
       row.append(selectButton, centerButton, hideButton, lockButton); return row;
     }));
+    scheduleMapDiagnostics();
+  }
+
+  function collectMapDiagnostics() {
+    const issues = [];
+    const entities = allEditorEntities();
+    const seen = new Set();
+    const occupiedTransitions = new Map();
+    const push = (severity, kind, entity, message) => {
+      const id = String(entity?.id || "");
+      issues.push({
+        severity, kind, id,
+        label: String(entity?.label || entity?.name || entity?.id || "Mapa"), message,
+        navigable: Boolean(id && entityById(kind, id)),
+      });
+    };
+
+    const snapshotValidation = validateMapEditorData(rawDataSnapshot);
+    snapshotValidation.errors.forEach((message) => push("error", "map", null, message));
+
+    const rawSeen = new Set();
+    [
+      ["asset", data.addedAssets], ["npc", data.addedNpcs],
+      ["entrance", data.entrances], ["event", data.events],
+    ].forEach(([kind, records]) => (Array.isArray(records) ? records : []).forEach((record, index) => {
+      const entity = record && typeof record === "object" && !Array.isArray(record) ? record : {};
+      const rawKey = entity.id ? selectionKey(kind, entity.id) : "";
+      if (rawKey && rawSeen.has(rawKey)) push("error", kind, entity, "Hay otra entidad con el mismo ID en los datos del mapa.");
+      if (rawKey) rawSeen.add(rawKey);
+      const validation = contextualEntityValidation(kind, clone(record));
+      validation.errors.forEach((message) => push("error", kind, { ...entity, label: entity.label || entity.name || `Registro ${index + 1}` }, message));
+    }));
+
+    entities.forEach(({ kind, entity }) => {
+      const key = selectionKey(kind, entity.id);
+      if (seen.has(key)) push("error", kind, entity, "Hay otra entidad con el mismo ID.");
+      seen.add(key);
+      const validation = contextualEntityValidation(kind, clone(entity));
+      validation.errors.forEach((message) => push("error", kind, entity, message));
+      validation.warnings.forEach((message) => push("warning", kind, entity, message));
+      if ((kind === "entrance" || kind === "event") && (entity.action === "transition" || ["teleport", "transition"].includes(entity.type))) {
+        const positionKey = `${entity.col},${entity.row}`;
+        const previous = occupiedTransitions.get(positionKey);
+        if (previous) push("warning", kind, entity, `Comparte casilla de transición con ${previous}.`);
+        else occupiedTransitions.set(positionKey, entity.label || entity.id);
+      }
+    });
+    return [...new Map(issues.map((issue) => [`${issue.severity}:${issue.kind}:${issue.id}:${issue.message}`, issue])).values()];
+  }
+
+  function renderMapDiagnostics() {
+    const list = $("#mapEditorDiagnosticsList");
+    const status = $("#mapEditorDiagnosticsStatus");
+    const count = $("#mapEditorDiagnosticsCount");
+    if (!list || !status || !count) return;
+    const issues = collectMapDiagnostics();
+    const errors = issues.filter((issue) => issue.severity === "error").length;
+    const warnings = issues.length - errors;
+    count.textContent = String(issues.length);
+    count.dataset.state = errors ? "error" : warnings ? "warning" : "ok";
+    status.dataset.state = errors ? "error" : warnings ? "warning" : "ok";
+    status.textContent = errors
+      ? `${errors} errores y ${warnings} avisos por revisar.`
+      : warnings ? `${warnings} avisos; el mapa se puede probar.` : "Todo listo: no se han encontrado problemas.";
+    list.replaceChildren(...issues.slice(0, 50).map((issue) => {
+      const item = document.createElement("li"); item.dataset.state = issue.severity;
+      const button = document.createElement("button"); button.type = "button";
+      if (issue.navigable) button.dataset.diagnosticEntity = selectionKey(issue.kind, issue.id);
+      else button.disabled = true;
+      const title = document.createElement("strong"); title.textContent = issue.label;
+      const message = document.createElement("span"); message.textContent = issue.message;
+      button.append(title, message); item.appendChild(button); return item;
+    }));
+  }
+
+  function scheduleMapDiagnostics(delay = 220) {
+    if (!$("#mapEditorDiagnosticsList")) return;
+    window.clearTimeout(diagnosticsTimer);
+    diagnosticsTimer = window.setTimeout(renderMapDiagnostics, delay);
   }
 
   function setInfo(selector, primary, secondary) {
@@ -829,19 +968,62 @@ import {
     return presentEntityValidation("event", event, $("#eventValidation"), Object.values(eventInputs));
   }
 
-  function presentEntityValidation(kind, entity, output, inputs = []) {
+  function contextualEntityValidation(kind, entity) {
     const base = validateEditorEntity(kind, entity);
     const result = { ...base, errors: [...base.errors], warnings: [...base.warnings] };
+    if (!entity || typeof entity !== "object" || Array.isArray(entity)) return result;
+    const grid = bridge.grid();
+    const col = Number(entity.col); const row = Number(entity.row);
+    const positionIsFinite = Number.isFinite(col) && Number.isFinite(row);
+    const insideGrid = positionIsFinite && col >= 0 && row >= 0 && col < grid.cols && row < grid.rows;
+    if (kind === "asset") {
+      const x = Number(entity.x); const y = Number(entity.y);
+      if (entity.sprite && !bridge.assetCatalog()[entity.sprite]) {
+        result.errors.push("El prototipo visual del objeto no existe en el catálogo.");
+      }
+      if (Number.isFinite(x) && Number.isFinite(y) && (x < 0 || y < 0 || x > grid.cols * grid.tileSize || y > grid.rows * grid.tileSize)) {
+        result.errors.push("El objeto está fuera del tamaño actual del mapa.");
+      }
+    } else if (positionIsFinite && !insideGrid) result.errors.push("La entidad está fuera de la cuadrícula actual.");
     if (kind === "npc" && entity.patrol?.to) {
-      const route = lineCells({ col: entity.col, row: entity.row }, { col: entity.patrol.to[0], row: entity.patrol.to[1] }, bridge.grid());
-      if (route.some(({ col, row }) => bridge.tileType(col, row) === "blocked")) result.errors.push("La ruta de patrulla atraviesa una casilla bloqueada.");
+      const patrolCol = Number(entity.patrol.to[0]); const patrolRow = Number(entity.patrol.to[1]);
+      const patrolInside = Number.isFinite(patrolCol) && Number.isFinite(patrolRow)
+        && patrolCol >= 0 && patrolRow >= 0 && patrolCol < grid.cols && patrolRow < grid.rows;
+      if (!patrolInside) result.errors.push("El destino de patrulla está fuera del tamaño actual del mapa.");
+      else if (insideGrid) {
+        const route = lineCells({ col, row }, { col: patrolCol, row: patrolRow }, grid);
+        if (route.some((cell) => bridge.tileType(cell.col, cell.row) === "blocked")) result.errors.push("La ruta de patrulla atraviesa una casilla bloqueada.");
+      }
+    }
+    const dialogueLines = Array.isArray(entity.lines) ? entity.lines : [];
+    if (kind === "npc" && !dialogueLines.some((line) => String(line).trim())) {
+      result.warnings.push("El NPC no tiene diálogo.");
+    }
+    if (kind === "entrance" && entity.linkedAssetId && !bridge.assets().some((asset) => String(asset.id) === String(entity.linkedAssetId))) {
+      result.warnings.push("El edificio vinculado ya no existe.");
     }
     if (kind === "event") {
       const overlaps = (bridge.entities?.("event") || []).filter((candidate) => candidate.id !== entity.id && candidate.col === entity.col && candidate.row === entity.row);
       if (overlaps.length) result.warnings.push(`Comparte casilla con ${overlaps.map((candidate) => candidate.id).join(", ")}.`);
-      if (bridge.tileType(entity.col, entity.row) === "blocked") result.warnings.push("El evento está en una casilla bloqueada; comprueba que siga siendo accesible.");
+      if (insideGrid && bridge.tileType(col, row) === "blocked") result.warnings.push("El evento está en una casilla bloqueada; comprueba que siga siendo accesible.");
     }
+    const targetMap = String(entity.targetMap || "").toLowerCase().replace(/_/g, "-");
+    const targetsCurrentMap = targetMap === "current" || targetMap === activeMapId || (activeMapId === "san-pablo" && targetMap === "city");
+    const hasTarget = kind === "entrance" ? entity.action === "transition" : kind === "event" && ["teleport", "transition"].includes(entity.type);
+    if (hasTarget && targetsCurrentMap) {
+      const targetX = Number(entity.targetX); const targetY = Number(entity.targetY);
+      if (Number.isFinite(targetX) && Number.isFinite(targetY)
+        && (targetX < 0 || targetY < 0 || targetX >= grid.cols * grid.tileSize || targetY >= grid.rows * grid.tileSize)) {
+        result.errors.push("El destino está fuera del tamaño actual del mapa.");
+      }
+    }
+    result.errors = [...new Set(result.errors)]; result.warnings = [...new Set(result.warnings)];
     result.valid = result.errors.length === 0;
+    return result;
+  }
+
+  function presentEntityValidation(kind, entity, output, inputs = []) {
+    const result = contextualEntityValidation(kind, entity);
     inputs.filter(Boolean).forEach((input) => {
       input.setAttribute("aria-invalid", String(!result.valid));
       if (output?.id) input.setAttribute("aria-describedby", output.id);
@@ -853,9 +1035,134 @@ import {
     return result;
   }
 
+  function persistWorkspacePreferences() {
+    if (!persistentStorage) return;
+    const terrainBrushSize = Number($("#terrainBrushSize")?.value) || Number(workspacePreferences.terrainBrushSize) || 1;
+    const groundBrushSize = Number($("#groundBrushSize")?.value) || Number(workspacePreferences.groundBrushSize) || 1;
+    try {
+      persistentStorage.setItem(workspacePreferencesKey, JSON.stringify({ mode, terrainTool, groundTool, terrainBrushSize, groundBrushSize }));
+    } catch { /* Las preferencias nunca deben impedir editar. */ }
+  }
+
+  function updatePaintingToolUi(layer = mode) {
+    const isGround = layer === "ground";
+    const tool = isGround ? groundTool : terrainTool;
+    const selector = isGround ? "[data-ground-tool]" : "[data-terrain-tool]";
+    $$(selector).forEach((entry) => {
+      const active = (isGround ? entry.dataset.groundTool : entry.dataset.terrainTool) === tool;
+      entry.classList.toggle("selected", active);
+      entry.setAttribute("aria-pressed", String(active));
+    });
+    if (layer === mode) editor.dataset.tool = tool;
+  }
+
+  function setPaintingTool(nextTool, layer = mode, { persist = true } = {}) {
+    const allowed = layer === "ground"
+      ? ["pencil", "path", "eraser", "eyedropper", "rectangle", "fill"]
+      : ["pencil", "eraser", "eyedropper", "rectangle", "fill"];
+    if (!allowed.includes(nextTool)) return false;
+    if (layer === "ground") groundTool = nextTool; else terrainTool = nextTool;
+    updatePaintingToolUi(layer);
+    if (persist) persistWorkspacePreferences();
+    return true;
+  }
+
+  function applyWorkspacePreferences() {
+    const brushSizes = new Set([1, 3, 5, 7, 9]);
+    const terrainBrush = $("#terrainBrushSize");
+    const groundBrush = $("#groundBrushSize");
+    const terrainSize = Number(workspacePreferences.terrainBrushSize);
+    const groundSize = Number(workspacePreferences.groundBrushSize);
+    if (terrainBrush && brushSizes.has(terrainSize)) terrainBrush.value = String(terrainSize);
+    if (groundBrush && brushSizes.has(groundSize)) groundBrush.value = String(groundSize);
+    updatePaintingToolUi("terrain");
+    updatePaintingToolUi("ground");
+  }
+
+  function changeBrushSize(direction) {
+    const input = $(mode === "ground" ? "#groundBrushSize" : "#terrainBrushSize");
+    if (!input) return false;
+    const sizes = [1, 3, 5, 7, 9];
+    const current = Math.max(0, sizes.indexOf(Number(input.value)));
+    const next = sizes[clamp(current + Math.sign(direction), 0, sizes.length - 1, current)];
+    input.value = String(next);
+    persistWorkspacePreferences();
+    const hint = $("#tileEditorHint");
+    if (hint && mode === "terrain") hint.textContent = `Pincel ${next} × ${next} · ${terrainType}`;
+    return true;
+  }
+
+  function revertUncommittedBuilder(builder) {
+    if (!builder?.size) return false;
+    builder.command().before.forEach((operation) => { applyDataOperation(operation); applyBridgeOperation(operation); });
+    return true;
+  }
+
+  function cancelCurrentAction(options = {}) {
+    const clearSelection = options?.clearSelection !== false;
+    const builders = new Set([activeTransaction, drag?.transaction, formTransaction?.builder, keyboardTransaction?.builder].filter(Boolean));
+    let changed = false;
+    builders.forEach((builder) => { changed = revertUncommittedBuilder(builder) || changed; });
+    if (drag?.pointerId != null) {
+      try { canvas.releasePointerCapture?.(drag.pointerId); } catch { /* No todos los gestos capturan el puntero. */ }
+    }
+    const hadGesture = Boolean(drag || activeTransaction || keyboardTransaction || formTransaction || pinchGesture || touchPointers.size);
+    const hadSelection = clearSelection && Boolean(selected);
+    drag = null; activeTransaction = null; keyboardTransaction = null; formTransaction = null;
+    lastPaintedTile = ""; pinchGesture = null; touchPointers.clear(); spacePressed = false;
+    draggedCatalogAssetId = ""; delete editor.dataset.catalogDrag;
+    bridge.setTerrainPreview?.([]); bridge.setMarquee?.(null);
+    if (!changed && selected && clearSelection) setSelected(null, null);
+    else { renderSelection(); renderOutliner(); }
+    if (hadGesture || changed) setSaveStatus(pendingBatches.length ? "pending" : "saved", "Acción cancelada.");
+    return hadGesture || changed || hadSelection;
+  }
+
+  function selectAllAssets() {
+    const assets = bridge.assets().filter((asset) => !temporarilyHiddenEntities.has(selectionKey("asset", asset.id)));
+    multiSelection.clear();
+    assets.forEach((asset) => multiSelection.add(selectionKey("asset", asset.id)));
+    const last = assets.at(-1);
+    selected = last ? { kind: "asset", id: last.id } : null;
+    bridge.selectEntity?.("asset", last?.id || null);
+    bridge.setSelections?.(assets.map((asset) => ({ kind: "asset", id: asset.id })));
+    renderSelection(); renderOutliner(); sendPresence();
+  }
+
+  function focusEditorSearch() {
+    const input = mode === "objects" ? $("#assetCatalogSearch") : $("#mapEditorSearchInput");
+    if (!input) return;
+    let ancestor = input.parentElement;
+    while (ancestor) {
+      if (ancestor.tagName === "DETAILS") ancestor.open = true;
+      ancestor = ancestor.parentElement;
+    }
+    const focus = () => { input.focus(); input.select?.(); };
+    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(focus);
+    else window.setTimeout(focus, 0);
+  }
+
+  function executeEditorShortcut(action) {
+    if (!action) return false;
+    if (action.type === "mode") setMode(action.value);
+    else if (action.type === "paint.tool") setPaintingTool(action.value);
+    else if (action.type === "brush.size") changeBrushSize(action.value);
+    else if (action.type === "selection.all") selectAllAssets();
+    else if (action.type === "selection.clear") setSelected(null, null);
+    else if (action.type === "selection.group") transformSelectedAssets("group");
+    else if (action.type === "selection.center") { if (selected) bridge.focusEntity?.(selected.kind, selected.id); }
+    else if (action.type === "search") focusEditorSearch();
+    else if (action.type === "cancel") cancelCurrentAction();
+    else return false;
+    return true;
+  }
+
   function setMode(nextMode) {
-    const modes = new Set(["objects", "terrain", "ground", "npcs", "entrances", "events"]);
-    mode = modes.has(nextMode) ? nextMode : "objects";
+    const modes = new Set(EDITOR_MODE_ORDER);
+    const scene = bridge.sceneInfo?.() || {};
+    const resolvedMode = scene.kind === "interior" ? "objects" : (modes.has(nextMode) ? nextMode : "objects");
+    if (resolvedMode !== mode && (drag || activeTransaction || keyboardTransaction || formTransaction)) commitTransientTransactions();
+    mode = resolvedMode;
     $$('[data-editor-mode]').forEach((button) => {
       const active = button.dataset.editorMode === mode;
       button.classList.toggle("selected", active); button.setAttribute("aria-selected", String(active)); button.tabIndex = active ? 0 : -1;
@@ -872,7 +1179,9 @@ import {
     $$('[data-editor-overlay]').forEach((input) => { input.checked = relevantOverlays.includes(input.dataset.editorOverlay); });
     updateEditorOverlays();
     bridge.setEditorMode?.(mode);
+    editor.dataset.tool = mode === "ground" ? groundTool : mode === "terrain" ? terrainTool : "select";
     if (selected?.kind !== ({ objects: "asset", npcs: "npc", entrances: "entrance", events: "event" }[mode])) setSelected(null, null);
+    persistWorkspacePreferences();
     sendPresence();
   }
 
@@ -888,6 +1197,32 @@ import {
   function entitySetOperation(kind, entity) {
     const collection = entityCollection(kind, entity.id);
     return { type: "entity.set", entity: kind, collection, id: entity.id, value: cleanEntityRecord(kind, entity) };
+  }
+
+  function entityBeforeOperation(kind, entity) {
+    const collection = entityCollection(kind, entity.id);
+    const stored = ["assetOverrides", "npcOverrides"].includes(collection)
+      ? (hasOwn(data[collection], entity.id) ? data[collection][entity.id] : null)
+      : data[collection]?.find?.((entry) => entry?.id === entity.id) || null;
+    const baselineValue = cleanEntityRecord(kind, entity);
+    if (stored) {
+      return {
+        type: "entity.set", entity: kind, collection, id: entity.id, value: clone(stored),
+        rebuildRuntime: true, baselineValue,
+      };
+    }
+    return {
+      type: "entity.delete", entity: kind, collection, id: entity.id, hide: false,
+      rebuildRuntime: true, baselineValue,
+    };
+  }
+
+  function operationsAreEquivalent(after, before) {
+    if (before?.baselineValue && after?.type === "entity.set"
+      && after.entity === before.entity && after.collection === before.collection && after.id === before.id) {
+      return JSON.stringify(after.value) === JSON.stringify(before.baselineValue);
+    }
+    return JSON.stringify(after) === JSON.stringify(before);
   }
 
   function beginTransaction(label) {
@@ -910,9 +1245,12 @@ import {
   function commitTransaction(builder) {
     if (!builder?.size) return false;
     const command = builder.command();
-    const changes = command.after.map((after, index) => ({ after, before: command.before[command.before.length - 1 - index] }))
-      .filter(({ after, before }) => JSON.stringify(after) !== JSON.stringify(before));
-    if (!changes.length) return false;
+    const staged = command.after.map((after, index) => ({ after, before: command.before[command.before.length - 1 - index] }));
+    const changes = staged.filter(({ after, before }) => !operationsAreEquivalent(after, before));
+    staged.filter(({ after, before }) => operationsAreEquivalent(after, before)).forEach(({ before }) => {
+      applyDataOperation(before); applyBridgeOperation(before);
+    });
+    if (!changes.length) { renderSelection(); renderOutliner(); return false; }
     command.after = changes.map((change) => change.after);
     command.before = changes.map((change) => change.before).reverse();
     command.keys = command.after.map(operationKey);
@@ -927,18 +1265,15 @@ import {
 
   function commitTransientTransactions() {
     let committed = false;
-    if (keyboardTransaction) {
-      committed = commitTransaction(keyboardTransaction.builder) || committed;
-      keyboardTransaction = null;
+    const builders = new Set([keyboardTransaction?.builder, formTransaction?.builder, drag?.transaction, activeTransaction].filter(Boolean));
+    builders.forEach((builder) => { committed = commitTransaction(builder) || committed; });
+    if (drag?.pointerId != null) {
+      try { canvas.releasePointerCapture?.(drag.pointerId); } catch { /* El cierre puede haber liberado ya el puntero. */ }
     }
-    if (formTransaction) {
-      committed = commitTransaction(formTransaction.builder) || committed;
-      formTransaction = null;
-    }
-    if (activeTransaction) {
-      committed = commitTransaction(activeTransaction) || committed;
-      activeTransaction = null;
-    }
+    drag = null; keyboardTransaction = null; formTransaction = null; activeTransaction = null;
+    lastPaintedTile = ""; pinchGesture = null; touchPointers.clear(); spacePressed = false;
+    draggedCatalogAssetId = ""; delete editor.dataset.catalogDrag;
+    bridge.setTerrainPreview?.([]); bridge.setMarquee?.(null);
     if (committed) renderSelection();
     return committed;
   }
@@ -950,34 +1285,37 @@ import {
       setSaveStatus("error", validation.errors[0]);
       return null;
     }
+    const inverse = historyBefore ? entityBeforeOperation(kind, historyBefore) : null;
     const result = bridge.setEntity?.(kind, next.id, next) || next;
     const current = entityById(kind, next.id) || result;
     const operation = entitySetOperation(kind, current);
     queueOperation(operation);
-    if (historyBefore) pushHistory(operation, {
-      type: "entity.set", entity: kind, collection: entityCollection(kind, next.id), id: next.id,
-      value: cleanEntityRecord(kind, historyBefore),
-    }, label);
+    if (inverse) pushHistory(operation, inverse, label);
     setSelected(kind, next.id);
     return current;
   }
 
   function updateSelected(patch, label = "Editar entidad") {
+    commitTransientTransactions();
     const entity = selectedEntity(); if (!entity || !selected) return;
     const before = clone(entity); const next = { ...entity, ...patch };
     upsertLocalEntity(selected.kind, next, { historyBefore: before, label });
   }
 
   function addAsset(sprite = prototypeSelect?.value, position = bridge.viewportCenter(), template = {}) {
+    commitTransientTransactions();
     const prototype = bridge.assetCatalog()[sprite]; if (!prototype) return null;
     recentAssetSprites = [sprite, ...recentAssetSprites.filter((entry) => entry !== sprite)].slice(0, 8);
-    persistentStorage?.setItem("pokemon-map-editor-recent-assets", JSON.stringify(recentAssetSprites));
+    safelyStore(persistentStorage, "pokemon-map-editor-recent-assets", JSON.stringify(recentAssetSprites));
     renderAssetCatalog();
+    const scene = bridge.sceneInfo?.() || { id: "world", kind: "world" };
     const asset = {
       id: uniqueId(`editor-${sprite}`), sprite, kind: prototype.kind || "prop", placement: "editor",
       x: snap(position.x), y: snap(position.y), scale: Number(template.scale) || 1,
       rotation: Number(template.rotation) || 0, depthY: snap(position.y) - (prototype.kind === "building" ? 10 : 2),
-      solid: template.solid !== false, flipX: Boolean(template.flipX), label: template.label || `Objeto ${sprite}`,
+      solid: typeof template.solid === "boolean" ? template.solid : prototype.solid !== false,
+      flipX: Boolean(template.flipX), label: template.label || prototype.label || `Objeto ${sprite}`,
+      scene: scene.id || "world",
     };
     const operation = { type: "entity.set", entity: "asset", collection: "addedAssets", id: asset.id, value: assetRecord(asset, true) };
     bridge.setEntity("asset", asset.id, asset); queueOperation(operation);
@@ -986,6 +1324,7 @@ import {
   }
 
   function addNpc(template = "dialogue", position = bridge.viewportCenter()) {
+    commitTransientTransactions();
     const grid = bridge.grid(); const col = clamp(Math.floor(position.x / grid.tileSize), 0, grid.cols - 1);
     const row = clamp(Math.floor(position.y / grid.tileSize), 0, grid.rows - 1);
     const npc = { id: uniqueId("npc"), col, row, direction: "down", name: template === "patrol" ? "Paseante" : "Vecino", sprite: npcInputs.sprite?.value || "guide", lines: ["Hola, entrenador."] };
@@ -997,6 +1336,7 @@ import {
   }
 
   function addEntrance(template = "interior", position = bridge.viewportCenter()) {
+    commitTransientTransactions();
     const grid = bridge.grid(); const col = clamp(Math.floor(position.x / grid.tileSize), 0, grid.cols - 1);
     const row = clamp(Math.floor(position.y / grid.tileSize), 0, grid.rows - 1);
     const entrance = template === "new-map"
@@ -1009,6 +1349,7 @@ import {
   }
 
   function addEvent(template = "thought", position = bridge.viewportCenter()) {
+    commitTransientTransactions();
     const grid = bridge.grid(); const col = clamp(Math.floor(position.x / grid.tileSize), 0, grid.cols - 1);
     const row = clamp(Math.floor(position.y / grid.tileSize), 0, grid.rows - 1);
     const base = { id: uniqueId("event"), col, row, label: "Evento", type: template, trigger: "interact", message: "Algo llama tu atención.", once: false, enabled: true };
@@ -1021,6 +1362,7 @@ import {
   }
 
   function duplicateSelected() {
+    commitTransientTransactions();
     const entity = selectedEntity(); if (!entity || !selected) return;
     if (selected.kind === "asset") { addAsset(entity.sprite, { x: entity.x + 32, y: entity.y + 32 }, { ...entity, label: `${entity.label || entity.sprite} (copia)` }); return; }
     const duplicate = clone(entity); const grid = bridge.grid(); duplicate.id = uniqueId(selected.kind); duplicate.col = clamp(Number(duplicate.col) + 1, 0, grid.cols - 1); duplicate.row = clamp(Number(duplicate.row) + 1, 0, grid.rows - 1);
@@ -1038,6 +1380,7 @@ import {
   }
 
   function deleteSelected() {
+    commitTransientTransactions();
     const entity = selectedEntity(); if (!entity || !selected) return;
     const { kind, id } = selected; const collection = entityCollection(kind, id);
     const baseEntity = (kind === "asset" && collection === "assetOverrides") || (kind === "npc" && collection === "npcOverrides");
@@ -1047,7 +1390,7 @@ import {
     if (kind === "entrance" && !data.entrances.some((entry) => entry.id === id)) {
       operation = { type: "entity.set", entity: kind, collection: "entrances", id, value: { ...clone(entity), enabled: false } };
     } else operation = { type: "entity.delete", entity: kind, collection, id, hide: baseEntity };
-    const inverse = { type: "entity.set", entity: kind, collection, id, value: cleanEntityRecord(kind, entity) };
+    const inverse = entityBeforeOperation(kind, entity);
     applyBridgeOperation(operation); queueOperation(operation);
     pushHistory(operation, inverse, `${baseEntity ? "Ocultar" : "Eliminar"} ${kind}`);
     setSelected(null, null);
@@ -1073,7 +1416,10 @@ import {
 
   function tileAtEvent(event) {
     const point = bridge.canvasToWorld(event.clientX, event.clientY); const grid = bridge.grid();
-    return { col: Math.floor(point.x / grid.tileSize), row: Math.floor(point.y / grid.tileSize) };
+    return {
+      col: clamp(Math.floor(point.x / grid.tileSize), 0, grid.cols - 1),
+      row: clamp(Math.floor(point.y / grid.tileSize), 0, grid.rows - 1),
+    };
   }
 
   function selectedAssetHandle(point) {
@@ -1125,39 +1471,56 @@ import {
     return tool === "path" ? (groundPathType(surface) || surface) : surface;
   }
 
-  function paintAtEvent(event, builder = activeTransaction, fromCell = null) {
+  function paintAtEvent(event, builder = activeTransaction, fromCell = null, toolOverride = null) {
     const center = tileAtEvent(event);
     const isGround = mode === "ground";
-    const selectedType = isGround ? selectedGroundPaintType() : terrainType;
-    const selectedTool = isGround ? groundTool : terrainTool;
+    const selectedTool = toolOverride || (isGround ? groundTool : terrainTool);
+    const selectedType = isGround ? selectedGroundPaintType(groundType, selectedTool) : terrainType;
     const brushSize = Math.max(1, Number($(isGround ? "#groundBrushSize" : "#terrainBrushSize")?.value) || 1);
     const centerCol = center.col; const centerRow = center.row;
-    const strokeKey = `${mode}:${centerCol},${centerRow}:${selectedType}:${brushSize}`; if (strokeKey === lastPaintedTile) return center;
+    const strokeKey = `${mode}:${selectedTool}:${centerCol},${centerRow}:${selectedType}:${brushSize}`; if (strokeKey === lastPaintedTile) return center;
     lastPaintedTile = strokeKey;
-    const baseCells = isGround && selectedTool === "path" && fromCell ? lineCells(fromCell, center, bridge.grid()) : [center];
+    const baseCells = fromCell ? lineCells(fromCell, center, bridge.grid()) : [center];
     stageTerrainCells(expandCellsWithBrush(baseCells), builder, selectedTool === "eraser" ? "inherit" : selectedType, isGround ? "ground" : "terrain");
     return center;
   }
 
-  function previewTerrainCells(cells) {
+  function previewTerrainCells(cells, toolOverride = null) {
     const isGround = mode === "ground";
-    const selectedTool = isGround ? groundTool : terrainTool;
-    const selectedType = isGround ? selectedGroundPaintType() : terrainType;
+    const selectedTool = toolOverride || (isGround ? groundTool : terrainTool);
+    const selectedType = isGround ? selectedGroundPaintType(groundType, selectedTool) : terrainType;
     bridge.setTerrainPreview?.(cells.map((cell) => ({ ...cell, type: selectedTool === "eraser" ? "inherit" : selectedType, layer: isGround ? "ground" : "terrain", tool: selectedTool })));
+  }
+
+  function startPinchGesture(entries = [...touchPointers.entries()]) {
+    const pair = entries.slice(0, 2);
+    if (pair.length < 2) { pinchGesture = null; return false; }
+    const points = pair.map(([, point]) => point);
+    pinchGesture = {
+      pointerIds: pair.map(([pointerId]) => pointerId),
+      distance: Math.max(1, Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)),
+      midpoint: { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 },
+      zoom: bridge.zoom?.() || 1,
+    };
+    return true;
   }
 
   function onPointerDown(event) {
     if (!enabled || !bridge.isOpen()) return;
+    if (formTransaction) { commitTransaction(formTransaction.builder); formTransaction = null; }
+    if (keyboardTransaction) { commitTransaction(keyboardTransaction.builder); keyboardTransaction = null; }
     if (event.pointerType === "touch") {
       touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (touchPointers.size === 2) {
-        const points = [...touchPointers.values()];
-        if (activeTransaction) { commitTransaction(activeTransaction); activeTransaction = null; }
-        drag = null;
-        pinchGesture = {
-          distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
-          zoom: bridge.zoom?.() || 1,
-        };
+      if (touchPointers.size >= 2) {
+        const touchEntries = [...touchPointers.entries()];
+        if (!pinchGesture) {
+          if (drag || activeTransaction) cancelCurrentAction({ clearSelection: false });
+          touchEntries.forEach(([pointerId, point]) => {
+            touchPointers.set(pointerId, point);
+            try { canvas.setPointerCapture?.(pointerId); } catch { /* El navegador puede haber liberado ya un toque. */ }
+          });
+          startPinchGesture(touchEntries);
+        }
         event.preventDefault();
         return;
       }
@@ -1168,24 +1531,22 @@ import {
       drag = { type: "pan", pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY };
       canvas.setPointerCapture?.(event.pointerId);
       return;
-    } else if (event.button !== 0) return;
+    } else if (event.button !== 0 && !(event.button === 2 && (mode === "terrain" || mode === "ground"))) return;
     if (mode === "terrain" || mode === "ground") {
       event.preventDefault();
       const start = tileAtEvent(event);
       const isGround = mode === "ground";
-      const selectedTool = isGround ? groundTool : terrainTool;
+      const selectedTool = event.button === 2 ? "eraser" : (isGround ? groundTool : terrainTool);
       if (selectedTool === "eyedropper") {
         if (isGround) {
           const sampledType = bridge.groundType(start.col, start.row) || "inherit";
           groundType = groundPathSurface(sampledType) || sampledType;
-          if (isGroundPathType(sampledType)) {
-            groundTool = "path";
-            $$('[data-ground-tool]').forEach((entry) => { entry.classList.toggle("selected", entry.dataset.groundTool === groundTool); entry.setAttribute("aria-pressed", String(entry.dataset.groundTool === groundTool)); });
-          }
+          setPaintingTool(isGroundPathType(sampledType) ? "path" : "pencil", "ground");
           $$('[data-ground-type]').forEach((entry) => entry.classList.toggle("selected", entry.dataset.groundType === groundType));
         } else {
           terrainType = bridge.tileType(start.col, start.row) || "inherit";
           $$('[data-tile-type]').forEach((entry) => entry.classList.toggle("selected", entry.dataset.tileType === terrainType));
+          setPaintingTool("pencil", "terrain");
         }
         return;
       }
@@ -1198,7 +1559,7 @@ import {
       }
       lastPaintedTile = "";
       if (selectedTool === "rectangle" || event.shiftKey) drag = { type: "terrain-shape", layer: isGround ? "ground" : "terrain", shape: selectedTool === "rectangle" ? "rectangle" : "line", tool: selectedTool, pointerId: event.pointerId, start, current: start, transaction: activeTransaction };
-      else { drag = { type: "terrain", layer: isGround ? "ground" : "terrain", tool: selectedTool, pointerId: event.pointerId, lastCell: start, transaction: activeTransaction }; paintAtEvent(event, activeTransaction); }
+      else { drag = { type: "terrain", layer: isGround ? "ground" : "terrain", tool: selectedTool, pointerId: event.pointerId, lastCell: start, transaction: activeTransaction }; paintAtEvent(event, activeTransaction, null, selectedTool); }
     } else if (mode === "objects") {
       if (drag?.type === "pan") { /* Space/middle pan has priority. */ }
       else {
@@ -1208,7 +1569,7 @@ import {
           event.preventDefault();
           drag = {
             type: "entity-transform", transform: handle.type, kind: "asset", pointerId: event.pointerId,
-            before: clone(asset), beforeOperation: entitySetOperation("asset", asset), transaction: beginTransaction(handle.type === "scale" ? "Escalar objeto" : "Rotar objeto"),
+            before: clone(asset), beforeOperation: entityBeforeOperation("asset", asset), transaction: beginTransaction(handle.type === "scale" ? "Escalar objeto" : "Rotar objeto"),
             center, startDistance: Math.max(1, Math.hypot(point.x - center.x, point.y - center.y)), startAngle: Math.atan2(point.y - center.y, point.x - center.x),
           };
           canvas.setPointerCapture?.(event.pointerId); return;
@@ -1223,7 +1584,7 @@ import {
         const groupBefore = groupId ? bridge.assets().filter((candidate) => groupedAssets.get(selectionKey("asset", candidate.id)) === groupId).map(clone) : null;
         drag = asset ? {
           type: "entity", kind: "asset", pointerId: event.pointerId, offsetX: point.x - asset.x, offsetY: point.y - asset.y,
-          before: clone(asset), beforeOperation: entitySetOperation("asset", asset), groupBefore, transaction: beginTransaction(groupBefore?.length > 1 ? "Mover grupo" : "Mover objeto"),
+          before: clone(asset), beforeOperation: entityBeforeOperation("asset", asset), groupBefore, transaction: beginTransaction(groupBefore?.length > 1 ? "Mover grupo" : "Mover objeto"),
         } : null;
         if (asset && (lockedEntities.has(selectionKey("asset", asset.id)) || remoteLockOwner("asset", asset.id))) {
           const owner = remoteLockOwner("asset", asset.id);
@@ -1242,7 +1603,7 @@ import {
         }
         event.preventDefault(); drag = {
           type: "entity", kind, pointerId: event.pointerId, before: clone(entity),
-          beforeOperation: entitySetOperation(kind, entity), transaction: beginTransaction(`Mover ${kind}`),
+          beforeOperation: entityBeforeOperation(kind, entity), transaction: beginTransaction(`Mover ${kind}`),
         };
       }
     }
@@ -1253,9 +1614,14 @@ import {
     if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
       touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (pinchGesture && touchPointers.size >= 2) {
-        const points = [...touchPointers.values()].slice(0, 2);
+        if (!pinchGesture.pointerIds.includes(event.pointerId)) { event.preventDefault(); return; }
+        const points = pinchGesture.pointerIds.map((pointerId) => touchPointers.get(pointerId));
+        if (points.some((point) => !point)) { startPinchGesture(); event.preventDefault(); return; }
         const distance = Math.max(1, Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y));
-        const anchor = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
+        const midpoint = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
+        bridge.panBy?.(pinchGesture.midpoint.x - midpoint.x, pinchGesture.midpoint.y - midpoint.y);
+        pinchGesture.midpoint = midpoint;
+        const anchor = bridge.canvasToWorld(midpoint.x, midpoint.y);
         setEditorZoom(pinchGesture.zoom * distance / Math.max(1, pinchGesture.distance), anchor);
         event.preventDefault();
         return;
@@ -1274,11 +1640,11 @@ import {
       bridge.panBy?.(drag.clientX - event.clientX, drag.clientY - event.clientY);
       drag.clientX = event.clientX; drag.clientY = event.clientY; return;
     }
-    if (drag.type === "terrain") { drag.lastCell = paintAtEvent(event, drag.transaction, drag.tool === "path" ? drag.lastCell : null) || drag.lastCell; return; }
+    if (drag.type === "terrain") { drag.lastCell = paintAtEvent(event, drag.transaction, drag.lastCell, drag.tool) || drag.lastCell; return; }
     if (drag.type === "terrain-shape") {
       drag.current = tileAtEvent(event);
       const baseCells = drag.shape === "rectangle" ? rectangleCells(drag.start, drag.current, bridge.grid()) : lineCells(drag.start, drag.current, bridge.grid());
-      previewTerrainCells(expandCellsWithBrush(baseCells)); return;
+      previewTerrainCells(expandCellsWithBrush(baseCells), drag.tool); return;
     }
     if (drag.type === "marquee") {
       drag.current = bridge.canvasToWorld(event.clientX, event.clientY);
@@ -1301,7 +1667,7 @@ import {
         const deltaX = next.x - drag.before.x; const deltaY = next.y - drag.before.y;
         drag.groupBefore.forEach((asset) => {
           const moved = { ...asset, x: snap(asset.x + deltaX), y: snap(asset.y + deltaY) };
-          stageTransaction(drag.transaction, entitySetOperation("asset", moved), entitySetOperation("asset", asset));
+          stageTransaction(drag.transaction, entitySetOperation("asset", moved), entityBeforeOperation("asset", asset));
         });
         setSelected(drag.kind, next.id);
         return;
@@ -1316,15 +1682,17 @@ import {
 
   function endPointer(event) {
     if (event.pointerType === "touch") {
+      const changedPair = pinchGesture?.pointerIds?.includes(event.pointerId);
       touchPointers.delete(event.pointerId);
       if (touchPointers.size < 2) pinchGesture = null;
+      else if (changedPair) startPinchGesture();
     }
     if (!drag || drag.pointerId !== event.pointerId) return;
     const finished = drag; drag = null; lastPaintedTile = ""; canvas.releasePointerCapture?.(event.pointerId);
     if (finished.type === "terrain-shape") {
       const baseCells = finished.shape === "rectangle" ? rectangleCells(finished.start, finished.current, bridge.grid()) : lineCells(finished.start, finished.current, bridge.grid());
       const selectedType = finished.layer === "ground" ? selectedGroundPaintType(groundType, finished.tool) : terrainType;
-      stageTerrainCells(expandCellsWithBrush(baseCells), finished.transaction, selectedType, finished.layer);
+      stageTerrainCells(expandCellsWithBrush(baseCells), finished.transaction, finished.tool === "eraser" ? "inherit" : selectedType, finished.layer);
       bridge.setTerrainPreview?.([]);
     }
     if (finished.type === "marquee") {
@@ -1349,6 +1717,7 @@ import {
   }
 
   function undo() {
+    commitTransientTransactions();
     const candidate = history.peekUndo();
     const result = history.undo({ changedKeys: changedKeysSince(remoteKeyRevisions, candidate?.revision) });
     if (!result.command) return;
@@ -1367,6 +1736,7 @@ import {
   }
 
   function redo() {
+    commitTransientTransactions();
     const command = history.redo(); if (!command) return;
     applyHistoryOperations(command.after, `Rehacer: ${command.label}`);
     updateHistoryButtons(); recordActivity(`rehacer: ${command.label}`);
@@ -1418,7 +1788,7 @@ import {
 
   function populatePrototypes() {
     if (!prototypeSelect) return;
-    const labels = { building: "Edificios", tree: "Árboles", prop: "Mobiliario", blocker: "Obstáculos" };
+    const labels = { building: "Edificios", tree: "Árboles", prop: "Mobiliario urbano", furniture: "Muebles de interior", blocker: "Obstáculos" };
     const groups = new Map();
     Object.entries(bridge.assetCatalog()).forEach(([id, prototype]) => {
       const kind = prototype.kind || "prop"; if (!groups.has(kind)) groups.set(kind, []); groups.get(kind).push([id, prototype]);
@@ -1450,6 +1820,8 @@ import {
       const item = document.createElement("div"); item.className = "map-editor-catalog-item";
       const select = document.createElement("button"); select.type = "button"; select.setAttribute("role", "option");
       select.setAttribute("aria-selected", String(prototypeSelect.value === id)); select.dataset.catalogAsset = id;
+      select.draggable = true;
+      select.title = "Seleccionar · doble clic para colocar · arrastrar al mapa";
       const image = document.createElement("img"); image.src = prototype.src; image.alt = ""; image.loading = "lazy";
       const name = document.createElement("span"); name.textContent = prototype.label || id;
       const size = document.createElement("small"); size.textContent = `${prototype.w}×${prototype.h}`;
@@ -1485,8 +1857,12 @@ import {
       const ensureTransaction = () => {
         const entity = selectedEntity();
         if (!entity || selected?.kind !== kind) return null;
+        if (keyboardTransaction) {
+          commitTransaction(keyboardTransaction.builder);
+          keyboardTransaction = null;
+        }
         if (!formTransaction || formTransaction.kind !== kind || formTransaction.id !== entity.id) {
-          formTransaction = { kind, id: entity.id, builder: beginTransaction(label), before: entitySetOperation(kind, entity) };
+          formTransaction = { kind, id: entity.id, builder: beginTransaction(label), before: entityBeforeOperation(kind, entity) };
         }
         return formTransaction;
       };
@@ -1552,6 +1928,7 @@ import {
   }
 
   function transformSelectedAssets(action) {
+    commitTransientTransactions();
     const assets = selectedAssets();
     if (action === "lock") {
       assets.forEach((asset) => lockedEntities.add(selectionKey("asset", asset.id))); renderOutliner(); return;
@@ -1581,7 +1958,7 @@ import {
         patch = { x: sorted[0].x + step * order };
       }
       if (!Object.keys(patch).length) return;
-      stageTransaction(builder, entitySetOperation("asset", { ...asset, ...patch }), entitySetOperation("asset", asset));
+      stageTransaction(builder, entitySetOperation("asset", { ...asset, ...patch }), entityBeforeOperation("asset", asset));
     });
     commitTransaction(builder); renderSelection();
   }
@@ -1593,6 +1970,7 @@ import {
   }
 
   function pasteSelection() {
+    commitTransientTransactions();
     if (!copiedAssets.length) return;
     const builder = beginTransaction("Pegar objetos"); multiSelection.clear();
     copiedAssets.forEach((source, index) => {
@@ -1632,6 +2010,7 @@ import {
   }
 
   function expandMap() {
+    commitTransientTransactions();
     const current = data.mapSize || { cols: MAP_EDITOR_RULES.world.cols, rows: MAP_EDITOR_RULES.world.rows };
     const addCols = Math.max(0, Math.floor(Number($("#mapExpandCols")?.value) || 0));
     const addRows = Math.max(0, Math.floor(Number($("#mapExpandRows")?.value) || 0));
@@ -1648,6 +2027,7 @@ import {
   }
 
   function resetGroundOverrides() {
+    commitTransientTransactions();
     const entries = Object.keys(data.groundOverrides);
     if (!entries.length) return;
     const builder = beginTransaction("Borrar suelo pintado");
@@ -1669,9 +2049,31 @@ import {
   }
 
   function prepareOpenEditor() {
-    editor.classList.toggle("collapsed", window.innerWidth <= 680);
+    const scene = bridge.sceneInfo?.() || { id: "world", kind: "world", label: "San Pablo" };
+    const interior = scene.kind === "interior";
+    const categorySelect = $("#assetCatalogCategory");
+    if (categorySelect) {
+      if (interior) categorySelect.value = "furniture";
+      else if (categorySelect.value === "furniture") categorySelect.value = "all";
+    }
+    const eyebrow = $("#mapEditorEyebrow");
+    const title = $("#mapEditorTitle");
+    if (eyebrow) eyebrow.textContent = interior ? "MODO DIOS · INTERIOR" : "MODO DIOS · SOLO DESARROLLO";
+    if (title) title.textContent = interior ? `Decorar ${scene.label || "casa"}` : "Editor del mundo";
+    $$('[data-editor-mode]').forEach((button) => {
+      const unavailable = interior && button.dataset.editorMode !== "objects";
+      button.disabled = unavailable;
+      button.setAttribute("aria-disabled", String(unavailable));
+    });
+    if (interior) setMode("objects");
+    populatePrototypes();
+    populateNpcSprites();
+    renderSelection();
+    renderOutliner();
+    editor.classList.remove("collapsed");
     editor.classList.remove("fullscreen-inspector");
-    $("#mapEditorSheetToggle")?.setAttribute("aria-expanded", String(!editor.classList.contains("collapsed")));
+    $("#mapEditorSheetToggle")?.setAttribute("aria-expanded", "true");
+    $("#mapEditorExpandSheetButton")?.setAttribute("aria-pressed", "false");
     window.setTimeout(() => $("[data-editor-mode][aria-selected='true']")?.focus(), 0);
     updateZoomLabel();
   }
@@ -1698,7 +2100,7 @@ import {
     nameInput.value = editorName;
     nameInput.addEventListener("change", () => {
       editorName = nameInput.value.trim().slice(0, MAP_EDITOR_RULES.lengths.actorName) || `Editor ${actorId.slice(-4).toUpperCase()}`;
-      nameInput.value = editorName; persistentStorage?.setItem("pokemon-map-editor-name", editorName); sendPresence();
+      nameInput.value = editorName; safelyStore(persistentStorage, "pokemon-map-editor-name", editorName); sendPresence();
     });
     $("#copyEditorInviteButton").addEventListener("click", async () => {
       const value = inviteUrl || window.location.href;
@@ -1723,17 +2125,17 @@ import {
       $$('[data-tile-type]').forEach((entry) => entry.classList.toggle("selected", entry === button));
     }));
     $$('[data-terrain-tool]').forEach((button) => button.addEventListener("click", () => {
-      terrainTool = button.dataset.terrainTool;
-      $$('[data-terrain-tool]').forEach((entry) => { entry.classList.toggle("selected", entry === button); entry.setAttribute("aria-pressed", String(entry === button)); });
+      setPaintingTool(button.dataset.terrainTool, "terrain");
     }));
     $$('[data-ground-type]').forEach((button) => button.addEventListener("click", () => {
       groundType = button.dataset.groundType;
       $$('[data-ground-type]').forEach((entry) => entry.classList.toggle("selected", entry === button));
     }));
     $$('[data-ground-tool]').forEach((button) => button.addEventListener("click", () => {
-      groundTool = button.dataset.groundTool;
-      $$('[data-ground-tool]').forEach((entry) => { entry.classList.toggle("selected", entry === button); entry.setAttribute("aria-pressed", String(entry === button)); });
+      setPaintingTool(button.dataset.groundTool, "ground");
     }));
+    $("#terrainBrushSize")?.addEventListener("change", persistWorkspacePreferences);
+    $("#groundBrushSize")?.addEventListener("change", persistWorkspacePreferences);
     $("#resetGroundMap")?.addEventListener("click", resetGroundOverrides);
     $("#expandMapButton")?.addEventListener("click", expandMap);
     $("#addAssetButton").addEventListener("click", () => addAsset());
@@ -1749,14 +2151,32 @@ import {
       if (favorite) {
         const id = favorite.dataset.catalogFavorite;
         if (favoriteAssetSprites.has(id)) favoriteAssetSprites.delete(id); else favoriteAssetSprites.add(id);
-        persistentStorage?.setItem("pokemon-map-editor-favorite-assets", JSON.stringify([...favoriteAssetSprites]));
+        safelyStore(persistentStorage, "pokemon-map-editor-favorite-assets", JSON.stringify([...favoriteAssetSprites]));
         renderAssetCatalog();
         return;
       }
       const option = event.target.closest("[data-catalog-asset]");
       if (!option) return;
-      prototypeSelect.value = option.dataset.catalogAsset;
+      const id = option.dataset.catalogAsset;
+      const now = Date.now();
+      const shouldPlace = catalogLastActivation.id === id && now - catalogLastActivation.at <= 500;
+      catalogLastActivation = shouldPlace ? { id: "", at: 0 } : { id, at: now };
+      prototypeSelect.value = id;
+      if (shouldPlace) { addAsset(id); return; }
       renderAssetCatalog();
+    });
+    $("#assetCatalogGrid")?.addEventListener("dragstart", (event) => {
+      const option = event.target.closest("[data-catalog-asset]");
+      if (!option || !event.dataTransfer) return;
+      draggedCatalogAssetId = option.dataset.catalogAsset;
+      catalogLastActivation = { id: "", at: 0 };
+      editor.dataset.catalogDrag = "true";
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData("application/x-pokemon-map-asset", draggedCatalogAssetId);
+      event.dataTransfer.setData("text/plain", draggedCatalogAssetId);
+    });
+    $("#assetCatalogGrid")?.addEventListener("dragend", () => {
+      draggedCatalogAssetId = ""; delete editor.dataset.catalogDrag;
     });
     prototypeSelect.addEventListener("change", renderAssetCatalog);
     $("#duplicateAssetButton").addEventListener("click", duplicateSelected);
@@ -1797,7 +2217,10 @@ import {
       $("#mapEditorSheetToggle").setAttribute("aria-expanded", String(expanded));
     });
     $("#mapEditorExpandSheetButton")?.addEventListener("click", () => {
-      editor.classList.toggle("fullscreen-inspector"); editor.classList.remove("collapsed"); $("#mapEditorSheetToggle")?.setAttribute("aria-expanded", "true");
+      const expanded = editor.classList.toggle("fullscreen-inspector");
+      editor.classList.remove("collapsed");
+      $("#mapEditorSheetToggle")?.setAttribute("aria-expanded", "true");
+      $("#mapEditorExpandSheetButton")?.setAttribute("aria-pressed", String(expanded));
     });
     $("#mapEditorSearchInput")?.addEventListener("input", renderOutliner); $("#mapEditorFilterInput")?.addEventListener("change", renderOutliner);
     $("#mapEditorOutlinerList")?.addEventListener("click", (event) => {
@@ -1814,12 +2237,45 @@ import {
         if (lockedEntities.has(key)) lockedEntities.delete(key); else lockedEntities.add(key); renderOutliner();
       }
     });
+    $("#mapEditorDiagnosticsRefresh")?.addEventListener("click", renderMapDiagnostics);
+    $("#mapEditorDiagnosticsList")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-diagnostic-entity]");
+      const raw = button?.dataset.diagnosticEntity;
+      if (!raw) return;
+      const separator = raw.indexOf(":");
+      if (separator <= 0) return;
+      const kind = raw.slice(0, separator); const id = raw.slice(separator + 1);
+      const nextMode = { asset: "objects", npc: "npcs", entrance: "entrances", event: "events" }[kind];
+      if (!nextMode || !id || !entityById(kind, id)) return;
+      setMode(nextMode); setSelected(kind, id); bridge.focusEntity?.(kind, id);
+    });
     $$('[data-multi-action]').forEach((button) => button.addEventListener("click", () => transformSelectedAssets(button.dataset.multiAction)));
     $$('[data-editor-overlay]').forEach((input) => input.addEventListener("change", updateEditorOverlays));
     updateEditorOverlays();
     bindInspectorInputs();
+    canvas.addEventListener("dragover", (event) => {
+      const hasCatalogType = Array.from(event.dataTransfer?.types || []).includes("application/x-pokemon-map-asset");
+      if (!bridge.isOpen() || (!hasCatalogType && !draggedCatalogAssetId)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    });
+    canvas.addEventListener("drop", (event) => {
+      if (!bridge.isOpen()) return;
+      const sprite = event.dataTransfer?.getData("application/x-pokemon-map-asset") || draggedCatalogAssetId;
+      if (!sprite || !bridge.assetCatalog()[sprite]) return;
+      event.preventDefault();
+      draggedCatalogAssetId = "";
+      catalogLastActivation = { id: "", at: 0 };
+      delete editor.dataset.catalogDrag;
+      prototypeSelect.value = sprite;
+      setMode("objects");
+      addAsset(sprite, bridge.canvasToWorld(event.clientX, event.clientY));
+    });
+    canvas.addEventListener("contextmenu", (event) => {
+      if (bridge.isOpen() && (mode === "terrain" || mode === "ground")) event.preventDefault();
+    });
     canvas.addEventListener("pointerdown", onPointerDown); canvas.addEventListener("pointermove", onPointerMove);
-    canvas.addEventListener("pointerup", endPointer); canvas.addEventListener("pointercancel", endPointer);
+    canvas.addEventListener("pointerup", endPointer); canvas.addEventListener("pointercancel", () => cancelCurrentAction({ clearSelection: false }));
     canvas.addEventListener("pointerleave", () => { if (!drag) bridge.setTerrainPreview?.([]); });
     canvas.addEventListener("wheel", (event) => {
       if (!bridge.isOpen()) return; event.preventDefault();
@@ -1832,23 +2288,42 @@ import {
     });
     document.addEventListener("map-editor-open", prepareOpenEditor);
     document.addEventListener("map-editor-close", commitTransientTransactions);
+    document.addEventListener("map-editor-cancel-request", (event) => {
+      if (bridge.isOpen() && cancelCurrentAction()) event.preventDefault();
+    });
     document.addEventListener("keydown", (event) => {
       if (!enabled) return;
       const modifier = event.ctrlKey || event.metaKey;
-      if (modifier && event.key.toLowerCase() === "s") { event.preventDefault(); flushOperations(); return; }
-      if (modifier && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
-      if (modifier && event.key.toLowerCase() === "c" && bridge.isOpen()) { event.preventDefault(); copySelection(); return; }
-      if (modifier && event.key.toLowerCase() === "v" && bridge.isOpen()) { event.preventDefault(); pasteSelection(); return; }
-      const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || ""); if (typing) return;
-      if (event.key === " ") { if (bridge.isOpen()) event.preventDefault(); spacePressed = true; return; }
-      if (event.key.toLowerCase() === "g" && !event.repeat) { event.preventDefault(); bridge.isOpen() ? bridge.close() : bridge.open(); return; }
-      if (!bridge.isOpen() || !selected) return;
-      if (modifier && event.key.toLowerCase() === "d") { event.preventDefault(); duplicateSelected(); return; }
-      if (event.key === "Delete") { event.preventDefault(); deleteSelected(); return; }
+      const key = event.key.toLowerCase();
+      const interactive = Boolean(event.target?.closest?.("input,select,textarea,button,a,summary,[contenteditable]"));
+      if (!bridge.isOpen()) {
+        if (!interactive && !modifier && !event.altKey && key === "g" && !event.repeat) { event.preventDefault(); bridge.open(); }
+        return;
+      }
+      if (event.key === "Escape") return;
+      if (modifier && key === "s") {
+        event.preventDefault(); commitTransientTransactions(); void flushOperations(); return;
+      }
+      if (interactive) return;
+      if (!modifier && !event.altKey && key === "g" && !event.repeat) { event.preventDefault(); bridge.close(); return; }
       const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-      const direction = directions[event.key]; if (!direction) return;
+      const direction = !modifier && !event.altKey ? directions[event.key] : null;
+      if (drag || activeTransaction || formTransaction || (keyboardTransaction && !direction)) return;
+      if (modifier && key === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
+      if (modifier && key === "c") { event.preventDefault(); copySelection(); return; }
+      if (modifier && key === "v") { event.preventDefault(); pasteSelection(); return; }
+      if (event.key === " ") { event.preventDefault(); spacePressed = true; return; }
+      const shortcut = resolveEditorShortcut({ key: event.key, mode, modifier, shift: event.shiftKey, alt: event.altKey });
+      if (shortcut && executeEditorShortcut(shortcut)) { event.preventDefault(); return; }
+      if (!selected) return;
+      if (modifier && key === "d") { event.preventDefault(); duplicateSelected(); return; }
+      if (event.key === "Delete") { event.preventDefault(); deleteSelected(); return; }
+      if (!direction) return;
       event.preventDefault(); const entity = selectedEntity(); if (!entity) return;
-      if (!keyboardTransaction) keyboardTransaction = { builder: beginTransaction(`Mover ${selected.kind}`), before: entitySetOperation(selected.kind, entity), kind: selected.kind, id: entity.id };
+      if (keyboardTransaction && (keyboardTransaction.kind !== selected.kind || keyboardTransaction.id !== entity.id)) {
+        commitTransaction(keyboardTransaction.builder); keyboardTransaction = null;
+      }
+      if (!keyboardTransaction) keyboardTransaction = { builder: beginTransaction(`Mover ${selected.kind}`), before: entityBeforeOperation(selected.kind, entity), kind: selected.kind, id: entity.id };
       const grid = bridge.grid(); const next = selected.kind === "asset"
         ? { ...entity, x: entity.x + direction[0] * (event.shiftKey ? grid.tileSize : 1), y: entity.y + direction[1] * (event.shiftKey ? grid.tileSize : 1) }
         : { ...entity, col: clamp(entity.col + direction[0], 0, grid.cols - 1), row: clamp(entity.row + direction[1], 0, grid.rows - 1) };
@@ -1859,6 +2334,10 @@ import {
       if (keyboardTransaction && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
         commitTransaction(keyboardTransaction.builder); keyboardTransaction = null; renderSelection();
       }
+    });
+    window.addEventListener("blur", () => {
+      if (bridge.isOpen()) commitTransientTransactions();
+      else spacePressed = false;
     });
     window.addEventListener("pagehide", () => {
       commitTransientTransactions();
@@ -1916,9 +2395,9 @@ import {
         enabled = true;
         pendingBatches = recovered;
         inviteUrl = window.location.href;
-        bridge.enable(); populatePrototypes(); populateNpcSprites(); bindUi();
+        bridge.enable(); populatePrototypes(); populateNpcSprites(); bindUi(); applyWorkspacePreferences();
         applySnapshot({ revision: stored?.revision || 0, data: stored?.data || window.CITY_MAP_EDITOR_DATA || {} }, { preservePending: pendingBatches.length > 0 });
-        setMode("objects");
+        setMode(mode);
         if (bridge.isOpen()) prepareOpenEditor();
         renderPresence([{ actorId, name: editorName, color }]);
         renderOutliner();
@@ -1941,7 +2420,7 @@ import {
         ? result.collaboration?.inviteUrl || window.location.href
         : window.location.href;
       setRevision(result.revision);
-      bridge.enable(); populatePrototypes(); populateNpcSprites(); bindUi(); applySnapshot(result, { preservePending: pendingBatches.length > 0 }); setMode("objects");
+      bridge.enable(); populatePrototypes(); populateNpcSprites(); bindUi(); applyWorkspacePreferences(); applySnapshot(result, { preservePending: pendingBatches.length > 0 }); setMode(mode);
       if (bridge.isOpen()) prepareOpenEditor();
       openEventStream(); startPresenceHeartbeat(); sendPresence();
       renderOutliner();

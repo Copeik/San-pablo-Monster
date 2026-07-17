@@ -1,1 +1,17 @@
 .worktrees/
+.pnpm-store/
+node_modules/
+.superpowers/
+.codex-*.log
+__pycache__/
+*.py[cod]
+tmp/
+animations/
+exports/
+docs/superpowers/
+assets/pokemon/_animation-audit/
+assets/pokemon/*/pixellab-test/
+assets/maps/*-reference-comparison.png
+assets/maps/trainer-bedroom-preview.*
+assets/sprites/npcs/*preview*.png
+assets/sprites/npcs/*report*.json

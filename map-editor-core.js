@@ -1,6 +1,38 @@
-import { groundPaintLayers, MAP_EDITOR_RULES, editorOperationKey, tileInBounds } from "./map-editor-contract.js?v=3";
+import { groundPaintLayers, MAP_EDITOR_RULES, editorOperationKey } from "./map-editor-contract.js?v=3";
 
 const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
+const cellInBounds = (col, row, bounds = MAP_EDITOR_RULES.world) => {
+  const cols = Number(bounds?.cols ?? bounds?.maxCols);
+  const rows = Number(bounds?.rows ?? bounds?.maxRows);
+  return Number.isInteger(col) && Number.isInteger(row) && Number.isInteger(cols) && Number.isInteger(rows)
+    && col >= 0 && row >= 0 && col < cols && row < rows;
+};
+
+export const EDITOR_MODE_ORDER = Object.freeze(["objects", "terrain", "ground", "npcs", "entrances", "events"]);
+
+export function resolveEditorShortcut({ key = "", mode = "objects", modifier = false, shift = false, alt = false } = {}) {
+  const normalized = String(key).toLowerCase();
+  if (alt) return null;
+  if (modifier) {
+    if (normalized === "a" && mode === "objects") return { type: shift ? "selection.clear" : "selection.all" };
+    if (normalized === "g" && mode === "objects") return { type: "selection.group" };
+    return null;
+  }
+  const modeIndex = Number(normalized) - 1;
+  if (Number.isInteger(modeIndex) && modeIndex >= 0 && modeIndex < EDITOR_MODE_ORDER.length) {
+    return { type: "mode", value: EDITOR_MODE_ORDER[modeIndex] };
+  }
+  if (normalized === "escape") return { type: "cancel" };
+  if (normalized === "/") return { type: "search" };
+  if (normalized === "c") return { type: "selection.center" };
+  if (["[", "]", "-", "_", "+", "="].includes(normalized) && (mode === "terrain" || mode === "ground")) {
+    return { type: "brush.size", value: ["[", "-", "_"].includes(normalized) ? -1 : 1 };
+  }
+  if (mode !== "terrain" && mode !== "ground") return null;
+  const tools = { b: "pencil", e: "eraser", i: "eyedropper", r: "rectangle", f: "fill" };
+  if (mode === "ground") tools.p = "path";
+  return tools[normalized] ? { type: "paint.tool", value: tools[normalized] } : null;
+}
 
 export function chunkOperationBatches(operations, { id, label = "Cambio", baseRevision = 0, createdAt = Date.now(), maximum = MAP_EDITOR_RULES.limits.operationsPerBatch } = {}) {
   const source = Array.isArray(operations) ? operations : [];
@@ -87,21 +119,24 @@ export function groundPathConnectionMask({ col, row, getValue, bounds = MAP_EDIT
   ];
   return directions.reduce((mask, direction) => {
     const neighborCol = col + direction.col; const neighborRow = row + direction.row;
-    return tileInBounds(neighborCol, neighborRow, { world: bounds }) && isGroundPathType(getValue(neighborCol, neighborRow))
+    return cellInBounds(neighborCol, neighborRow, bounds) && isGroundPathType(getValue(neighborCol, neighborRow))
       ? mask | direction.bit
       : mask;
   }, 0);
 }
 
 export function lineCells(start, end, bounds = MAP_EDITOR_RULES.world) {
-  let x0 = Math.floor(start.col); let y0 = Math.floor(start.row);
-  const x1 = Math.floor(end.col); const y1 = Math.floor(end.row);
+  const values = [start?.col, start?.row, end?.col, end?.row].map(Number);
+  if (!values.every(Number.isFinite)) return [];
+  let x0 = Math.floor(values[0]); let y0 = Math.floor(values[1]);
+  const x1 = Math.floor(values[2]); const y1 = Math.floor(values[3]);
+  if (!cellInBounds(x0, y0, bounds) || !cellInBounds(x1, y1, bounds)) return [];
   const dx = Math.abs(x1 - x0); const sx = x0 < x1 ? 1 : -1;
   const dy = -Math.abs(y1 - y0); const sy = y0 < y1 ? 1 : -1;
   let error = dx + dy;
   const cells = [];
   while (true) {
-    if (tileInBounds(x0, y0, { world: bounds })) cells.push({ col: x0, row: y0 });
+    if (cellInBounds(x0, y0, bounds)) cells.push({ col: x0, row: y0 });
     if (x0 === x1 && y0 === y1) break;
     const doubled = error * 2;
     if (doubled >= dy) { error += dy; x0 += sx; }
@@ -123,15 +158,16 @@ export function rectangleCells(start, end, bounds = MAP_EDITOR_RULES.world) {
 }
 
 export function floodFillCells({ start, getValue, bounds = MAP_EDITOR_RULES.world, maximum = MAP_EDITOR_RULES.limits.tileOverrides }) {
-  if (!tileInBounds(start.col, start.row, { world: bounds })) return [];
+  if (!cellInBounds(start.col, start.row, bounds)) return [];
   const target = getValue(start.col, start.row);
   const queue = [{ col: start.col, row: start.row }];
+  let queueIndex = 0;
   const visited = new Set();
   const cells = [];
-  while (queue.length && cells.length < maximum) {
-    const cell = queue.shift();
+  while (queueIndex < queue.length && cells.length < maximum) {
+    const cell = queue[queueIndex]; queueIndex += 1;
     const key = `${cell.col},${cell.row}`;
-    if (visited.has(key) || !tileInBounds(cell.col, cell.row, { world: bounds })) continue;
+    if (visited.has(key) || !cellInBounds(cell.col, cell.row, bounds)) continue;
     visited.add(key);
     if (getValue(cell.col, cell.row) !== target) continue;
     cells.push(cell);

@@ -13,8 +13,10 @@
   const ATTACK_EFFECTS = globalThis.AttackEffects;
   if (!ATTACK_EFFECTS) throw new Error("No se pudo cargar el editor de efectos de ataque.");
 
+  const MUSIC_LIBRARY = globalThis.GAME_MUSIC;
+  if (!MUSIC_LIBRARY) throw new Error("No se pudo cargar la biblioteca musical chiptune.");
+
   const SAVE_KEY = "pokemon-city-save-v3";
-  const MAP_EDIT_KEY = "pokemon-city-tile-overrides-v5";
   const CITY_MAP = window.CITY_MAP_CONFIG;
   const ACTIVE_MAP_ID = MAP_REGISTRY.resolve(window.ACTIVE_GAME_MAP_ID || CITY_MAP.id || MAP_REGISTRY.defaultMapId);
   const MAP_REVISION = Number(CITY_MAP.revision) || 1;
@@ -196,7 +198,6 @@
   const PLAYER_SUPPORT_ROW = 59;
   let VIEW_WIDTH = 960;
   let VIEW_HEIGHT = BASE_VIEW_HEIGHT;
-  const PIXELS_PER_METER = 8;
   let WORLD_WIDTH = CITY_MAP.width;
   let WORLD_HEIGHT = CITY_MAP.height;
   const PRISM_WIDTH = 2100;
@@ -261,6 +262,8 @@
      silvestre más grande con encuentros. Las coordenadas están en el espacio
      del mundo (px) y se dibujan con la misma cámara que el mapa de la ciudad. */
   const INDOOR_ROOM = { x: 40, y: 30, w: 880, h: 560, wall: 30 };
+  const INDOOR_WORLD_WIDTH = 960;
+  const INDOOR_WORLD_HEIGHT = 624;
   const INDOOR_SPAWN = { x: INDOOR_ROOM.x + INDOOR_ROOM.w / 2, y: INDOOR_ROOM.y + INDOOR_ROOM.h - 54 };
   const INDOOR_NPC = { x: INDOOR_ROOM.x + INDOOR_ROOM.w / 2, y: INDOOR_ROOM.y + 120, radius: 46 };
   const INDOOR_EXIT = { x: INDOOR_SPAWN.x, y: INDOOR_SPAWN.y, radius: 42 };
@@ -313,7 +316,6 @@
     jardinera: { spriteIndex: 9, sprite: "npc-13-gardener", layout: "studio", color: "#6aa84f", name: "Jardinera Sol", lines: ["Hablo con las plantas. Ellas responden con fotosíntesis pasivo-agresiva.", "La hierba alta esconde especies distintas y, en mi caso, las tijeras."] },
   };
 
-  const BUILDING_SHEET_URL = "https://www.spriters-resource.com/media/assets/4/3849.png?updated=1755472417";
   const PLAYER_SHEET_URL = "assets/sprites/protagonist-walk.png";
   const PLAYER_DIAGONAL_SHEET_URL = "assets/sprites/protagonist-walk-diagonal.png?v=4";
   const NPC_SHEET_URL = "assets/sprites/hgss-npc-idle.png";
@@ -423,6 +425,7 @@
       back: "assets/pokemon/peyote-line/peyote-idle-back.webp",
     },
   });
+  const SANPLEDEX_ANIMATION_ASSETS = globalThis.SANPLEDEX_ANIMATION_ASSETS || Object.freeze({});
   const REDUCED_MOTION_QUERY = typeof window.matchMedia === "function"
     ? window.matchMedia("(prefers-reduced-motion: reduce)")
     : null;
@@ -467,6 +470,7 @@
   });
   const CUSTOM_ATTACK_DURATION = 3000;
   const CUSTOM_POKEMON_ATTACKS = Object.freeze({
+    4: { kind: "ram", title: "Defensa de púas", anatomy: "Patas, garra, grupa y púas ígneas", x: "42%", y: "-14%", turn: "-13deg", scale: 1.16 },
     9001: { kind: "ram", title: "Ariete brote", anatomy: "Cabezazo, boca y hojas", x: "28%", y: "-8%", turn: "-7deg", scale: 1.08 },
     9002: { kind: "slam", title: "Martillo musgoso", anatomy: "Dos puños, torso y rugido", x: "18%", y: "-5%", turn: "4deg", scale: 1.1 },
     9003: { kind: "slam", title: "Puño sísmico", anatomy: "Puño gigante, piernas y enredaderas", x: "21%", y: "-4%", turn: "6deg", scale: 1.12 },
@@ -505,6 +509,18 @@
     9814: { kind: "wing", title: "Arco toledano", anatomy: "Filo, guarda y cinta", x: "39%", y: "-20%", turn: "-16deg", scale: 1.12 },
     9815: { kind: "slam", title: "Sentencia matallama", anatomy: "Filo, manto y llama interior", x: "25%", y: "-10%", turn: "7deg", scale: 1.15 },
   });
+  const CUSTOM_POKEMON_COMBAT_BIOLOGY = Object.freeze({
+    5: "Patas y hombros impulsan la garra; caderas, coraza y cresta ígnea orientan la descarga dorsal.",
+    6: "Las garras descargan el peso volcánico; las fisuras y respiraderos de la coraza expulsan magma a distancia.",
+    9001: "Pies y caparazón producen el ariete; el brote se tensa como una catapulta de hojas y fragmentos minerales.",
+    9002: "Piernas y puños rocosos generan el impacto; núcleo, cristales y raíces canalizan la salva mineral.",
+    9003: "Piernas, cadera y puño forman el golpe sísmico; núcleo, brazo y raíces proyectan rocas sin mover los pies.",
+    9101: "Sus pies inclinan el bloque rígido para golpear; el sello tallado concentra y dispara la presión mineral.",
+    9102: "Los brazos-prensa cierran el ataque físico; pies, pilares y sello conducen la onda por el terreno.",
+    9201: "Patas traseras, garra, mordida y cola producen el ataque corto; vientre, mandíbula y alas sostienen el aliento dragón.",
+    9202: "Garras y cuatro alas forman el tajo cruzado; las dos parejas de alas comprimen y disparan cuchillas de aire.",
+    9203: "Garras, cola afilada y cuatro alas convergen en melee; pecho, mandíbula y alas liberan el vórtice dragón.",
+  });
   const PETRILLO_ID = 9001;
   const SHADOW_SPRITE_URL = "assets/images/shadow-stalker.png";
   const HORROR_AUDIO_URLS = {
@@ -522,12 +538,12 @@
   };
 
   const MOVES = {
-    tackle: { name: "Placaje", type: "Normal", power: 12, accuracy: 96 },
-    vineWhip: { name: "Látigo Cepa", type: "Planta", power: 17, accuracy: 94 },
-    scratch: { name: "Arañazo", type: "Normal", power: 13, accuracy: 97 },
-    ember: { name: "Ascuas", type: "Fuego", power: 17, accuracy: 94 },
+    tackle: { name: "Placaje", type: "Normal", power: 12, accuracy: 96, delivery: "melee" },
+    vineWhip: { name: "Látigo Cepa", type: "Planta", power: 17, accuracy: 94, delivery: "ranged" },
+    scratch: { name: "Arañazo", type: "Normal", power: 13, accuracy: 97, delivery: "melee" },
+    ember: { name: "Ascuas", type: "Fuego", power: 17, accuracy: 94, delivery: "ranged" },
     waterGun: { name: "Pistola Agua", type: "Agua", power: 17, accuracy: 94 },
-    gust: { name: "Tornado", type: "Volador", power: 14, accuracy: 95 },
+    gust: { name: "Tornado", type: "Volador", power: 14, accuracy: 95, delivery: "ranged" },
     quickAttack: { name: "Ataque Rápido", type: "Normal", power: 15, accuracy: 98 },
     bugBite: { name: "Picadura", type: "Bicho", power: 14, accuracy: 95 },
     poisonSting: { name: "Picotazo Veneno", type: "Veneno", power: 13, accuracy: 95 },
@@ -535,14 +551,14 @@
     absorb: { name: "Absorber", type: "Planta", power: 14, accuracy: 96, drain: true },
     lick: { name: "Lengüetazo", type: "Fantasma", power: 16, accuracy: 94 },
     confusion: { name: "Confusión", type: "Psíquico", power: 18, accuracy: 94 },
-    headbutt: { name: "Cabezazo", type: "Normal", power: 17, accuracy: 92 },
+    headbutt: { name: "Cabezazo", type: "Normal", power: 17, accuracy: 92, delivery: "melee" },
     metalSound: { name: "Onda Metálica", type: "Acero", power: 17, accuracy: 94 },
-    dragonRage: { name: "Furia Dragón", type: "Dragón", power: 19, accuracy: 92 },
-    stoneSeal: { name: "Sello Pétreo", type: "Roca", power: 18, accuracy: 95 },
-    earthPress: { name: "Prensa Telúrica", type: "Tierra", power: 23, accuracy: 90 },
-    scaleRush: { name: "Carrera Escama", type: "Dragón", power: 18, accuracy: 95 },
-    razorWing: { name: "Ala Cortadora", type: "Bicho", power: 20, accuracy: 93 },
-    prairieDive: { name: "Picado de Pradera", type: "Volador", power: 24, accuracy: 89 },
+    dragonRage: { name: "Furia Dragón", type: "Dragón", power: 19, accuracy: 92, delivery: "ranged" },
+    stoneSeal: { name: "Sello Pétreo", type: "Roca", power: 18, accuracy: 95, delivery: "ranged" },
+    earthPress: { name: "Prensa Telúrica", type: "Tierra", power: 23, accuracy: 90, delivery: "ranged" },
+    scaleRush: { name: "Carrera Escama", type: "Dragón", power: 18, accuracy: 95, delivery: "melee" },
+    razorWing: { name: "Ala Cortadora", type: "Bicho", power: 20, accuracy: 93, delivery: "melee" },
+    prairieDive: { name: "Picado de Pradera", type: "Volador", power: 24, accuracy: 89, delivery: "melee" },
     moonGleam: { name: "Brillo Lunar", type: "Hada", power: 18, accuracy: 96 },
     dreamWhisper: { name: "Susurro Onírico", type: "Psíquico", power: 21, accuracy: 93 },
     astralGuard: { name: "Luz Astral", type: "Hada", power: 25, accuracy: 89 },
@@ -603,7 +619,7 @@
     9003: { id: 9003, name: "Terravórdeo", type: "Roca", secondaryType: "Planta", baseHp: 25, catchRate: .34, moves: [MOVES.tackle, MOVES.vineWhip], description: "Monstruo Montaña Viviente. Cada paso mezcla minerales y semillas; allí donde descansa, vuelve a brotar la vida." },
     9101: { id: 9101, name: "Peyote", type: "Roca", secondaryType: "Tierra", baseHp: 30, catchRate: .52, moves: [MOVES.tackle, MOVES.stoneSeal], description: "Monstruo Adobe. Compacta capas de tierra y roca hasta convertirlas en una coraza orgullosamente sellada.", evolvesTo: 9102, evolveLevel: 18 },
     9102: { id: 9102, name: "Prensalito", type: "Roca", secondaryType: "Tierra", baseHp: 44, catchRate: .16, moves: [MOVES.stoneSeal, MOVES.earthPress, MOVES.headbutt], description: "Monstruo Bloque Prensado. Protege su territorio con un cuerpo de densidad extraordinaria." },
-    9201: { id: 9201, name: "Criascama", type: "Dragón", baseHp: 23, catchRate: .42, moves: [MOVES.tackle, MOVES.scaleRush], description: "Monstruo Cría Dragón. Salta entre piedras mientras aprende a leer las corrientes de la pradera.", evolvesTo: 9202, evolveLevel: 18 },
+    9201: { id: 9201, name: "Criascama", type: "Dragón", baseHp: 23, catchRate: .42, moves: [MOVES.tackle, MOVES.scaleRush, MOVES.dragonRage], description: "Monstruo Cría Dragón. Salta entre piedras mientras aprende a leer las corrientes de la pradera.", evolvesTo: 9202, evolveLevel: 18 },
     9202: { id: 9202, name: "Aliscama", type: "Dragón", secondaryType: "Bicho", baseHp: 31, catchRate: .18, moves: [MOVES.scaleRush, MOVES.razorWing, MOVES.gust], description: "Monstruo Ala Cortadora. Sus antenas anticipan cada cambio del viento.", evolvesTo: 9203, evolveLevel: 36 },
     9203: { id: 9203, name: "Dracoscama", type: "Dragón", secondaryType: "Bicho", baseHp: 42, catchRate: .07, moves: [MOVES.dragonRage, MOVES.razorWing, MOVES.prairieDive], description: "Monstruo Dragón Veloz. Custodia las praderas con maniobras imposibles de seguir a simple vista." },
     9301: { id: 9301, name: "Luminio", type: "Psíquico", baseHp: 21, catchRate: .50, moves: [MOVES.confusion, MOVES.moonGleam], description: "Monstruo Brillo. Baila junto a fuentes tranquilas y deja sueños de paz a su paso.", evolvesTo: 9302, evolveLevel: 17 },
@@ -667,7 +683,7 @@
   const SECRET_POKEMON_IDS = Object.freeze(Object.keys(POKEMON).map(Number).filter((id) => !SANPLEDEX_IDS.includes(id)));
   const LOCAL_DEX_SIZE = Object.keys(POKEMON).length - SECRET_POKEMON_IDS.length;
 
-  const STARTERS = [POKEMON[9001], POKEMON[9201], POKEMON[9301], POKEMON[9501]];
+  const STARTERS = [POKEMON[4], POKEMON[9001], POKEMON[9201], POKEMON[9301], POKEMON[9501]];
   const WILD_TABLE = [
     { id: 9701, weight: 22 }, { id: 9601, weight: 20 }, { id: 9501, weight: 16 },
     { id: 9001, weight: 14 }, { id: 9101, weight: 10 }, { id: 9301, weight: 8 },
@@ -683,54 +699,6 @@
     { id: 9813, weight: 4 },
   ];
 
-  const BUILDING_SPRITES = {
-    houseGreen: [24, 22, 80, 66], houseYellow: [114, 22, 82, 65], houseRed: [208, 22, 83, 71],
-    houseBlue: [300, 25, 80, 63], houseTeal: [395, 24, 81, 65], houseOrange: [493, 27, 76, 62],
-    housePurple: [579, 26, 80, 64], houseTall: [673, 25, 65, 74], tower: [8, 143, 109, 228],
-    department: [142, 125, 144, 162], mansion: [296, 125, 128, 158], gym: [433, 132, 106, 105],
-    gameCorner: [560, 136, 178, 103], mart: [454, 236, 66, 68], center: [502, 236, 92, 68],
-    club: [621, 238, 81, 67], museum: [137, 340, 255, 115], daycare: [420, 339, 103, 83],
-    lab: [532, 337, 131, 86], bike: [676, 337, 61, 91],
-  };
-
-  const SPRITE_CHOICES = [
-    { id: "houseGreen", name: "Casa verde" }, { id: "houseYellow", name: "Casa amarilla" },
-    { id: "houseRed", name: "Casa roja" }, { id: "houseBlue", name: "Casa azul" },
-    { id: "houseTeal", name: "Casa turquesa" }, { id: "houseOrange", name: "Casa naranja" },
-    { id: "housePurple", name: "Casa violeta" }, { id: "houseTall", name: "Edificio urbano" },
-    { id: "department", name: "Grandes almacenes" }, { id: "mansion", name: "Bloque residencial" },
-    { id: "gym", name: "Gimnasio Pokémon" }, { id: "gameCorner", name: "Edificio recreativo" },
-    { id: "mart", name: "Poké Mart" }, { id: "center", name: "Centro Pokémon" },
-    { id: "club", name: "Club Pokémon" }, { id: "museum", name: "Museo" },
-    { id: "daycare", name: "Guardería" }, { id: "lab", name: "Laboratorio" },
-    { id: "bike", name: "Tienda de bicis" }, { id: "tower", name: "Torre Pokémon" },
-  ];
-
-  const zones = [
-    { id: "jerusalen", name: "Avenida Jerusalén", yStart: 0, yEnd: 280, pattern: 0 },
-    { id: "estambul", name: "Residencial Norte", yStart: 280, yEnd: 650, pattern: 1 },
-    { id: "memphis", name: "Parque San Pablo", yStart: 650, yEnd: 1120, pattern: 0 },
-    { id: "persepolis", name: "Residencial Sur", yStart: 1120, yEnd: 1450, pattern: 1 },
-    { id: "siracusa", name: "Avenida Tesalónica", yStart: 1450, yEnd: 1700, pattern: 2 },
-  ];
-
-  const roads = [
-    { id: "jerusalen", name: "Avenida Jerusalén", x1: 0, y1: 120, x2: 2500, y2: 120, width: 126, kind: "vehicle", dashed: true },
-    { id: "tesalonica", name: "Avenida Tesalónica", x1: 0, y1: 1580, x2: 2500, y2: 1580, width: 126, kind: "vehicle", dashed: true },
-    { id: "paseo-oeste", name: "Paseo del Olivo", x1: 70, y1: 230, x2: 70, y2: 1500, width: 54, kind: "pedestrian", dashed: false },
-    { id: "paseo-1", name: "Paseo de los Pinos", x1: 620, y1: 230, x2: 620, y2: 1500, width: 46, kind: "pedestrian", dashed: false },
-    { id: "paseo-2", name: "Paseo del Centro", x1: 1220, y1: 230, x2: 1220, y2: 1500, width: 46, kind: "pedestrian", dashed: false },
-    { id: "paseo-3", name: "Paseo de la Fuente", x1: 1820, y1: 230, x2: 1820, y2: 1500, width: 46, kind: "pedestrian", dashed: false },
-    { id: "paseo-este", name: "Paseo de los Naranjos", x1: 2430, y1: 230, x2: 2430, y2: 1500, width: 54, kind: "pedestrian", dashed: false },
-    { id: "parque-norte", name: "Sendero Norte", x1: 90, y1: 735, x2: 2410, y2: 735, width: 46, kind: "pedestrian", dashed: false },
-    { id: "parque-sur", name: "Sendero Sur", x1: 90, y1: 1060, x2: 2410, y2: 1060, width: 46, kind: "pedestrian", dashed: false },
-  ];
-
-  const parkingLots = [
-    { id: "jerusalen", x: 820, y: 218, w: 700, h: 48, a: 0 },
-    { id: "tesalonica", x: 1680, y: 1482, w: 760, h: 48, a: 0 },
-  ];
-
   const buildings = createMapBuildings();
   const field = CITY_MAP.field || { x: 1250, y: 900, w: 320, h: 210, a: 0 };
   function currentPortalDoor() {
@@ -744,11 +712,6 @@
       : { ...INITIAL_PORTAL_POSITION };
   }
 
-  const INITIAL_PORTAL_RETURN = CITY_MAP.portalReturn || {
-    x: INITIAL_PORTAL_POSITION.x,
-    y: INITIAL_PORTAL_POSITION.y + field.h / 2 + 70,
-  };
-
   function currentPortalReturn() {
     if (CITY_MAP.portalReturn) return { ...CITY_MAP.portalReturn };
     const position = currentPortalPosition();
@@ -761,8 +724,6 @@
       ? { x: Number(entrance.approach[0]), y: Number(entrance.approach[1]) }
       : { ...NORMAL_START };
   }
-  const greenAreas = createGreenAreas();
-  const encounterZones = greenAreas.map((area) => area.polygon);
 
   const pointsOfInterest = CITY_MAP.pointsOfInterest || [
     { id: "dimension_portal", x: INITIAL_PORTAL_POSITION.x, y: INITIAL_PORTAL_POSITION.y, radius: 78 },
@@ -812,8 +773,6 @@
 
   const BLACK_MARKET_LIMITS = Object.freeze({ rareCandy: 2, masterBall: 1, prismBattery: 3 });
 
-  const treePositions = [];
-  const carPositions = [];
 
   const defaultState = () => ({
     version: 7, mapRevision: MAP_REVISION, started: false, starterChosen: false,
@@ -841,6 +800,8 @@
   let dialogCallback = null;
   let dialogPresentation = null;
   let audioContext = null;
+  let musicPreviewTrackId = null;
+  let lastMusicFocus = null;
   let lastFrameTime = 0;
   let animationTime = 0;
   let animationPhase = 0;
@@ -858,12 +819,13 @@
   let lastArea = "";
   let lastSaveAt = 0;
   let saveStatusTimer = 0;
-  let selectedBuildingId = "";
   let inventoryOpenedFromBattle = false;
   let selectedSanpledexId = PETRILLO_ID;
   let lastSanpledexFocus = null;
   let sanpledexAttackTimer = 0;
+  let sanpledexAttackRequest = 0;
   let attackEffectOverrides = Object.create(null);
+  let movePixelEffectPlayback = 0;
   let selectedAttackMoveId = Object.keys(MOVES)[0];
   let lastAttackDexFocus = null;
   let attackDexPreviewTimers = [];
@@ -928,7 +890,6 @@
     strafeLeft: false, strafeRight: false, run: false,
   };
 
-  const buildingSheet = new Image();
   const playerSheet = new Image();
   const playerDiagonalSheet = new Image();
   const npcSheet = new Image();
@@ -948,6 +909,8 @@
     ...asset,
     colliders: (asset.colliders || []).map((collider) => [...collider]),
   })) : [];
+  const interiorAssetsByScene = new Map();
+  let runtimeEditorAssetSnapshot = cloneRuntimeRecord(initialEditorData);
   const initialAddedAssetIds = new Set((Array.isArray(initialEditorData.addedAssets) ? initialEditorData.addedAssets : [])
     .map((asset) => String(asset?.id || ""))
     .filter(Boolean));
@@ -992,7 +955,6 @@
   let dialogMusicGainNode = null;
   let activeDialogMusicSource = null;
   const activeScareClips = new Set();
-  let buildingSheetReady = false;
   let playerSheetReady = false;
   let playerDiagonalSheetReady = false;
   let npcSheetReady = false;
@@ -1090,6 +1052,9 @@
     inventoryButton: $("#inventoryButton"), inventoryDrawer: $("#inventoryDrawer"),
     closeInventory: $("#closeInventory"), inventoryScrim: $("#inventoryScrim"),
     dimensionProgress: $("#dimensionProgress"), inventoryList: $("#inventoryList"),
+    musicButton: $("#musicButton"), musicModal: $("#musicModal"), closeMusic: $("#closeMusic"),
+    musicCatalog: $("#musicCatalog"), musicNowTitle: $("#musicNowTitle"),
+    musicNowMeta: $("#musicNowMeta"), musicAutoButton: $("#musicAutoButton"),
     gameCard: $("#gameCard"), fullscreenButton: $("#fullscreenButton"),
     mazeHud: $("#mazeHud"), lightCharges: $("#lightCharges"), shadowStatus: $("#shadowStatus"),
     mazeObjective: $("#mazeObjective"), noiseLabel: $("#noiseLabel"),
@@ -1123,24 +1088,6 @@
     elements.fullscreenButton.title = fullscreen ? "Salir de pantalla completa" : "Pantalla completa";
   }
 
-  function createResidentialBand(zoneId, streetName, northY, southY, pattern) {
-    const sprites = ["houseGreen", "houseYellow", "houseRed", "houseBlue", "houseTeal", "houseOrange", "housePurple"];
-    const xPositions = [475, 665, 855, 1045, 1235, 1425, 1615];
-    const result = [];
-    [northY, southY].forEach((y, rowIndex) => {
-      xPositions.forEach((x, index) => {
-        const sprite = sprites[(index + pattern * 2 + rowIndex) % sprites.length];
-        const suffix = `${rowIndex === 0 ? "N" : "S"}${index + 1}`;
-        result.push({
-          id: `${zoneId}-${suffix.toLowerCase()}`, zone: zoneId, x, y,
-          w: index % 3 === 1 ? 168 : 158, h: 112, a: 0,
-          sprite, defaultSprite: sprite, label: `Edificio ${streetName} ${suffix}`,
-        });
-      });
-    });
-    return result;
-  }
-
   function createMapBuildings() {
     const mapBuildings = [
       { id: "bloque-norte-1", zone: "estambul", x: 330, y: 430, w: 500, h: 220, sprite: "mansion", renderStyle: "apartment", label: "Bloque Norte 1", doorSide: "bottom", doorOffsets: [-150, 0, 150] },
@@ -1163,17 +1110,6 @@
 
   function rectanglePolygon(x, y, width, height) {
     return [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
-  }
-
-  function createGreenAreas() {
-    return [
-      { name: "Jardines del Parque San Pablo", polygon: rectanglePolygon(105, 680, 2290, 400) },
-      { name: "Jardín Norte Oeste", polygon: rectanglePolygon(100, 275, 180, 300) },
-      { name: "Jardín Norte Este", polygon: rectanglePolygon(2220, 275, 180, 300) },
-      { name: "Jardín Sur Oeste", polygon: rectanglePolygon(100, 1120, 180, 300) },
-      { name: "Jardín Sur Este", polygon: rectanglePolygon(2220, 1120, 180, 300) },
-      { name: "Campo de fútbol de San Pablo", polygon: rectanglePolygon(field.x - field.w / 2, field.y - field.h / 2, field.w, field.h) },
-    ];
   }
 
   function seededRandom(seed) {
@@ -1757,45 +1693,40 @@
     else voiceNpc.direction = dy < 0 ? "up" : "down";
   }
 
-  function prepareWorldDecorations() {
-    for (let index = 0; index < 118; index += 1) {
-      const zone = encounterZones[index % encounterZones.length];
-      const xs = zone.map((point) => point[0]);
-      const ys = zone.map((point) => point[1]);
-      const x = Math.min(...xs) + seededRandom(index + 10) * (Math.max(...xs) - Math.min(...xs));
-      const y = Math.min(...ys) + seededRandom(index + 120) * (Math.max(...ys) - Math.min(...ys));
-      if (pointInPolygon(x, y, zone) && !collidesWithBuilding(x, y, 30)) {
-        treePositions.push({ x, y, size: 24 + seededRandom(index + 300) * 12 });
-      }
-    }
-    for (let x = 55; x < WORLD_WIDTH; x += 58) {
-      treePositions.push({ x, y: 58 + seededRandom(x) * 24, size: 38 });
-      treePositions.push({ x, y: WORLD_HEIGHT - 38 - seededRandom(x + 1) * 24, size: 38 });
-    }
-    for (let y = 135; y < WORLD_HEIGHT - 100; y += 62) {
-      treePositions.push({ x: 55 + seededRandom(y) * 22, y, size: 38 });
-      treePositions.push({ x: WORLD_WIDTH - 45 - seededRandom(y + 1) * 22, y, size: 38 });
-    }
-    const vehicleRoads = roads.filter((road) => road.kind === "vehicle");
-    for (let index = 0; index < 38; index += 1) {
-      const road = vehicleRoads[index % vehicleRoads.length];
-      const position = .06 + seededRandom(index + 520) * .88;
-      const angle = Math.atan2(road.y2 - road.y1, road.x2 - road.x1);
-      const laneOffset = (index % 2 ? 1 : -1) * road.width * .25;
-      carPositions.push({
-        x: road.x1 + (road.x2 - road.x1) * position - Math.sin(angle) * laneOffset,
-        y: road.y1 + (road.y2 - road.y1) * position + Math.cos(angle) * laneOffset,
-        color: ["#d7564f", "#4b83a5", "#eee8cf", "#dea944", "#7d8790"][index % 5],
-        angle,
-      });
-    }
-  }
-
   function customPokemonAsset(id, view = "front") { return CUSTOM_POKEMON_ASSETS[id]?.[view] || null; }
   function prefersReducedMotion() { return Boolean(REDUCED_MOTION_QUERY?.matches); }
-  function customPokemonFrameAsset(id, view = "front") {
+  function moveDelivery(move) { return move?.delivery === "ranged" ? "ranged" : "melee"; }
+  function customPokemonAnimation(id) { return SANPLEDEX_ANIMATION_ASSETS[Number(id)] || null; }
+  function customPokemonAttackAnimation(id, variant = "melee") {
+    return customPokemonAnimation(id)?.attacks?.[variant] || null;
+  }
+  function customPokemonFrameAsset(id, state = "idle", view = "front", variant = null) {
     if (prefersReducedMotion()) return null;
-    return CUSTOM_POKEMON_FRAME_ASSETS[Number(id)]?.[view] || null;
+    if (state === "front" || state === "back") { view = state; state = "idle"; }
+    const animation = customPokemonAnimation(id);
+    if (animation) {
+      if (state === "attack" && variant) {
+        return customPokemonAttackAnimation(id, variant)?.[view]
+          || animation.attack?.[view]
+          || null;
+      }
+      return animation[state]?.[view] || null;
+    }
+    return state === "idle" ? CUSTOM_POKEMON_FRAME_ASSETS[Number(id)]?.[view] || null : null;
+  }
+  function customPokemonAttackPose(id, view = "front", variant = null) {
+    return (variant ? customPokemonAttackAnimation(id, variant)?.pose?.[view] : null)
+      || customPokemonAnimation(id)?.pose?.[view]
+      || customPokemonAsset(id, view === "back" ? "attackBack" : "attackFront");
+  }
+  function imageCanLoad(src) {
+    if (!src) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve(true);
+      image.onerror = () => resolve(false);
+      image.src = src;
+    });
   }
   function customPokemonAttack(id) { return CUSTOM_POKEMON_ATTACKS[Number(id)] || null; }
   function customAttackStyle(profile) {
@@ -1808,7 +1739,7 @@
   function setBattlePokemonMotion(element, id, view = "front") {
     const motion = CUSTOM_POKEMON_MOTIONS[Number(id)];
     const attack = customPokemonAttack(id);
-    const frameAnimated = Boolean(customPokemonFrameAsset(id, view));
+    const frameAnimated = Boolean(customPokemonFrameAsset(id, "idle", view));
     element.classList.toggle("frame-animated", frameAnimated);
     element.classList.toggle("custom-pokemon-motion", Boolean(motion) && !frameAnimated);
     element.dataset.pokemonId = String(id);
@@ -1831,12 +1762,12 @@
   function frontSpriteUrl(id) { return customPokemonFrameAsset(id) || customPokemonAsset(id) || ""; }
   function backSpriteUrl(id) { return customPokemonFrameAsset(id, "back") || customPokemonAsset(id, "back") || ""; }
   function itemSpriteUrl(name) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${name}.png`; }
-  function currentWorldWidth() { return state.dimension === "prism" ? PRISM_WIDTH : WORLD_WIDTH; }
-  function currentWorldHeight() { return state.dimension === "prism" ? PRISM_HEIGHT : WORLD_HEIGHT; }
+  function currentWorldWidth() { return state.interior ? INDOOR_WORLD_WIDTH : (state.dimension === "prism" ? PRISM_WIDTH : WORLD_WIDTH); }
+  function currentWorldHeight() { return state.interior ? INDOOR_WORLD_HEIGHT : (state.dimension === "prism" ? PRISM_HEIGHT : WORLD_HEIGHT); }
 
   function attachSpriteFallback(image, id, back = false) {
     const view = back ? "back" : "front";
-    const animatedAsset = customPokemonFrameAsset(id, view);
+    const animatedAsset = customPokemonFrameAsset(id, "idle", view);
     const fallbackAsset = customPokemonAsset(id, view);
     if (!animatedAsset || !fallbackAsset) {
       image.onerror = null;
@@ -1866,8 +1797,11 @@
     if (!elements.sanpledexModal?.classList.contains("hidden")) {
       elements.sanpledexDetail.querySelectorAll(".sanpledex-base-sprite").forEach((image) => {
         const view = image.dataset.view === "back" ? "back" : "front";
-        image.classList.toggle("frame-animated", Boolean(customPokemonFrameAsset(selectedSanpledexId, view)));
-        image.src = view === "back" ? backSpriteUrl(selectedSanpledexId) : frontSpriteUrl(selectedSanpledexId);
+        image.classList.toggle("frame-animated", Boolean(customPokemonFrameAsset(selectedSanpledexId, "idle", view)));
+        const idleSource = view === "back" ? backSpriteUrl(selectedSanpledexId) : frontSpriteUrl(selectedSanpledexId);
+        image.dataset.idleSrc = idleSource;
+        image.dataset.attackSrc = customPokemonFrameAsset(selectedSanpledexId, "attack", view) || "";
+        image.src = idleSource;
         attachSpriteFallback(image, selectedSanpledexId, view === "back");
       });
     }
@@ -2049,8 +1983,6 @@
   }
 
   function loadAssets() {
-    buildingSheet.onload = () => { buildingSheetReady = true; };
-    buildingSheet.onerror = () => { buildingSheetReady = false; };
     playerSheet.onload = () => { buildPlayerFrames(); playerSheetReady = true; updateAssetNotice(); };
     playerSheet.onerror = () => { playerSheetReady = false; elements.assetNotice.textContent = "Personaje en modo alternativo"; };
     playerDiagonalSheet.onload = () => {
@@ -2104,7 +2036,6 @@
     roadSidewalkTilesetImage.onerror = () => { roadSidewalkTilesetReady = false; document.documentElement.dataset.pathTexturesReady = "error"; };
     shadowStalkerImage.onload = () => { shadowStalkerReady = true; };
     shadowStalkerImage.onerror = () => { shadowStalkerReady = false; };
-    buildingSheet.src = BUILDING_SHEET_URL;
     playerSheet.src = PLAYER_SHEET_URL;
     playerDiagonalSheet.decoding = "async";
     playerDiagonalSheet.src = PLAYER_DIAGONAL_SHEET_URL;
@@ -2720,10 +2651,6 @@
   function mapSectionAt(x, y) {
     return (CITY_MAP.sections || []).find((section) => x >= section.x && x < section.x + section.w
       && y >= section.y && y < section.y + section.h) || { id: ACTIVE_MAP_ID, name: CITY_MAP.name || ACTIVE_MAP_ID, x: 0, y: 0, w: WORLD_WIDTH, h: WORLD_HEIGHT };
-  }
-
-  function zoneAtY(y) {
-    return mapSectionAt(state.worldX, y);
   }
 
   function tileKey(col, row) { return `${col},${row}`; }
@@ -3503,14 +3430,15 @@
 
   function openBuildingEditor() {
     if (!developerEditorEnabled) return;
+    closeMusicLibrary(false);
     editorReturnFocus = document.activeElement;
     enterWorldForBuildingEditor();
     if (!elements.battleScreen.classList.contains("hidden")) {
       setBattleMessage("Termina el combate para abrir el modo dios.");
       return;
     }
-    if (!state.started || state.dimension !== "san_pablo" || state.interior) {
-      if (!elements.worldScreen.classList.contains("hidden")) showAreaToast("MODO DIOS · SOLO EN EL EXTERIOR");
+    if (!state.started || state.dimension !== "san_pablo" || (state.interior && state.interior !== "building")) {
+      if (!elements.worldScreen.classList.contains("hidden")) showAreaToast("MODO DIOS · NO DISPONIBLE EN ESTA ZONA");
       return;
     }
     if (elements.worldScreen.classList.contains("hidden")) return;
@@ -3575,7 +3503,7 @@
       setBattleMessage("La energía del laberinto bloquea la mochila durante el rescate.");
       return;
     }
-    closeSanpledex(false); closeTeam(); closeBuildingEditorPanel(); clearDirectionalInput();
+    closeMusicLibrary(false); closeSanpledex(false); closeTeam(); closeBuildingEditorPanel(); clearDirectionalInput();
     inventoryOpenedFromBattle = fromBattle && Boolean(battle);
     renderInventory();
     elements.inventoryDrawer.classList.add("open");
@@ -4029,7 +3957,7 @@
     elements.starterIntroScreen.classList.add("hidden");
     elements.battleScreen.classList.add("hidden");
     elements.worldScreen.classList.remove("hidden");
-    elements.buildingEditorButton.disabled = state.dimension === "prism" || Boolean(state.interior);
+    elements.buildingEditorButton.disabled = state.dimension === "prism" || Boolean(state.interior && state.interior !== "building");
     elements.worldScreen.classList.toggle("maze-mode", state.dimension === "prism");
     elements.mazeHud.classList.toggle("hidden", state.dimension !== "prism");
     if (VOICE_NPC_ENABLED && state.dimension === "san_pablo" && !state.interior) placeVoiceNpcNearPlayer();
@@ -4623,19 +4551,6 @@
     return inside;
   }
 
-  function rotatedRectPolygon(building, padding = 0) {
-    const width = building.w + padding * 2;
-    const height = building.h + padding * 2;
-    const cosine = Math.cos(building.a || 0);
-    const sine = Math.sin(building.a || 0);
-    return [[-width / 2, -height / 2], [width / 2, -height / 2], [width / 2, height / 2], [-width / 2, height / 2]]
-      .map(([x, y]) => [building.x + x * cosine - y * sine, building.y + x * sine + y * cosine]);
-  }
-
-  function collidesWithBuilding(x, y, padding = 16) {
-    return buildings.some((building) => pointInPolygon(x, y, rotatedRectPolygon(building, padding)));
-  }
-
   function buildingDoorAt(building, offset = building.doorOffset || 0) {
     const side = building.doorSide || "bottom";
     let localX = offset; let localY = building.h / 2 + 34;
@@ -4662,8 +4577,6 @@
     const offsets = Array.isArray(building.doorOffsets) && building.doorOffsets.length ? building.doorOffsets : [building.doorOffset || 0];
     return offsets.map((offset, index) => ({ ...buildingDoorAt(building, offset), doorIndex: index }));
   }
-
-  function buildingDoor(building) { return buildingDoors(building)[0]; }
 
   function maintenanceCanOccupy(x, y) {
     const room = MAINTENANCE_ROOM;
@@ -4821,6 +4734,7 @@
 
   function updateAreaLabel() {
     const area = areaForPosition(state.worldX, state.worldY);
+    const areaChanged = area !== lastArea;
     const tile = worldToTile(state.worldX, state.worldY);
     document.documentElement.dataset.playerPosition = `${Math.round(state.worldX)},${Math.round(state.worldY)}`;
     document.documentElement.dataset.playerTile = `C${tile.col},F${tile.row}`;
@@ -4838,6 +4752,7 @@
     updateCaptureStatus();
     if (lastArea && area !== lastArea) showAreaToast(area.toUpperCase());
     lastArea = area;
+    if (areaChanged && state.started && !activeDialogMusicSource) startBackgroundMusic();
   }
 
   function updateCaptureStatus() {
@@ -5049,7 +4964,33 @@
       return !ROUTE_BLOCKED.some((b) => x >= b.x - 14 && x <= b.x + b.w + 14 && y >= b.y - 14 && y <= b.y + b.h + 14);
     }
     const r = INDOOR_ROOM;
-    return x > r.x + r.wall && x < r.x + r.w - r.wall && y > r.y + r.wall && y < r.y + r.h - r.wall;
+    if (!(x > r.x + r.wall && x < r.x + r.w - r.wall && y > r.y + r.wall && y < r.y + r.h - r.wall)) return false;
+    return !activeInteriorAssets().some((asset) => asset.solid !== false
+      && worldAssetColliderRects(asset).some((rect) => circleIntersectsRect(x, y, 14, rect)));
+  }
+
+  function stableInteriorSceneId(type, door) {
+    const source = String(door?.id || door?.assetId || door?.label || type || "house");
+    const slug = source.toLowerCase().replace(/[^a-z0-9_.:-]+/g, "-").replace(/^-+|-+$/g, "") || "house";
+    let hash = 2166136261;
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `interior:${slug.slice(0, 38)}:${(hash >>> 0).toString(36)}`.slice(0, 64);
+  }
+
+  function currentInteriorSceneId() {
+    return state.interior === "building" ? String(state.interiorData?.scene || "") : "";
+  }
+
+  function activeInteriorAssets() {
+    const scene = currentInteriorSceneId();
+    return scene ? (interiorAssetsByScene.get(scene) || []) : [];
+  }
+
+  function activeEditorAssets() {
+    return state.interior === "building" ? activeInteriorAssets() : cityWorldAssets;
   }
 
   async function enterInterior(type, door) {
@@ -5057,10 +4998,13 @@
     inputLocked = true; clearDirectionalInput();
     await fadeTransition(() => {
       state.interior = type === "route" ? "route" : "building";
+      const scene = type === "route" ? "" : stableInteriorSceneId(type, door);
       state.interiorData = {
         type, label: door?.label || INTERIOR_PALETTES[type]?.label || "Interior",
-        npc: door?.npc || null, returnX: state.worldX, returnY: state.worldY, returnDir: state.direction,
+        npc: door?.npc || null, scene, returnX: state.worldX, returnY: state.worldY, returnDir: state.direction,
       };
+      if (scene && !interiorAssetsByScene.has(scene)) rebuildInteriorAssetScenes(runtimeEditorAssetSnapshot);
+      if (scene && !interiorAssetsByScene.has(scene)) interiorAssetsByScene.set(scene, []);
       if (type === "route") { state.worldX = ROUTE_SPAWN.x; state.worldY = ROUTE_SPAWN.y; }
       else { state.worldX = INDOOR_SPAWN.x; state.worldY = INDOOR_SPAWN.y; }
       state.direction = "up";
@@ -5068,7 +5012,7 @@
       camera.x = 0;
       camera.y = 0;
       lastArea = "";
-      elements.buildingEditorButton.disabled = true;
+      elements.buildingEditorButton.disabled = type === "route";
       closeBuildingEditorPanel();
     });
     inputLocked = false;
@@ -5803,169 +5747,6 @@
     }
   }
 
-  function drawRoad(context, road) {
-    if (road.kind === "pedestrian") {
-      drawPedestrianStreet(context, road);
-      return;
-    }
-    const angle = Math.atan2(road.y2 - road.y1, road.x2 - road.x1);
-    context.save();
-    context.lineCap = "butt";
-    context.strokeStyle = "#ded8bd";
-    context.lineWidth = road.width + 28;
-    context.beginPath(); context.moveTo(road.x1, road.y1); context.lineTo(road.x2, road.y2); context.stroke();
-    context.strokeStyle = "#667176";
-    context.lineWidth = road.width;
-    context.stroke();
-    if (road.dashed) {
-      context.strokeStyle = "rgba(255,244,193,.78)";
-      context.lineWidth = 3;
-      context.setLineDash([28, 25]);
-      context.beginPath(); context.moveTo(road.x1, road.y1); context.lineTo(road.x2, road.y2); context.stroke();
-      context.setLineDash([]);
-    }
-    context.restore();
-  }
-
-  function drawPedestrianStreet(context, street) {
-    const angle = Math.atan2(street.y2 - street.y1, street.x2 - street.x1);
-    const length = Math.hypot(street.x2 - street.x1, street.y2 - street.y1);
-    context.save();
-    context.lineCap = "butt";
-    context.strokeStyle = "#ab9868";
-    context.lineWidth = street.width + 24;
-    context.beginPath(); context.moveTo(street.x1, street.y1); context.lineTo(street.x2, street.y2); context.stroke();
-    context.strokeStyle = "#d8c792";
-    context.lineWidth = street.width;
-    context.stroke();
-
-    context.translate(street.x1, street.y1); context.rotate(angle);
-    context.strokeStyle = "rgba(117,94,52,.2)";
-    context.lineWidth = 2;
-    for (let x = 18; x < length; x += 32) {
-      context.beginPath(); context.moveTo(x, -street.width / 2); context.lineTo(x, street.width / 2); context.stroke();
-    }
-    context.strokeStyle = "rgba(255,249,218,.45)";
-    context.beginPath(); context.moveTo(0, -street.width * .28); context.lineTo(length, -street.width * .28); context.stroke();
-    context.beginPath(); context.moveTo(0, street.width * .28); context.lineTo(length, street.width * .28); context.stroke();
-
-    context.restore();
-  }
-
-  function drawGround(context) {
-    const bounds = visibleBounds(80);
-    const firstTileX = Math.floor(bounds.left / 32) * 32;
-    const firstTileY = Math.floor(bounds.top / 32) * 32;
-    context.fillStyle = "#78b566";
-    context.fillRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
-
-    for (let y = firstTileY; y < bounds.bottom; y += 32) {
-      for (let x = firstTileX; x < bounds.right; x += 32) {
-        context.fillStyle = ((x / 32 + y / 32) % 2 === 0) ? "#82ba6b" : "#79b164";
-        context.fillRect(x, y, 32, 32);
-        if ((x / 32 + y / 32) % 7 === 0) {
-          context.fillStyle = "rgba(67,126,65,.27)";
-          context.fillRect(x + 8, y + 19, 3, 8);
-          context.fillRect(x + 12, y + 16, 3, 11);
-        }
-      }
-    }
-
-    drawForestBorder(context, bounds);
-    drawCityBase(context, bounds);
-    drawBuildingPlots(context, bounds);
-    encounterZones.filter((zone) => polygonInView(zone, bounds)).forEach((zone, index) => drawGrassPatch(context, zone, index));
-    roads.filter((road) => roadInView(road, bounds)).forEach((road) => drawRoad(context, road));
-    drawParkFixtures(context, bounds);
-    if (field.y + field.h / 2 >= bounds.top && field.y - field.h / 2 <= bounds.bottom) drawField(context);
-    drawParkingAreas(context, bounds);
-  }
-
-  function drawCityBase(context, bounds) {
-    context.fillStyle = "#d5c9a4";
-    context.fillRect(Math.max(0, bounds.left), 232, Math.min(WORLD_WIDTH, bounds.right) - Math.max(0, bounds.left), 1270);
-    context.fillStyle = "#a8c978";
-    context.fillRect(105, 680, 2290, 400);
-    context.fillStyle = "#c9bc91";
-    context.fillRect(105, 705, 2290, 42);
-    context.fillRect(105, 1038, 2290, 42);
-    context.fillStyle = "rgba(255,250,218,.48)";
-    for (let y = 258; y < 1495; y += 24) {
-      context.fillRect(100, y, 2300, 2);
-    }
-    context.fillStyle = "#6fa85f";
-    context.fillRect(110, 760, 2280, 255);
-    context.fillStyle = "#86b96a";
-    context.fillRect(132, 780, 2236, 215);
-  }
-
-  function drawParkFixtures(context, bounds) {
-    const playgrounds = [
-      { x: 260, y: 870, w: 250, h: 170, accent: "#da9a32" },
-      { x: 2240, y: 870, w: 250, h: 170, accent: "#d9574f" },
-    ];
-    playgrounds.forEach((playground) => {
-      if (playground.x + playground.w / 2 < bounds.left || playground.x - playground.w / 2 > bounds.right) return;
-      context.save(); context.translate(playground.x, playground.y);
-      context.fillStyle = "#d8c79a"; context.fillRect(-playground.w / 2, -playground.h / 2, playground.w, playground.h);
-      context.strokeStyle = "#7c8069"; context.lineWidth = 5; context.strokeRect(-playground.w / 2, -playground.h / 2, playground.w, playground.h);
-      context.fillStyle = playground.accent; context.fillRect(-82, -35, 26, 72); context.fillRect(-92, 28, 48, 10);
-      context.fillStyle = "#4a80a6"; context.fillRect(28, -30, 78, 12); context.fillRect(93, -30, 12, 56);
-      context.strokeStyle = "#3d6380"; context.lineWidth = 8; context.beginPath(); context.moveTo(30, -24); context.lineTo(95, 24); context.stroke();
-      context.fillStyle = "#bd6f4a"; context.fillRect(-120, 56, 70, 14);
-      context.restore();
-    });
-
-    const benches = [
-      [690, 810], [690, 1010], [1820, 810], [1820, 1010], [1060, 810], [1440, 1010],
-    ];
-    benches.forEach(([x, y]) => drawBench(context, x, y));
-    for (let x = 120; x <= 2380; x += 150) drawLamp(context, x, 690);
-    for (let x = 120; x <= 2380; x += 150) drawLamp(context, x, 1100);
-    for (let x = 155; x <= 2350; x += 210) drawTree(context, { x, y: 745, size: 30 });
-    for (let x = 155; x <= 2350; x += 210) drawTree(context, { x, y: 1050, size: 30 });
-  }
-
-  function drawBench(context, x, y) {
-    context.save(); context.translate(x, y);
-    context.fillStyle = "rgba(35,54,42,.2)"; context.fillRect(-26, 7, 52, 7);
-    context.fillStyle = "#925c38"; context.fillRect(-25, -7, 50, 11); context.fillRect(-21, 5, 6, 13); context.fillRect(15, 5, 6, 13);
-    context.restore();
-  }
-
-  function drawLamp(context, x, y) {
-    context.save(); context.translate(x, y);
-    context.fillStyle = "#56605c"; context.fillRect(-3, -28, 6, 28); context.fillStyle = "#424c4c"; context.fillRect(-7, -32, 14, 5);
-    context.fillStyle = "#f3de83"; context.beginPath(); context.arc(0, -35, 7, 0, Math.PI * 2); context.fill();
-    context.fillStyle = "rgba(248,222,125,.2)"; context.beginPath(); context.arc(0, -35, 17, 0, Math.PI * 2); context.fill();
-    context.restore();
-  }
-
-  function drawForestBorder(context, bounds) {
-    const depth = 105;
-    context.fillStyle = "#285d38";
-    if (bounds.top <= depth) context.fillRect(0, 0, WORLD_WIDTH, depth);
-    if (bounds.bottom >= WORLD_HEIGHT - depth) context.fillRect(0, WORLD_HEIGHT - depth, WORLD_WIDTH, depth);
-    if (bounds.left <= depth) context.fillRect(0, 0, depth, WORLD_HEIGHT);
-    if (bounds.right >= WORLD_WIDTH - depth) context.fillRect(WORLD_WIDTH - depth, 0, depth, WORLD_HEIGHT);
-  }
-
-  function drawBuildingPlots(context, bounds) {
-    buildings.filter((building) => entityInView(building, bounds, 65)).forEach((building) => {
-      context.save();
-      context.translate(building.x, building.y);
-      context.rotate(building.a || 0);
-      context.fillStyle = "#d5c99d";
-      context.fillRect(-building.w / 2 - 28, -building.h / 2 - 28, building.w + 56, building.h + 70);
-      context.fillStyle = "#78aa5b";
-      context.fillRect(-building.w / 2 - 18, -building.h / 2 - 18, building.w + 36, building.h + 50);
-      context.strokeStyle = "rgba(247,239,202,.62)";
-      context.lineWidth = 4;
-      context.strokeRect(-building.w / 2 - 23, -building.h / 2 - 23, building.w + 46, building.h + 60);
-      context.restore();
-    });
-  }
-
   function visibleBounds(margin = 0) {
     return {
       left: clamp(camera.x - margin, 0, currentWorldWidth()),
@@ -5975,115 +5756,11 @@
     };
   }
 
-  function polygonInView(polygon, bounds) {
-    const xs = polygon.map((point) => point[0]);
-    const ys = polygon.map((point) => point[1]);
-    return Math.max(...xs) >= bounds.left && Math.min(...xs) <= bounds.right && Math.max(...ys) >= bounds.top && Math.min(...ys) <= bounds.bottom;
-  }
-
-  function roadInView(road, bounds) {
-    return Math.max(road.x1, road.x2) + road.width >= bounds.left
-      && Math.min(road.x1, road.x2) - road.width <= bounds.right
-      && Math.max(road.y1, road.y2) + road.width >= bounds.top
-      && Math.min(road.y1, road.y2) - road.width <= bounds.bottom;
-  }
-
   function entityInView(entity, bounds, margin = 100) {
     return entity.x + (entity.w || 0) / 2 + margin >= bounds.left
       && entity.x - (entity.w || 0) / 2 - margin <= bounds.right
       && entity.y + (entity.h || 0) / 2 + margin >= bounds.top
       && entity.y - (entity.h || 0) / 2 - margin <= bounds.bottom;
-  }
-
-  function drawZonePattern(context, zone) {
-    const residential = ["memphis", "persepolis", "siracusa", "ada_sur"].includes(zone.id);
-    if (!residential) {
-      context.fillStyle = zone.id === "jerusalen" ? "rgba(220,207,161,.42)" : "rgba(211,199,153,.34)";
-      context.fillRect(365, zone.yStart + 18, 1425, Math.max(0, zone.yEnd - zone.yStart - 36));
-      return;
-    }
-
-    const top = zone.yStart + 28;
-    const height = zone.yEnd - zone.yStart - 56;
-    context.fillStyle = "#cabb88";
-    context.fillRect(365, top, 1415, height);
-    context.fillStyle = "#90b968";
-    context.fillRect(395, top + 22, 1355, height - 44);
-
-    context.fillStyle = "#dfd3a6";
-    if (zone.pattern === 0) {
-      context.fillRect(1035, top + 22, 54, height - 44);
-      context.fillRect(395, top + height / 2 - 24, 1355, 48);
-    } else if (zone.pattern === 1) {
-      for (let x = 500; x < 1700; x += 280) context.fillRect(x, top + 22, 42, height - 44);
-    } else if (zone.pattern === 2) {
-      context.fillRect(395, top + height / 2 - 22, 1355, 44);
-      for (let x = 565; x < 1670; x += 360) {
-        context.beginPath(); context.arc(x, top + height / 2, 52, 0, Math.PI * 2); context.fill();
-      }
-    } else {
-      for (let x = 430; x < 1710; x += 170) context.fillRect(x, top + height / 2 - 16, 115, 32);
-    }
-
-    drawZoneMarker(context, zone);
-  }
-
-  function drawZoneMarker(context, zone) {
-    context.save();
-    context.fillStyle = "rgba(31,77,56,.84)";
-    context.fillRect(385, zone.yStart + 34, 165, 27);
-    context.fillStyle = "#fffbea";
-    context.font = "900 12px Trebuchet MS";
-    context.textAlign = "left";
-    context.fillText(zone.name.toUpperCase(), 397, zone.yStart + 52);
-    context.restore();
-  }
-
-  function drawGrassPatch(context, polygon, index) {
-    context.save();
-    context.beginPath(); context.moveTo(polygon[0][0], polygon[0][1]);
-    polygon.slice(1).forEach((point) => context.lineTo(point[0], point[1]));
-    context.closePath(); context.clip();
-    const xs = polygon.map((point) => point[0]); const ys = polygon.map((point) => point[1]);
-    const left = Math.min(...xs); const right = Math.max(...xs); const top = Math.min(...ys); const bottom = Math.max(...ys);
-    context.fillStyle = index % 2 ? "#78aa59" : "#72a354";
-    context.fillRect(left, top, right - left, bottom - top);
-    context.fillStyle = index % 3 === 0 ? "#397846" : "#45824a";
-    const spacing = 22 + (index % 3) * 4;
-    for (let y = top + 8; y < bottom; y += spacing) {
-      for (let x = left + 7 + ((y / spacing) % 2) * 9; x < right; x += spacing) {
-        context.fillRect(x, y + 5, 3, 10); context.fillRect(x - 3, y + 8, 3, 7); context.fillRect(x + 3, y + 6, 3, 9);
-      }
-    }
-    context.restore();
-  }
-
-  function drawAdaDistanceMarkers(context, bounds) {
-    for (let meters = 0; meters <= 350; meters += 50) {
-      const y = 350 + meters * PIXELS_PER_METER;
-      if (y < bounds.top - 20 || y > bounds.bottom + 20) continue;
-      context.fillStyle = "#f7f2d9";
-      context.fillRect(319, y - 10, 44, 20);
-      context.strokeStyle = "#355346";
-      context.lineWidth = 2;
-      context.strokeRect(319, y - 10, 44, 20);
-      context.fillStyle = "#29493b";
-      context.font = "900 9px Trebuchet MS";
-      context.textAlign = "center";
-      context.fillText(`${meters} m`, 341, y + 3);
-    }
-  }
-
-  function drawField(context) {
-    context.save();
-    context.translate(field.x, field.y); context.rotate(field.a);
-    context.fillStyle = "#d7d0b0"; context.fillRect(-field.w / 2 - 14, -field.h / 2 - 14, field.w + 28, field.h + 28);
-    context.fillStyle = "#4e9b59"; context.fillRect(-field.w / 2, -field.h / 2, field.w, field.h);
-    context.strokeStyle = "rgba(241,247,218,.75)"; context.lineWidth = 4; context.strokeRect(-field.w / 2 + 12, -field.h / 2 + 12, field.w - 24, field.h - 24);
-    context.beginPath(); context.arc(0, 0, 39, 0, Math.PI * 2); context.stroke();
-    context.beginPath(); context.moveTo(0, -field.h / 2 + 12); context.lineTo(0, field.h / 2 - 12); context.stroke();
-    context.restore();
-    drawMapLabel(context, field.x, field.y + field.h / 2 + 22, "CAMPO DE SAN PABLO");
   }
 
   function drawMaintenanceRoom(context) {
@@ -6166,13 +5843,24 @@
     context.fillRect(r.x + 8, r.y + 8, r.w - 16, 6);
     context.strokeStyle = palette.accent; context.lineWidth = 3;
     context.strokeRect(r.x + 9.5, r.y + 9.5, r.w - 19, r.h - 19);
+    const sceneAssets = activeInteriorAssets().filter((asset) => !editorHiddenEntities.has(`asset:${asset.id}`));
+    sceneAssets.filter((asset) => asset.layer === "floor").forEach((asset) => drawWorldAsset(context, asset));
     drawInteriorFurniture(context, palette);
-    drawInteriorNpc(context, palette);
     const ex = INDOOR_EXIT;
     context.fillStyle = "rgba(244,220,119,.32)"; context.beginPath(); context.ellipse(ex.x, ex.y, 44, 16, 0, 0, Math.PI * 2); context.fill();
     context.fillStyle = "rgba(244,220,119,.5)"; context.beginPath(); context.ellipse(ex.x, ex.y, 22, 8, 0, 0, Math.PI * 2); context.fill();
     drawMapLabel(context, ex.x, ex.y + 30, "SALIDA");
     drawMapLabel(context, r.x + r.w / 2, r.y + 48, palette.label);
+    const entities = sceneAssets.filter((asset) => asset.layer !== "floor").map((asset) => ({
+      y: Number(asset.depthY ?? asset.y), priority: 0, draw: () => drawWorldAsset(context, asset),
+    }));
+    entities.push(
+      { y: INDOOR_NPC.y, priority: 1, draw: () => drawInteriorNpc(context, palette) },
+      { y: state.worldY, priority: 2, draw: () => drawPlayer(context) },
+    );
+    entities.sort((first, second) => first.y - second.y || first.priority - second.priority).forEach((entity) => entity.draw());
+    drawWorldAssetColliders(context, sceneAssets);
+    if (elements.buildingEditor.classList.contains("open")) drawEditorPresence(context);
   }
 
   function drawPixelFurniture(context, kind, x, y, color = "#8a6440") {
@@ -6330,152 +6018,6 @@
     context.fillStyle = "rgba(244,220,119,.42)"; context.beginPath(); context.ellipse(ex.x, ex.y, 46, 18, 0, 0, Math.PI * 2); context.fill();
     drawMapLabel(context, ex.x, ex.y + 32, "VOLVER A LA CIUDAD");
     drawMapLabel(context, r.x + r.w / 2, r.y + 44, "RUTA SILVESTRE");
-  }
-
-  function drawParkingAreas(context, bounds) {
-    const lots = parkingLots.filter((lot) => entityInView(lot, bounds, 20));
-    lots.forEach((lot) => {
-      context.save(); context.translate(lot.x, lot.y); context.rotate(lot.a);
-      context.fillStyle = "#c7b887"; context.fillRect(-lot.w / 2 - 8, -lot.h / 2 - 8, lot.w + 16, lot.h + 16);
-      context.fillStyle = "#666f72"; context.fillRect(-lot.w / 2, -lot.h / 2, lot.w, lot.h);
-      context.strokeStyle = "rgba(245,240,207,.72)"; context.lineWidth = 2;
-      for (let x = -lot.w / 2 + 20; x < lot.w / 2 - 10; x += 52) {
-        context.beginPath(); context.moveTo(x, -lot.h / 2); context.lineTo(x + 17, -lot.h / 2 + Math.min(34, lot.h)); context.stroke();
-        if (lot.h >= 78) { context.beginPath(); context.moveTo(x, lot.h / 2); context.lineTo(x + 17, lot.h / 2 - 34); context.stroke(); }
-      }
-      context.restore();
-      drawParkedCars(context, lot);
-    });
-  }
-
-  function drawParkedCars(context, lot) {
-    const colors = ["#d7564f", "#4b83a5", "#eee8cf", "#dea944", "#7d8790", "#60906e"];
-    let slot = 0;
-    for (let x = lot.x - lot.w / 2 + 42; x < lot.x + lot.w / 2 - 25; x += 78) {
-      if (seededRandom(slot + lot.y * .01) > .24) {
-        drawCar(context, { x, y: lot.y - Math.max(8, lot.h * .23), color: colors[slot % colors.length], angle: 0 });
-      }
-      if (lot.h >= 78 && seededRandom(slot + lot.y * .02 + 30) > .32) {
-        drawCar(context, { x: x + 25, y: lot.y + lot.h * .24, color: colors[(slot + 3) % colors.length], angle: Math.PI });
-      }
-      slot += 1;
-    }
-  }
-
-  function drawCar(context, car) {
-    context.save(); context.translate(car.x, car.y); context.rotate(car.angle);
-    context.fillStyle = "rgba(35,50,47,.22)"; context.fillRect(-12, -6, 30, 15);
-    context.fillStyle = car.color; context.fillRect(-15, -8, 30, 16);
-    context.fillStyle = "#bcd7d7"; context.fillRect(-6, -6, 12, 12);
-    context.fillStyle = "#263634"; context.fillRect(-11, -11, 7, 3); context.fillRect(6, -11, 7, 3); context.fillRect(-11, 8, 7, 3); context.fillRect(6, 8, 7, 3);
-    context.restore();
-  }
-
-  function drawTree(context, tree) {
-    const size = tree.size;
-    context.fillStyle = "rgba(30,60,39,.2)";
-    context.beginPath(); context.ellipse(tree.x + 5, tree.y + size * .45, size * .58, size * .25, 0, 0, Math.PI * 2); context.fill();
-    context.fillStyle = "#5a4930"; context.fillRect(tree.x - 3, tree.y, 6, size * .62);
-    context.fillStyle = "#2f6841"; context.fillRect(tree.x - size * .45, tree.y - size * .48, size * .9, size * .72);
-    context.fillStyle = "#4c8a49"; context.fillRect(tree.x - size * .32, tree.y - size * .63, size * .64, size * .66);
-    context.fillStyle = "rgba(199,230,125,.46)"; context.fillRect(tree.x - size * .19, tree.y - size * .5, size * .22, size * .15);
-  }
-
-  function drawBuilding(context, building) {
-    const sprite = state.buildingSkins?.[building.id] || building.defaultSprite || building.sprite;
-    const selected = building.id === selectedBuildingId && elements.buildingEditor.classList.contains("open");
-    context.save(); context.translate(building.x, building.y); context.rotate(building.a || 0);
-    if (selected) {
-      context.fillStyle = "rgba(247,199,70,.42)";
-      context.fillRect(-building.w / 2 - 10, -building.h / 2 - 10, building.w + 20, building.h + 20);
-      context.strokeStyle = "#f7c746"; context.lineWidth = 6;
-      context.strokeRect(-building.w / 2 - 10, -building.h / 2 - 10, building.w + 20, building.h + 20);
-    }
-    context.fillStyle = "rgba(28,54,43,.22)";
-    context.beginPath(); context.ellipse(8, building.h / 2 - 3, building.w * .42, 12, 0, 0, Math.PI * 2); context.fill();
-    if (building.renderStyle === "apartment") drawApartmentBuilding(context, building.w, building.h);
-    else if (buildingSheetReady && BUILDING_SPRITES[sprite]) {
-      const [sx, sy, sw, sh] = BUILDING_SPRITES[sprite];
-      const scale = Math.min(building.w / sw, building.h / sh);
-      const drawWidth = sw * scale;
-      const drawHeight = sh * scale;
-      context.globalCompositeOperation = "multiply";
-      context.drawImage(buildingSheet, sx, sy, sw, sh, -drawWidth / 2, building.h / 2 - drawHeight, drawWidth, drawHeight);
-      context.globalCompositeOperation = "source-over";
-    } else drawFallbackBuilding(context, building.w, building.h, sprite);
-    context.restore();
-    drawBuildingDoor(context, building);
-    const notable = Boolean(building.poi) || building.id === "pabellon-san-pablo";
-    if (notable || selected) drawMapLabel(context, building.x, building.y + building.h * .63, building.label);
-  }
-
-  function drawApartmentBuilding(context, width, height) {
-    const left = -width / 2;
-    const top = -height / 2;
-    const sectionWidth = width / 3;
-    context.fillStyle = "#f3efe0"; context.fillRect(left, top, width, height);
-    context.fillStyle = "#d5b86b"; context.fillRect(left, height / 2 - 58, width, 58);
-    context.fillStyle = "#6b7075"; context.fillRect(left - 8, top, width + 16, 30);
-    context.fillStyle = "#92989d"; context.fillRect(left - 3, top + 30, width + 6, 6);
-    context.strokeStyle = "#b9b8ac"; context.lineWidth = 3; context.strokeRect(left, top + 22, width, height - 22);
-
-    for (let section = 0; section < 3; section += 1) {
-      const sectionLeft = left + section * sectionWidth;
-      context.fillStyle = section % 2 ? "#e9e5d6" : "#f6f0df";
-      context.fillRect(sectionLeft + 6, top + 40, sectionWidth - 12, height - 105);
-      context.fillStyle = "#b4785e";
-      context.fillRect(sectionLeft + 18, top + 58, sectionWidth - 36, 30);
-      context.fillStyle = "#7b9a9e";
-      for (let row = 0; row < 2; row += 1) {
-        for (let column = 0; column < 2; column += 1) {
-          const windowX = sectionLeft + 24 + column * (sectionWidth - 66);
-          const windowY = top + 105 + row * 42;
-          context.fillStyle = "#89adb1"; context.fillRect(windowX, windowY, 24, 25);
-          context.fillStyle = "rgba(255,255,255,.55)"; context.fillRect(windowX + 3, windowY + 3, 7, 19);
-          context.strokeStyle = "#5a6d70"; context.lineWidth = 2; context.strokeRect(windowX, windowY, 24, 25);
-        }
-      }
-      context.fillStyle = "#d8d2c0"; context.fillRect(sectionLeft + 12, height / 2 - 82, sectionWidth - 24, 4);
-      context.fillStyle = "#4e7b69"; context.fillRect(sectionLeft + 17, height / 2 - 51, sectionWidth - 34, 5);
-    }
-    context.strokeStyle = "rgba(88,91,84,.55)"; context.lineWidth = 2;
-    context.beginPath(); context.moveTo(left + sectionWidth, top + 32); context.lineTo(left + sectionWidth, height / 2); context.moveTo(left + sectionWidth * 2, top + 32); context.lineTo(left + sectionWidth * 2, height / 2); context.stroke();
-    context.fillStyle = "#416c5a"; context.fillRect(left + 14, height / 2 - 4, width - 28, 8);
-  }
-
-  function drawBuildingDoor(context, building) {
-    const pulse = .55 + Math.sin(performance.now() / 330) * .18;
-    buildingDoors(building).forEach((door) => {
-      context.save();
-      context.translate(door.facade.x, door.facade.y);
-      context.rotate(door.rotation);
-      context.fillStyle = "#523f2b";
-      context.fillRect(-13, -19, 26, 38);
-      context.fillStyle = "#e7c86a";
-      context.fillRect(7, 0, 3, 3);
-      context.strokeStyle = "#2f3028";
-      context.lineWidth = 3;
-      context.strokeRect(-13, -19, 26, 38);
-      context.restore();
-
-      context.save();
-      context.globalAlpha = pulse;
-      context.fillStyle = "#f4dc77";
-      context.beginPath();
-      context.ellipse(door.x, door.y, 22, 9, door.rotation, 0, Math.PI * 2);
-      context.fill();
-      context.restore();
-    });
-  }
-
-  function drawFallbackBuilding(context, width, height, style) {
-    const colors = style === "center" ? ["#e9e4cf", "#cc504a"] : style === "museum" ? ["#e7dcc7", "#a96d55"] : ["#e7e1ca", "#5c8598"];
-    context.fillStyle = colors[0]; context.fillRect(-width / 2, -height / 2 + 28, width, height - 28);
-    context.fillStyle = colors[1]; context.fillRect(-width / 2 - 6, -height / 2 + 10, width + 12, 34);
-    context.fillStyle = "rgba(255,255,255,.28)"; context.fillRect(-width / 2, -height / 2 + 15, width, 6);
-    context.fillStyle = "#406b69";
-    for (let x = -width / 2 + 20; x < width / 2 - 15; x += 45) context.fillRect(x, 0, 22, 20);
-    context.fillRect(-13, height / 2 - 45, 26, 45);
   }
 
   function drawMapLabel(context, x, y, label) {
@@ -6641,8 +6183,9 @@
     const record = cityWorldAssetImages.get(worldAssetSource(asset));
     if (!record?.ready) return;
     context.save();
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
+    const pixelated = asset.kind === "furniture" || runtimeAssetPrototype(asset.sprite)?.pixelated;
+    context.imageSmoothingEnabled = !pixelated;
+    if (!pixelated) context.imageSmoothingQuality = "high";
     if (asset.kind === "building") context.filter = "drop-shadow(0 3px 2px rgba(24, 45, 34, .28))";
     const width = Number(asset.w); const height = Number(asset.h);
     const rotation = Number(asset.rotation) || 0;
@@ -6789,8 +6332,9 @@
       priority: 0,
       draw: () => drawWorldAsset(context, asset),
     }));
-    const portalPosition = currentPortalPosition();
-    if (entityInView(portalPosition, bounds, 110)) {
+    const portalDoor = currentPortalDoor();
+    const portalPosition = portalDoor ? currentPortalPosition() : null;
+    if (portalPosition && entityInView(portalPosition, bounds, 110)) {
       entities.push({
         y: portalPosition.y,
         priority: 1,
@@ -6978,78 +6522,6 @@
     }
     context.restore();
     drawMapLabel(context, x, y + 82, mirror ? "PORTAL DE REGRESO" : active ? "PORTAL PRISMA" : "ARCO INACTIVO");
-  }
-
-  function drawPrismGround(context) {
-    const bounds = visibleBounds(100);
-    context.fillStyle = "#141329";
-    context.fillRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
-    for (let y = Math.floor(bounds.top / 64) * 64; y < bounds.bottom; y += 64) {
-      for (let x = Math.floor(bounds.left / 64) * 64; x < bounds.right; x += 64) {
-        const bright = seededRandom(x * .01 + y * .03) > .75;
-        context.fillStyle = bright ? "rgba(190,161,255,.55)" : "rgba(112,206,221,.24)";
-        context.fillRect(x + 12, y + 16, bright ? 3 : 2, bright ? 3 : 2);
-      }
-    }
-
-    prismWalkableAreas.filter((area) => entityInView({ x: area.x + area.w / 2, y: area.y + area.h / 2, w: area.w, h: area.h }, bounds, 30)).forEach((area, index) => {
-      context.fillStyle = "#3c3464";
-      context.fillRect(area.x - 12, area.y + 13, area.w + 24, area.h + 12);
-      context.fillStyle = index % 2 ? "#66528a" : "#5b4b82";
-      context.fillRect(area.x, area.y, area.w, area.h);
-      context.strokeStyle = "#8a72aa"; context.lineWidth = 5; context.strokeRect(area.x + 2, area.y + 2, area.w - 4, area.h - 4);
-      for (let y = area.y + 16; y < area.y + area.h; y += 32) {
-        for (let x = area.x + 16; x < area.x + area.w; x += 32) {
-          if ((x / 32 + y / 32) % 3 === 0) {
-            context.fillStyle = "rgba(153,123,186,.2)";
-            context.fillRect(x, y, 16, 16);
-          }
-        }
-      }
-    });
-
-    prismEncounterZones.filter((zone) => polygonInView(zone, bounds)).forEach((zone, index) => drawPrismGrass(context, zone, index));
-    drawPrismRelics(context, bounds);
-    drawPortal(context, 1050, 1830, true, true);
-  }
-
-  function drawPrismGrass(context, polygon, index) {
-    context.save();
-    context.beginPath(); context.moveTo(polygon[0][0], polygon[0][1]); polygon.slice(1).forEach((point) => context.lineTo(point[0], point[1])); context.closePath(); context.clip();
-    const xs = polygon.map((point) => point[0]); const ys = polygon.map((point) => point[1]);
-    const left = Math.min(...xs); const right = Math.max(...xs); const top = Math.min(...ys); const bottom = Math.max(...ys);
-    context.fillStyle = index % 2 ? "#49376f" : "#334c6d"; context.fillRect(left, top, right - left, bottom - top);
-    for (let y = top + 10; y < bottom; y += 30) {
-      for (let x = left + 12; x < right; x += 30) {
-        context.strokeStyle = (x + y) % 60 ? "#a77fd0" : "#6ad2df"; context.lineWidth = 3;
-        context.beginPath(); context.moveTo(x, y + 14); context.lineTo(x - 5, y + 3); context.moveTo(x, y + 14); context.lineTo(x + 6, y); context.stroke();
-      }
-    }
-    context.restore();
-  }
-
-  function drawPrismRelics(context, bounds) {
-    const relics = [
-      { x: 390, y: 490, sprite: "tower", w: 130, h: 220 },
-      { x: 1680, y: 1180, sprite: "mansion", w: 180, h: 190 },
-      { x: 360, y: 1220, sprite: "lab", w: 170, h: 130 },
-    ];
-    relics.filter((relic) => entityInView(relic, bounds, 40)).forEach((relic) => {
-      if (!buildingSheetReady) return;
-      const [sx, sy, sw, sh] = BUILDING_SPRITES[relic.sprite];
-      context.save(); context.globalAlpha = .56; context.filter = "hue-rotate(65deg) saturate(1.4)";
-      context.globalCompositeOperation = "multiply";
-      context.drawImage(buildingSheet, sx, sy, sw, sh, relic.x - relic.w / 2, relic.y - relic.h / 2, relic.w, relic.h);
-      context.restore();
-    });
-    drawMapLabel(context, 1050, 250, "ISLA DEL ECO");
-  }
-
-  function drawAvailableObjects(context, bounds) {
-    const time = performance.now();
-    worldObjects
-      .filter((object) => object.dimension === state.dimension && !state.collectedObjects.includes(object.id) && entityInView(object, bounds, 45))
-      .forEach((object) => drawWorldObject(context, object, time));
   }
 
   function checkObjectPickup() {
@@ -7359,7 +6831,7 @@
       return event ? { x: (event.col + .5) * CITY_MAP.tileSize, y: (event.row + .5) * CITY_MAP.tileSize } : null;
     }
     if (selection.kind === "asset") {
-      const asset = cityWorldAssets.find((entry) => entry.id === selection.id);
+      const asset = activeEditorAssets().find((entry) => entry.id === selection.id);
       return asset ? { x: Number(asset.x), y: Number(asset.y) } : null;
     }
     return null;
@@ -7375,7 +6847,7 @@
       context.fillStyle = "rgba(255,229,106,.2)";
       context.lineWidth = 3;
       if (entry.kind === "asset") {
-        const asset = cityWorldAssets.find((candidate) => candidate.id === entry.id);
+        const asset = activeEditorAssets().find((candidate) => candidate.id === entry.id);
         if (asset) {
           const left = asset.x - asset.w / 2; const top = asset.y - asset.h;
           context.fillRect(left, top, asset.w, asset.h); context.strokeRect(left, top, asset.w, asset.h);
@@ -7544,7 +7016,7 @@
       context.save();
       context.translate(-Math.round(camera.x), -Math.round(camera.y));
       drawInterior(context);
-      drawPlayer(context);
+      if (state.interior === "route") drawPlayer(context);
       context.restore();
       return;
     }
@@ -7719,7 +7191,7 @@
           : `ENCUENTRO SALVAJE · ${(CITY_MAP.name || ACTIVE_MAP_ID).toUpperCase()}`;
       elements.battleLabel.textContent = label;
       elements.flashOverlay.classList.remove("encounter"); inputLocked = false;
-      renderBattle(); setBattleMessage(`¡Un ${speciesOf(enemy).name} salvaje apareció!`); saveGame();
+      renderBattle(); startBackgroundMusic(); setBattleMessage(`¡Un ${speciesOf(enemy).name} salvaje apareció!`); saveGame();
     }, 760);
   }
 
@@ -7747,6 +7219,7 @@
       elements.flashOverlay.classList.remove("encounter");
       inputLocked = false;
       renderBattle();
+      startBackgroundMusic();
       setBattleMessage(`${speciesOf(enemy).name} invertido está atrapado por la dimensión. ¡Debilítalo para liberarlo!`);
       saveGame();
     }, 760);
@@ -7851,6 +7324,21 @@
     Object.values(BATTLE_SPRITE_HIT_FX).map((effect) => [effect.className, effect]),
   ));
 
+  const MOVE_PIXEL_EFFECTS = Object.freeze({
+    ember: Object.freeze({
+      src: "assets/effects/battle/pixellab/ascuas-sol-explosivo/ascuas-sol-explosivo.webp",
+      duration: 1060,
+      impactMs: 620,
+      startAnchor: .28,
+      endAnchor: .5,
+    }),
+  });
+
+  function movePixelEffect(move) {
+    if (prefersReducedMotion()) return null;
+    return move?.id ? MOVE_PIXEL_EFFECTS[move.id] || null : null;
+  }
+
   function attackEffectForMove(move) {
     const safeMove = move && typeof move === "object" ? move : { type: String(move || "Normal") };
     return ATTACK_EFFECTS.normalizeProfile(
@@ -7888,16 +7376,48 @@
     if (!effect.enabled) return [];
     const sceneRect = scene.getBoundingClientRect();
     const a = attacker.getBoundingClientRect(); const d = defender.getBoundingClientRect();
-    const startX = a.left + a.width / 2 - sceneRect.left; const startY = a.top + a.height * .48 - sceneRect.top;
+    const isBraspinQuillVolley = Number(attacker.dataset.pokemonId) === 4 && safeMove.id === "ember";
+    const visualDuration = isBraspinQuillVolley ? Math.min(effect.duration, 230) : effect.duration;
+    const startXRatio = isBraspinQuillVolley ? (attacker.dataset.view === "front" ? .62 : .5) : .5;
+    const startYRatio = isBraspinQuillVolley ? .32 : .48;
+    const startX = a.left + a.width * startXRatio - sceneRect.left;
+    const startY = a.top + a.height * startYRatio - sceneRect.top;
     const endX = d.left + d.width / 2 - sceneRect.left + effect.offsetX;
     const endY = d.top + d.height * .48 - sceneRect.top + effect.offsetY;
     const dx = endX - startX; const dy = endY - startY;
     const distancePx = Math.hypot(dx, dy); const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    const pixelEffect = effect.enabled ? movePixelEffect(safeMove) : null;
+    if (pixelEffect) {
+      const baseSize = Math.min(224, Math.max(128, Math.min(sceneRect.width * .38, sceneRect.height * .58)));
+      const sizeScale = Math.max(.72, Math.min(1.45, (Number(effect.impactScale) || 3.45) / 3.45));
+      const visualSize = Math.round(baseSize * sizeScale);
+      const facing = dx < 0 ? -1 : 1;
+      const startAnchor = facing < 0 ? 1 - pixelEffect.startAnchor : pixelEffect.startAnchor;
+      const visual = document.createElement("span");
+      const image = document.createElement("img");
+      visual.className = "fx-move-pixel-effect";
+      visual.style.left = `${startX - visualSize * startAnchor}px`;
+      visual.style.top = `${startY - visualSize * .5}px`;
+      visual.style.width = `${visualSize}px`;
+      visual.style.height = `${visualSize}px`;
+      visual.style.setProperty("--tx", `${dx - (pixelEffect.endAnchor - startAnchor) * visualSize}px`);
+      visual.style.setProperty("--ty", `${dy}px`);
+      visual.style.setProperty("--fx-duration", `${pixelEffect.duration}ms`);
+      visual.setAttribute("aria-hidden", "true");
+      image.alt = "";
+      image.draggable = false;
+      image.src = `${pixelEffect.src}?play=${++movePixelEffectPlayback}`;
+      image.style.setProperty("--fx-facing", String(facing));
+      image.addEventListener("error", () => visual.remove(), { once: true });
+      visual.appendChild(image);
+      scene.appendChild(visual);
+      return [visual];
+    }
     const fxClass = effect.preset || moveFxClass(safeMove.type); const nodes = [];
     const applyProfile = (node) => {
       node.classList.add("fx-custom-color");
       node.style.setProperty("--fx-color", effect.color);
-      node.style.setProperty("--fx-duration", `${effect.duration}ms`);
+      node.style.setProperty("--fx-duration", `${visualDuration}ms`);
     };
 
     if (effect.trail) {
@@ -7911,17 +7431,21 @@
       scene.appendChild(trail); nodes.push(trail);
     }
 
-    const count = ["electric", "psychic", "ghost", "dragon"].includes(fxClass) ? 3 : 6;
+    const count = isBraspinQuillVolley || ["electric", "psychic", "ghost", "dragon"].includes(fxClass) ? 3 : 6;
     for (let index = 0; index < count; index += 1) {
       const projectile = document.createElement("span");
       projectile.className = `fx-move-projectile fx-${fxClass}`;
+      if (isBraspinQuillVolley) projectile.classList.add("fx-fire-quill");
       projectile.style.left = `${startX}px`; projectile.style.top = `${startY}px`;
-      projectile.style.width = `${effect.width}px`; projectile.style.height = `${effect.height}px`;
-      projectile.style.marginLeft = `${effect.width / -2}px`; projectile.style.marginTop = `${effect.height / -2}px`;
+      const projectileWidth = isBraspinQuillVolley ? Math.max(30, effect.width * 1.35) : effect.width;
+      const projectileHeight = isBraspinQuillVolley ? Math.max(10, effect.height * .42) : effect.height;
+      projectile.style.width = `${projectileWidth}px`; projectile.style.height = `${projectileHeight}px`;
+      projectile.style.marginLeft = `${projectileWidth / -2}px`; projectile.style.marginTop = `${projectileHeight / -2}px`;
       projectile.style.setProperty("--tx", `${dx}px`); projectile.style.setProperty("--ty", `${dy}px`);
       projectile.style.setProperty("--mx", `${dx * .56}px`); projectile.style.setProperty("--my", `${dy * .56}px`);
-      projectile.style.setProperty("--curve", `${(index - (count - 1) / 2) * 13}px`);
+      projectile.style.setProperty("--curve", `${(index - (count - 1) / 2) * (isBraspinQuillVolley ? 18 : 13)}px`);
       projectile.style.setProperty("--delay", `${index * 35}ms`);
+      projectile.style.setProperty("--angle", `${angle}deg`);
       projectile.textContent = fxClass === "grass" ? "◆" : fxClass === "wind" ? "◌" : "";
       applyProfile(projectile);
       scene.appendChild(projectile); nodes.push(projectile);
@@ -7958,8 +7482,18 @@
     const effect = attackEffectForMove(safeMove);
     const pokemonId = Number(attacker.dataset.pokemonId);
     const profile = customPokemonAttack(pokemonId);
+    const attackVariant = moveDelivery(safeMove);
+    const showsTravelEffect = safeMove.delivery !== "melee";
+    const isBraspinQuillVolley = pokemonId === 4 && safeMove.id === "ember";
+    const pixelEffect = effect.enabled ? movePixelEffect(safeMove) : null;
     const isFront = attacker.dataset.view === "front";
-    const attackPose = isFront ? customPokemonAsset(pokemonId, "attackFront") : null;
+    const view = isFront ? "front" : "back";
+    const animation = customPokemonAnimation(pokemonId);
+    const attackAnimation = customPokemonAttackAnimation(pokemonId, attackVariant) || animation;
+    const customAttackAsset = customPokemonFrameAsset(pokemonId, "attack", view, attackVariant);
+    const idleAsset = customPokemonFrameAsset(pokemonId, "idle", view);
+    const canPlayCustomAttack = Boolean(customAttackAsset && await imageCanLoad(customAttackAsset));
+    const attackPose = customPokemonAttackPose(pokemonId, view, attackVariant);
     const originalSrc = attacker.getAttribute("src");
     const nodes = [];
     const timers = [];
@@ -7970,19 +7504,51 @@
       return timer;
     };
 
-    attacker.classList.remove("attacking", "anatomy-attacking", "attack-pose-active");
+    attacker.classList.remove("attacking", "anatomy-attacking", "attack-pose-active", "frame-attacking");
     defender.classList.remove("hit");
     void attacker.offsetWidth;
 
-    if (!profile) {
+    if (canPlayCustomAttack) {
+      const duration = Math.max(1, Number(attackAnimation?.durationMs) || 960);
+      const impact = Math.min(duration, Math.max(0, Number(attackAnimation?.impactMs) || Math.round(duration * .75)));
+      const moveImpact = pixelEffect ? Math.max(impact, pixelEffect.impactMs) : impact;
+      try {
+        attacker.style.setProperty("--frame-attack-duration", `${duration}ms`);
+        attacker.classList.remove("frame-animated");
+        attacker.classList.add("frame-attacking");
+        attacker.src = customAttackAsset;
+        if (showsTravelEffect) {
+          const visualLead = isBraspinQuillVolley
+            ? Math.min(effect.duration, 230) + 70
+            : Math.max(110, Math.round(effect.duration * .58));
+          const syncedVisualLead = pixelEffect?.impactMs ?? visualLead;
+          later(
+            () => nodes.push(...spawnMoveVisual(attacker, defender, safeMove, null, effect)),
+            Math.max(0, moveImpact - syncedVisualLead),
+          );
+        }
+        later(() => {
+          defender.classList.add("hit");
+          spawnHitParticles(defender, safeMove, intensity, null, effect);
+          if (effect.enabled && effect.shake > 0) shakeBattle(effect.shake * intensity);
+        }, moveImpact);
+        const visualStart = Math.max(0, moveImpact - (pixelEffect?.impactMs ?? moveImpact));
+        await wait(Math.max(duration, visualStart + (pixelEffect?.duration ?? 0)));
+      } finally {
+        attacker.classList.remove("frame-attacking");
+        attacker.style.removeProperty("--frame-attack-duration");
+        if (idleAsset || originalSrc) attacker.src = idleAsset || originalSrc;
+      }
+    } else if (!profile) {
       attacker.classList.add("attacking");
-      nodes.push(...spawnMoveVisual(attacker, defender, safeMove, null, effect));
+      if (showsTravelEffect) nodes.push(...spawnMoveVisual(attacker, defender, safeMove, null, effect));
+      const hitDelay = pixelEffect?.impactMs ?? Math.max(110, Math.round(effect.duration * .58));
       later(() => {
         defender.classList.add("hit");
         spawnHitParticles(defender, safeMove, intensity, null, effect);
         if (effect.enabled && effect.shake > 0) shakeBattle(effect.shake * intensity);
-      }, Math.max(110, Math.round(effect.duration * .58)));
-      await wait(Math.max(430, attackEffectTravelTail(effect) + 80));
+      }, hitDelay);
+      await wait(pixelEffect?.duration ?? Math.max(430, attackEffectTravelTail(effect) + 80));
     } else {
       attacker.classList.add("anatomy-attacking");
       anatomyCue = spawnAnatomyCue(attacker, profile);
@@ -7990,22 +7556,24 @@
         attacker.classList.add("attack-pose-active");
         attacker.src = attackPose;
       }, 690);
-      later(() => nodes.push(...spawnMoveVisual(attacker, defender, safeMove, null, effect)), 880);
+      const visualStart = 880;
+      const hitDelay = pixelEffect?.impactMs ?? Math.max(110, Math.round(effect.duration * .58));
+      if (showsTravelEffect) later(() => nodes.push(...spawnMoveVisual(attacker, defender, safeMove, null, effect)), visualStart);
       later(() => {
         defender.classList.add("hit");
         spawnHitParticles(defender, safeMove, intensity, null, effect);
         if (effect.enabled && effect.shake > 0) shakeBattle(effect.shake * intensity);
-      }, 880 + Math.max(110, Math.round(effect.duration * .58)));
+      }, visualStart + hitDelay);
       if (attackPose) later(() => {
         attacker.classList.remove("attack-pose-active");
         if (originalSrc) attacker.src = originalSrc;
       }, 1810);
-      await wait(Math.max(CUSTOM_ATTACK_DURATION, 880 + attackEffectTravelTail(effect) + 80));
+      await wait(Math.max(CUSTOM_ATTACK_DURATION, visualStart + (pixelEffect?.duration ?? attackEffectTravelTail(effect) + 80)));
     }
 
     timers.forEach((timer) => window.clearTimeout(timer));
     if (originalSrc && attacker.getAttribute("src") !== originalSrc) attacker.src = originalSrc;
-    attacker.classList.remove("attacking", "anatomy-attacking", "attack-pose-active");
+    attacker.classList.remove("attacking", "anatomy-attacking", "attack-pose-active", "frame-attacking");
     defender.classList.remove("hit");
     anatomyCue?.remove();
     nodes.forEach((node) => node.remove());
@@ -8419,7 +7987,7 @@
     elements.attackDexPreview?.classList.remove("shake");
     elements.attackDexPreviewAttacker?.classList.remove("preview-attacking");
     elements.attackDexPreviewDefender?.classList.remove("preview-hit");
-    elements.attackDexPreview?.querySelectorAll(".fx-move-trail,.fx-move-projectile,.fx-move-ring,.fx-particle,.fx-sprite-hit").forEach((node) => node.remove());
+    elements.attackDexPreview?.querySelectorAll(".fx-move-trail,.fx-move-projectile,.fx-move-ring,.fx-move-pixel-effect,.fx-particle,.fx-sprite-hit").forEach((node) => node.remove());
   }
 
   function playAttackDexPreview() {
@@ -8429,17 +7997,21 @@
     const profile = readAttackEffectForm();
     const attacker = elements.attackDexPreviewAttacker;
     const defender = elements.attackDexPreviewDefender;
+    const pixelEffect = profile.enabled ? movePixelEffect(move) : null;
     void attacker.offsetWidth;
     attacker.classList.add("preview-attacking");
     spawnMoveVisual(attacker, defender, move, elements.attackDexPreview, profile);
-    const hitDelay = Math.max(110, Math.round(profile.duration * .58));
+    const hitDelay = pixelEffect?.impactMs ?? Math.max(110, Math.round(profile.duration * .58));
     attackDexPreviewTimers.push(window.setTimeout(() => {
       defender.classList.add("preview-hit");
       spawnHitParticles(defender, move, 1, elements.attackDexPreview, profile);
       if (profile.enabled && profile.shake > 0) shakeBattle(profile.shake, elements.attackDexPreview);
     }, hitDelay));
     const particleTail = hitDelay + Math.max(400, Math.min(980, profile.duration + 230));
-    attackDexPreviewTimers.push(window.setTimeout(clearAttackDexPreview, Math.max(620, attackEffectTravelTail(profile) + 80, particleTail + 80)));
+    attackDexPreviewTimers.push(window.setTimeout(
+      clearAttackDexPreview,
+      Math.max(620, pixelEffect?.duration ?? attackEffectTravelTail(profile) + 80, particleTail + 80),
+    ));
   }
 
   function scheduleAttackDexPreview() {
@@ -8510,7 +8082,7 @@
   function openAttackDex() {
     if (!elements.attackDexModal) return;
     lastAttackDexFocus = document.activeElement instanceof HTMLElement ? document.activeElement : elements.attackDexButton;
-    closeSanpledex(false); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); clearDirectionalInput();
+    closeMusicLibrary(false); closeSanpledex(false); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); clearDirectionalInput();
     renderAttackDex();
     elements.attackDexModal.classList.remove("hidden");
     elements.attackDexModal.setAttribute("aria-hidden", "false");
@@ -8571,11 +8143,39 @@
     const family = sanpledexFamilyOf(selectedSanpledexId);
     const status = sanpledexStatus(selectedSanpledexId);
     const motion = CUSTOM_POKEMON_MOTIONS[selectedSanpledexId];
-    const animatedFront = Boolean(customPokemonFrameAsset(selectedSanpledexId, "front"));
-    const animatedBack = Boolean(customPokemonFrameAsset(selectedSanpledexId, "back"));
-    const attack = customPokemonAttack(selectedSanpledexId);
-    const attackFront = customPokemonAsset(selectedSanpledexId, "attackFront");
+    const animation = customPokemonAnimation(selectedSanpledexId);
+    const animatedFront = Boolean(customPokemonFrameAsset(selectedSanpledexId, "idle", "front"));
+    const animatedBack = Boolean(customPokemonFrameAsset(selectedSanpledexId, "idle", "back"));
+    const seenAttackVariants = new Set();
+    const frameAttackOptions = species.moves.map((move) => {
+      const variant = moveDelivery(move);
+      if (seenAttackVariants.has(variant)) return null;
+      seenAttackVariants.add(variant);
+      const front = customPokemonFrameAsset(selectedSanpledexId, "attack", "front", variant);
+      const back = customPokemonFrameAsset(selectedSanpledexId, "attack", "back", variant);
+      if (!front || !back) return null;
+      const timing = customPokemonAttackAnimation(selectedSanpledexId, variant) || animation;
+      return { move, variant, front, back, duration: timing?.durationMs || CUSTOM_ATTACK_DURATION };
+    }).filter(Boolean);
+    const defaultFrameAttack = frameAttackOptions[0] || null;
+    const frameAttackFront = defaultFrameAttack?.front || customPokemonFrameAsset(selectedSanpledexId, "attack", "front");
+    const frameAttackBack = defaultFrameAttack?.back || customPokemonFrameAsset(selectedSanpledexId, "attack", "back");
+    const attack = customPokemonAttack(selectedSanpledexId)
+      || { kind: "ram", title: "Ataque básico", anatomy: "Impulso de cuerpo completo", x: "24%", y: "-6%", turn: "-6deg", scale: 1.07 };
+    const attackFront = customPokemonAttackPose(selectedSanpledexId, "front", defaultFrameAttack?.variant);
     const attackStyle = customAttackStyle(attack);
+    const attackDuration = defaultFrameAttack?.duration || animation?.durationMs || CUSTOM_ATTACK_DURATION;
+    const attackDurationLabel = `${Math.max(.1, Math.round(attackDuration / 100) / 10)} s`;
+    const attackButtons = frameAttackOptions.length
+      ? frameAttackOptions.map(({ move, variant, duration }) => {
+        const delivery = variant === "ranged" ? "DISTANCIA" : "MELEE";
+        const label = `▶ ${move.name} · ${delivery} · ${Math.max(.1, Math.round(duration / 100) / 10)} s`;
+        return `<button type="button" class="sanpledex-attack-button" data-sanpledex-attack="${move.id}" data-attack-label="${label}" aria-pressed="false">${label}</button>`;
+      }).join("")
+      : `<button type="button" class="sanpledex-attack-button" data-sanpledex-attack="" data-attack-label="▶ Ver ataque · ${attackDurationLabel}" aria-pressed="false">▶ Ver ataque · ${attackDurationLabel}</button>`;
+    const attackSummary = frameAttackOptions.length > 1
+      ? `<p><strong>Dos respuestas anatómicas</strong><span>${CUSTOM_POKEMON_COMBAT_BIOLOGY[selectedSanpledexId] || `${attack.anatomy}; el cuerpo permanece anclado durante la respuesta a distancia.`}</span></p>`
+      : `<p><strong>${attack.title}</strong><span>${attack.anatomy}</span></p>`;
     const entryNumber = SANPLEDEX_IDS.indexOf(selectedSanpledexId) + 1;
     const evolutionHtml = family.ids.map((id, index) => {
       const stage = POKEMON[id];
@@ -8591,20 +8191,20 @@
         <span class="sanpledex-status ${status.className}">${status.label}</span>
       </div>
       <div class="sanpledex-types" aria-label="Tipos de ${species.name}">${sanpledexTypeBadges(species)}</div>
-      <div class="sanpledex-sprites sanpledex-combat-preview ${attackFront ? "has-attack-pose" : ""}" data-attack-kind="${attack.kind}" style="${attackStyle}" aria-label="Animación frontal y trasera de ${species.name}">
+      <div class="sanpledex-sprites sanpledex-combat-preview ${attackFront ? "has-attack-pose" : ""} ${frameAttackFront && frameAttackBack ? "has-frame-attack" : ""}" data-pokemon-id="${selectedSanpledexId}" data-attack-kind="${attack.kind}" data-attack-duration="${attackDuration}" style="${attackStyle}--frame-attack-duration:${attackDuration}ms;" aria-label="Animación frontal y trasera de ${species.name}">
         <figure><div class="sanpledex-platform" data-view="front">
-          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite ${animatedFront ? "frame-animated" : ""}" data-pokemon-motion="${motion}" data-view="front" src="${frontSpriteUrl(selectedSanpledexId)}" alt="${species.name} de frente" draggable="false" />
+          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite ${animatedFront ? "frame-animated" : ""}" data-pokemon-motion="${motion}" data-view="front" data-idle-src="${frontSpriteUrl(selectedSanpledexId)}" data-attack-src="${frameAttackFront || ""}" src="${frontSpriteUrl(selectedSanpledexId)}" alt="${species.name} de frente" draggable="false" />
           ${attackFront ? `<img class="sanpledex-sprite sanpledex-attack-pose custom-pokemon-sprite" src="${attackFront}" alt="" aria-hidden="true" draggable="false" />` : ""}
           <span class="sanpledex-anatomy-cue" aria-hidden="true"></span>
         </div><figcaption>Frontal · rival</figcaption></figure>
         <figure><div class="sanpledex-platform" data-view="back">
-          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite ${animatedBack ? "frame-animated" : ""}" data-pokemon-motion="${motion}" data-view="back" src="${backSpriteUrl(selectedSanpledexId)}" alt="${species.name} de espaldas" draggable="false" />
+          <img class="sanpledex-sprite sanpledex-base-sprite custom-pokemon-sprite ${animatedBack ? "frame-animated" : ""}" data-pokemon-motion="${motion}" data-view="back" data-idle-src="${backSpriteUrl(selectedSanpledexId)}" data-attack-src="${frameAttackBack || ""}" src="${backSpriteUrl(selectedSanpledexId)}" alt="${species.name} de espaldas" draggable="false" />
           <span class="sanpledex-anatomy-cue" aria-hidden="true"></span>
         </div><figcaption>Espalda · compañero</figcaption></figure>
       </div>
       <div class="sanpledex-attack-panel">
-        <button type="button" class="sanpledex-attack-button" data-sanpledex-attack aria-pressed="false">▶ Ver ataque · 3 s</button>
-        <p><strong>${attack.title}</strong><span>${attack.anatomy}</span></p>
+        <div class="sanpledex-attack-actions">${attackButtons}</div>
+        ${attackSummary}
       </div>
       <p class="sanpledex-description">${species.description}</p>
       <div class="sanpledex-evolution-title"><strong>CADENA EVOLUTIVA</strong><span>${family.name}</span></div>
@@ -8614,22 +8214,52 @@
     });
   }
 
-  function previewSanpledexAttack() {
+  async function previewSanpledexAttack(moveId = "") {
     const preview = elements.sanpledexDetail?.querySelector(".sanpledex-combat-preview");
-    const button = elements.sanpledexDetail?.querySelector("[data-sanpledex-attack]");
+    const buttons = [...(elements.sanpledexDetail?.querySelectorAll("[data-sanpledex-attack]") || [])];
+    const button = buttons.find((entry) => entry.dataset.sanpledexAttack === String(moveId)) || buttons[0];
     if (!preview || !button) return;
+    const requestId = ++sanpledexAttackRequest;
     window.clearTimeout(sanpledexAttackTimer);
-    preview.classList.remove("previewing-attack");
+    buttons.forEach((entry) => {
+      entry.setAttribute("aria-pressed", "false");
+      if (entry.dataset.attackLabel) entry.textContent = entry.dataset.attackLabel;
+    });
+    const sprites = [...preview.querySelectorAll(".sanpledex-base-sprite")];
+    sprites.forEach((image) => {
+      if (image.dataset.idleSrc) image.src = image.dataset.idleSrc;
+    });
+    preview.classList.remove("previewing-attack", "previewing-frame-attack");
     void preview.offsetWidth;
-    preview.classList.add("previewing-attack");
+    const previewId = preview.dataset.pokemonId;
+    const species = POKEMON[Number(previewId)];
+    const move = species?.moves.find((entry) => entry.id === moveId) || species?.moves[0] || null;
+    const attackVariant = moveDelivery(move);
+    const attackAnimation = customPokemonAttackAnimation(previewId, attackVariant) || customPokemonAnimation(previewId);
+    const attackSources = sprites.map((image) => customPokemonFrameAsset(previewId, "attack", image.dataset.view, attackVariant));
+    const canPlayFrames = attackSources.every(Boolean)
+      && (await Promise.all(attackSources.map(imageCanLoad))).every(Boolean);
+    if (!preview.isConnected || preview.dataset.pokemonId !== previewId || requestId !== sanpledexAttackRequest) return;
+    const duration = canPlayFrames
+      ? Math.max(1, Number(attackAnimation?.durationMs) || Number(preview.dataset.attackDuration) || 960)
+      : CUSTOM_ATTACK_DURATION;
+    if (canPlayFrames) {
+      sprites.forEach((image, index) => { image.src = attackSources[index]; });
+      preview.classList.add("previewing-frame-attack");
+    } else preview.classList.add("previewing-attack");
     button.setAttribute("aria-pressed", "true");
     button.textContent = "Reproduciendo ataque…";
     sanpledexAttackTimer = window.setTimeout(() => {
-      preview.classList.remove("previewing-attack");
-      button.setAttribute("aria-pressed", "false");
-      button.textContent = "▶ Ver ataque · 3 s";
+      sprites.forEach((image) => {
+        if (image.dataset.idleSrc) image.src = image.dataset.idleSrc;
+      });
+      preview.classList.remove("previewing-attack", "previewing-frame-attack");
+      buttons.forEach((entry) => {
+        entry.setAttribute("aria-pressed", "false");
+        if (entry.dataset.attackLabel) entry.textContent = entry.dataset.attackLabel;
+      });
       sanpledexAttackTimer = 0;
-    }, CUSTOM_ATTACK_DURATION);
+    }, duration);
   }
 
   function selectSanpledexEntry(id, focusSelected = false) {
@@ -8637,6 +8267,7 @@
     if (!SANPLEDEX_IDS.includes(numericId)) return;
     window.clearTimeout(sanpledexAttackTimer);
     sanpledexAttackTimer = 0;
+    sanpledexAttackRequest += 1;
     selectedSanpledexId = numericId;
     renderSanpledex();
     if (focusSelected) elements.sanpledexList.querySelector(`[data-sanpledex-id="${numericId}"]`)?.focus({ preventScroll: true });
@@ -8645,7 +8276,7 @@
   function openSanpledex() {
     if (!elements.sanpledexModal) return;
     lastSanpledexFocus = document.activeElement instanceof HTMLElement ? document.activeElement : elements.sanpledexButton;
-    closeAttackDex(false); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); clearDirectionalInput();
+    closeMusicLibrary(false); closeAttackDex(false); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); clearDirectionalInput();
     renderSanpledex();
     elements.sanpledexModal.classList.remove("hidden");
     elements.sanpledexModal.setAttribute("aria-hidden", "false");
@@ -8656,6 +8287,7 @@
     if (!elements.sanpledexModal || elements.sanpledexModal.classList.contains("hidden")) return;
     window.clearTimeout(sanpledexAttackTimer);
     sanpledexAttackTimer = 0;
+    sanpledexAttackRequest += 1;
     elements.sanpledexModal.classList.add("hidden");
     elements.sanpledexModal.setAttribute("aria-hidden", "true");
     if (restoreFocus) (lastSanpledexFocus?.isConnected ? lastSanpledexFocus : elements.sanpledexButton)?.focus({ preventScroll: true });
@@ -8664,7 +8296,7 @@
 
   function openTeam() {
     if (!state.started) return;
-    closeAttackDex(false); closeSanpledex(false); closeBuildingEditorPanel(); closeInventoryPanel(); clearDirectionalInput(); renderTeam(); elements.teamDrawer.classList.add("open"); elements.teamDrawer.setAttribute("aria-hidden", "false"); elements.drawerScrim.classList.remove("hidden");
+    closeMusicLibrary(false); closeAttackDex(false); closeSanpledex(false); closeBuildingEditorPanel(); closeInventoryPanel(); clearDirectionalInput(); renderTeam(); elements.teamDrawer.classList.add("open"); elements.teamDrawer.setAttribute("aria-hidden", "false"); elements.drawerScrim.classList.remove("hidden");
   }
   function closeTeam() { elements.teamDrawer.classList.remove("open"); elements.teamDrawer.setAttribute("aria-hidden", "true"); elements.drawerScrim.classList.add("hidden"); }
 
@@ -8705,7 +8337,7 @@
     if (state.sound) {
       playJingle("success");
       if (dialogPresentation?.music) playDialogMusic(dialogPresentation.music);
-      else if (!elements.worldScreen.classList.contains("hidden") && state.started) startBackgroundMusic();
+      else if (musicPreviewTrackId || (!elements.worldScreen.classList.contains("hidden") && state.started)) startBackgroundMusic();
     }
     saveGame();
   }
@@ -8725,22 +8357,125 @@
     (jingles[kind] || jingles.success).forEach((frequency, index) => playTone(frequency, .1, "square", .025, index * .09));
   }
 
-  const backgroundMusic = new Audio("assets/audio/Nylon_and_Cartridge.mp3");
-  backgroundMusic.loop = true;
-  backgroundMusic.preload = "auto";
-  backgroundMusic.volume = 0.05;
+  const backgroundMusic = MUSIC_LIBRARY.createPlayer({ getAudioContext: ensureAudio, volume: 0.082 });
+
+  function playerIsAtStadium() {
+    const padding = 32;
+    return state.dimension === "san_pablo" && !state.interior
+      && state.worldX >= field.x - field.w / 2 - padding
+      && state.worldX <= field.x + field.w / 2 + padding
+      && state.worldY >= field.y - field.h / 2 - padding
+      && state.worldY <= field.y + field.h / 2 + padding;
+  }
+
+  function automaticMusicTrackId() {
+    if (battle?.musicTrack && MUSIC_LIBRARY.trackById(battle.musicTrack)) return battle.musicTrack;
+    if (battle?.secretBattle) return "battle-prism-boss";
+    if (battle) return "battle-wild";
+    if (state.dimension === "prism") return "crystal-cave";
+    if (state.interior === "maintenance") return "ancient-ruins";
+    if (state.interior === "route") return "forest-whisper";
+    if (state.interior === "building") {
+      const interiorTracks = {
+        center: "pokemon-center",
+        mart: "city-azahar",
+        lab: "professor-lab",
+        house: "city-san-pablo",
+      };
+      return interiorTracks[state.interiorData?.type] || "city-san-pablo";
+    }
+    if (playerIsAtStadium()) return "grand-stadium";
+    if (CITY_MAP.music && MUSIC_LIBRARY.trackById(CITY_MAP.music)) return CITY_MAP.music;
+    if (ACTIVE_MAP_ID === "ciudad-azahar") return "city-azahar";
+    if (CITY_MAP.kind === "route" || ACTIVE_MAP_ID.includes("route")) return "route-first";
+    const hour = new Date().getHours();
+    return hour >= 21 || hour < 6 ? "city-night" : "city-san-pablo";
+  }
+
+  function selectedMusicTrackId() {
+    return musicPreviewTrackId || automaticMusicTrackId();
+  }
+
+  function updateMusicNowPlaying(trackId = backgroundMusic.currentTrack?.id || null) {
+    const track = MUSIC_LIBRARY.trackById(trackId);
+    const category = MUSIC_LIBRARY.categories.find((entry) => entry.id === track?.category);
+    if (elements.musicNowTitle) elements.musicNowTitle.textContent = track?.title || "Sin reproducción";
+    if (elements.musicNowMeta) {
+      elements.musicNowMeta.textContent = track
+        ? `${category?.label || "Música"} · ${track.scene} · ${track.bpm} BPM`
+        : state.sound ? "Elige un tema para escucharlo" : "Activa el sonido para escuchar la banda sonora";
+    }
+    if (elements.musicAutoButton) {
+      elements.musicAutoButton.classList.toggle("selected", !musicPreviewTrackId);
+      elements.musicAutoButton.setAttribute("aria-pressed", String(!musicPreviewTrackId));
+    }
+    elements.musicCatalog?.querySelectorAll("[data-music-track]").forEach((button) => {
+      const selected = button.dataset.musicTrack === trackId;
+      button.classList.toggle("playing", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  }
 
   function startBackgroundMusic() {
-    if (!state.sound || starterIntroActive) return;
-    backgroundMusic.loop = true;
-    backgroundMusic.volume = 0.05;
-    const playRequest = backgroundMusic.play();
-    if (playRequest?.catch) playRequest.catch(() => {});
+    if (!state.sound || activeDialogMusicSource || (starterIntroActive && !musicPreviewTrackId)) return;
+    if (!musicPreviewTrackId && !state.started && !battle) return;
+    const trackId = selectedMusicTrackId();
+    if (!backgroundMusic.play(trackId)) return;
+    const track = MUSIC_LIBRARY.trackById(trackId);
+    document.documentElement.dataset.musicTrack = trackId;
+    document.documentElement.dataset.musicCategory = track?.category || "";
+    document.documentElement.dataset.musicMode = musicPreviewTrackId ? "preview" : "automatic";
+    document.documentElement.dataset.musicStatus = "playing";
+    updateMusicNowPlaying(trackId);
   }
 
   function stopBackgroundMusic() {
-    backgroundMusic.pause();
-    try { backgroundMusic.currentTime = 0; } catch (error) { /* Metadata may not be ready yet. */ }
+    backgroundMusic.stop();
+    document.documentElement.dataset.musicStatus = "stopped";
+    updateMusicNowPlaying();
+  }
+
+  function renderMusicCatalog() {
+    if (!elements.musicCatalog) return;
+    elements.musicCatalog.innerHTML = MUSIC_LIBRARY.tracksByCategory().map((category) => `
+      <section class="music-category" data-music-category="${category.id}">
+        <header><span>${category.icon}</span><div><strong>${category.label}</strong><small>${category.tracks.length} temas</small></div></header>
+        <div>${category.tracks.map((track, index) => `
+          <button type="button" data-music-track="${track.id}" aria-pressed="false" style="--track-color:${track.color}">
+            <span>${String(index + 1).padStart(2, "0")}</span>
+            <span><strong>${track.title}</strong><small>${track.scene} · ${track.bpm} BPM</small></span>
+            <i aria-hidden="true">▶</i>
+          </button>`).join("")}
+        </div>
+      </section>`).join("");
+    elements.musicCatalog.querySelectorAll("[data-music-track]").forEach((button) => {
+      button.addEventListener("click", () => {
+        musicPreviewTrackId = button.dataset.musicTrack;
+        startBackgroundMusic();
+        updateMusicNowPlaying(musicPreviewTrackId);
+      });
+    });
+    updateMusicNowPlaying();
+  }
+
+  function openMusicLibrary() {
+    if (!elements.musicModal) return;
+    lastMusicFocus = document.activeElement;
+    closeAttackDex(false); closeSanpledex(false); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop();
+    clearDirectionalInput();
+    renderMusicCatalog();
+    elements.musicModal.classList.remove("hidden");
+    elements.closeMusic?.focus({ preventScroll: true });
+  }
+
+  function closeMusicLibrary(restoreFocus = true) {
+    if (!elements.musicModal || elements.musicModal.classList.contains("hidden")) return;
+    elements.musicModal.classList.add("hidden");
+    musicPreviewTrackId = null;
+    if (state.started || battle) startBackgroundMusic();
+    else stopBackgroundMusic();
+    if (restoreFocus && lastMusicFocus?.isConnected) lastMusicFocus.focus({ preventScroll: true });
+    lastMusicFocus = null;
   }
 
   function keyToControl(key) {
@@ -8784,15 +8519,23 @@
       }
       return;
     }
+    if (elements.musicModal && !elements.musicModal.classList.contains("hidden")) {
+      if (event.key === "Escape") closeMusicLibrary();
+      return;
+    }
     if (elements.buildingEditor.classList.contains("open")) {
       if (event.key === "Escape") {
-        closeBuildingEditorPanel();
+        event.preventDefault();
+        const cancelRequest = new CustomEvent("map-editor-cancel-request", { cancelable: true });
+        if (document.dispatchEvent(cancelRequest)) closeBuildingEditorPanel();
+        event.stopImmediatePropagation();
         return;
       }
       const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")
         || document.activeElement?.isContentEditable;
       const movementKey = ["w", "a", "s", "d", "shift"].includes(event.key.toLowerCase());
-      if (!typing && movementKey) {
+      const editorShortcutModifier = event.ctrlKey || event.metaKey || event.altKey;
+      if (!typing && !editorShortcutModifier && !event.defaultPrevented && movementKey) {
         const control = keyToControl(event.key);
         if (control) {
           event.preventDefault(); setDirectionalInput(control, true);
@@ -8859,10 +8602,11 @@
       }
       return;
     }
-    const control = keyToControl(event.key);
+    const gameplayModifier = event.ctrlKey || event.metaKey || event.altKey;
+    const control = gameplayModifier || event.defaultPrevented ? null : keyToControl(event.key);
     if (control) { event.preventDefault(); setDirectionalInput(control, true); }
     if (!elements.dialogBox.classList.contains("hidden")) {
-      if (["Enter", " ", "e", "E"].includes(event.key) && !event.repeat) advanceDialog();
+      if (!gameplayModifier && ["Enter", " ", "e", "E"].includes(event.key) && !event.repeat) advanceDialog();
       return;
     }
     if (state.dimension === "prism" && ["f", "F", " "].includes(event.key) && !event.repeat) {
@@ -8872,8 +8616,9 @@
     if ((event.key === "e" || event.key === "E" || event.key === "Enter") && !event.repeat) interact();
     if ((event.key === "k" || event.key === "K") && !event.repeat) { event.preventDefault(); openAttackDex(); }
     if ((event.key === "p" || event.key === "P") && !event.repeat) { event.preventDefault(); openSanpledex(); }
+    if ((event.key === "l" || event.key === "L") && !event.repeat) { event.preventDefault(); openMusicLibrary(); }
     if ((event.key === "m" || event.key === "M") && !event.repeat) elements.teamDrawer.classList.contains("open") ? closeTeam() : openTeam();
-    if (event.key === "Escape") { closeAttackDex(); closeSanpledex(); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); }
+    if (event.key === "Escape") { closeMusicLibrary(); closeAttackDex(); closeSanpledex(); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); }
   }
 
   function handleKeyUp(event) { const control = keyToControl(event.key); if (control) setDirectionalInput(control, false); }
@@ -8902,7 +8647,7 @@
     elements.sanpledexModal.addEventListener("click", (event) => {
       if (event.target === elements.sanpledexModal) { closeSanpledex(); return; }
       const attackTrigger = event.target instanceof Element ? event.target.closest("[data-sanpledex-attack]") : null;
-      if (attackTrigger) { previewSanpledexAttack(); return; }
+      if (attackTrigger) { previewSanpledexAttack(attackTrigger.dataset.sanpledexAttack); return; }
       const trigger = event.target instanceof Element ? event.target.closest("[data-sanpledex-id]") : null;
       if (trigger) selectSanpledexEntry(trigger.dataset.sanpledexId, true);
     });
@@ -8946,6 +8691,17 @@
       window.location.assign(mapNavigationUrl(MAP_REGISTRY.defaultMapId));
     });
     elements.soundButton.addEventListener("click", toggleSound);
+    elements.musicButton?.addEventListener("click", openMusicLibrary);
+    elements.closeMusic?.addEventListener("click", () => closeMusicLibrary());
+    elements.musicModal?.addEventListener("click", (event) => {
+      if (event.target === elements.musicModal) closeMusicLibrary();
+    });
+    elements.musicAutoButton?.addEventListener("click", () => {
+      musicPreviewTrackId = null;
+      if (state.started || battle) startBackgroundMusic();
+      else stopBackgroundMusic();
+      updateMusicNowPlaying();
+    });
     elements.fullscreenButton.addEventListener("click", toggleFullscreen);
     if (VOICE_NPC_ENABLED) elements.voiceNpcRetry?.addEventListener("click", () => requestVoiceNpcAccess(true));
     document.addEventListener("fullscreenchange", updateFullscreenButton);
@@ -9054,10 +8810,11 @@
 
   function runtimeEntities(kind) {
     const normalized = normalizedEditorEntityKind(kind);
+    if (state.interior === "building" && normalized !== "asset") return [];
     const source = normalized === "npc" ? cityNpcs
       : normalized === "entrance" ? cityEntrances
         : normalized === "event" ? cityEvents
-          : normalized === "asset" ? cityWorldAssets
+          : normalized === "asset" ? activeEditorAssets()
             : [];
     return source.map(cloneRuntimeRecord);
   }
@@ -9093,8 +8850,11 @@
     const x = Number(value.x ?? existing?.x);
     const y = Number(value.y ?? existing?.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    const safeX = clamp(x, 0, WORLD_WIDTH);
-    const safeY = clamp(y, 0, WORLD_HEIGHT);
+    const rawScene = String(value.scene ?? existing?.scene ?? "world").slice(0, 64);
+    const scene = /^[a-z0-9][a-z0-9_.:-]{0,63}$/i.test(rawScene) ? rawScene : "world";
+    const interiorScene = scene !== "world";
+    const safeX = clamp(x, 0, interiorScene ? INDOOR_WORLD_WIDTH : WORLD_WIDTH);
+    const safeY = clamp(y, 0, interiorScene ? INDOOR_WORLD_HEIGHT : WORLD_HEIGHT);
     const kind = String((spriteChanged || !existing ? prototype?.kind : existing?.kind) || prototype?.kind || "prop");
     const hasExplicitDepth = value.depthY !== undefined && value.depthY !== null && Number.isFinite(Number(value.depthY));
     const explicitDepth = Number(value.depthY);
@@ -9119,6 +8879,8 @@
       sprite: nextSprite,
       src: prototype?.src || existing?.src,
       kind,
+      scene,
+      layer: prototype?.layer || existing?.layer || "objects",
       placement: value.placement || existing?.placement || "editor",
       x: safeX,
       y: safeY,
@@ -9127,7 +8889,8 @@
       h: Math.round(baseHeight * scale * 100) / 100,
       scale,
       rotation,
-      solid: typeof value.solid === "boolean" ? value.solid : existing?.solid !== false,
+      solid: typeof value.solid === "boolean" ? value.solid
+        : (typeof existing?.solid === "boolean" ? existing.solid : prototype?.solid !== false),
       flipX: typeof value.flipX === "boolean" ? value.flipX : Boolean(existing?.flipX),
       label,
       colliders: baseColliders.map(([colliderX, colliderY, width, height]) => [
@@ -9136,11 +8899,31 @@
     };
   }
 
+  function rebuildInteriorAssetScenes(value = {}) {
+    const hidden = new Set((Array.isArray(value.hiddenAssets) ? value.hiddenAssets : []).map(String));
+    const nextScenes = new Map();
+    (Array.isArray(value.addedAssets) ? value.addedAssets : []).forEach((asset) => {
+      const scene = String(asset?.scene || "world");
+      const assetId = runtimeEntityId(asset?.id);
+      if (!assetId || scene === "world" || hidden.has(assetId) || !runtimeAssetPrototype(asset?.sprite)?.interior) return;
+      const record = normalizeRuntimeAsset(null, assetId, { ...asset, scene });
+      if (!record) return;
+      if (!nextScenes.has(scene)) nextScenes.set(scene, []);
+      nextScenes.get(scene).push(record);
+      ensureCityWorldAssetImage(record);
+    });
+    interiorAssetsByScene.clear();
+    nextScenes.forEach((assets, scene) => interiorAssetsByScene.set(scene, assets));
+    return [...nextScenes.values()].reduce((total, assets) => total + assets.length, 0);
+  }
+
   function applyRuntimeAssetSnapshot(value = {}) {
     const hasSnapshot = value.assetOverrides && typeof value.assetOverrides === "object"
       || Array.isArray(value.addedAssets)
       || Array.isArray(value.hiddenAssets);
     if (!hasSnapshot) return null;
+    runtimeEditorAssetSnapshot = cloneRuntimeRecord(value);
+    rebuildInteriorAssetScenes(value);
     const overrides = value.assetOverrides && typeof value.assetOverrides === "object" ? value.assetOverrides : {};
     const hidden = new Set((Array.isArray(value.hiddenAssets) ? value.hiddenAssets : []).map(String));
     const nextAssets = new Map();
@@ -9151,6 +8934,7 @@
       if (record) nextAssets.set(assetId, record);
     });
     (Array.isArray(value.addedAssets) ? value.addedAssets : []).forEach((asset) => {
+      if (asset?.scene && asset.scene !== "world") return;
       const assetId = runtimeEntityId(asset?.id);
       if (!assetId || hidden.has(assetId)) return;
       const record = normalizeRuntimeAsset(null, assetId, asset);
@@ -9185,22 +8969,29 @@
     const normalizedId = runtimeEntityId(id || value?.id);
     if (!normalizedKind || !normalizedId || !value || typeof value !== "object") return false;
     if (normalizedKind === "asset") {
-      const index = cityWorldAssets.findIndex((asset) => asset.id === normalizedId);
-      const record = normalizeRuntimeAsset(index >= 0 ? cityWorldAssets[index] : null, normalizedId, value);
+      const scene = String(value.scene || currentInteriorSceneId() || "world").slice(0, 64);
+      const interiorScene = scene !== "world";
+      if (interiorScene && !runtimeAssetPrototype(value.sprite)?.interior) return false;
+      if (interiorScene && !interiorAssetsByScene.has(scene)) interiorAssetsByScene.set(scene, []);
+      const assets = interiorScene ? interiorAssetsByScene.get(scene) : cityWorldAssets;
+      const index = assets.findIndex((asset) => asset.id === normalizedId);
+      const record = normalizeRuntimeAsset(index >= 0 ? assets[index] : null, normalizedId, { ...value, scene });
       if (!record) return false;
       let liveRecord = record;
       if (index >= 0) {
-        liveRecord = cityWorldAssets[index];
+        liveRecord = assets[index];
         Object.assign(liveRecord, record);
         liveRecord.colliders = record.colliders.map((collider) => [...collider]);
       } else {
-        cityWorldAssets.push(liveRecord);
-        linkedAssetPositions.set(liveRecord.id, { x: Number(liveRecord.x), y: Number(liveRecord.y) });
+        assets.push(liveRecord);
+        if (!interiorScene) linkedAssetPositions.set(liveRecord.id, { x: Number(liveRecord.x), y: Number(liveRecord.y) });
       }
       ensureCityWorldAssetImage(liveRecord);
-      worldAssetColliderIndex = null;
-      syncLinkedEntrancesFromAssets();
-      updateWorldAssetDataset();
+      if (!interiorScene) {
+        worldAssetColliderIndex = null;
+        syncLinkedEntrancesFromAssets();
+        updateWorldAssetDataset();
+      }
       return cloneRuntimeRecord(liveRecord);
     }
     if (normalizedKind === "npc") {
@@ -9244,11 +9035,27 @@
   function deleteRuntimeEntity(kind, id) {
     const normalizedKind = normalizedEditorEntityKind(kind);
     const normalizedId = runtimeEntityId(id);
-    const collection = normalizedKind === "npc" ? cityNpcs
+    let interiorAssetScene = "";
+    let interiorAssetCollection = null;
+    if (normalizedKind === "asset") {
+      const preferredScene = currentInteriorSceneId();
+      if (preferredScene && interiorAssetsByScene.get(preferredScene)?.some((entry) => entry.id === normalizedId)) {
+        interiorAssetScene = preferredScene;
+        interiorAssetCollection = interiorAssetsByScene.get(preferredScene);
+      } else {
+        for (const [scene, assets] of interiorAssetsByScene) {
+          if (!assets.some((entry) => entry.id === normalizedId)) continue;
+          interiorAssetScene = scene;
+          interiorAssetCollection = assets;
+          break;
+        }
+      }
+    }
+    const collection = interiorAssetCollection || (normalizedKind === "npc" ? cityNpcs
       : normalizedKind === "entrance" ? cityEntrances
         : normalizedKind === "event" ? cityEvents
           : normalizedKind === "asset" ? cityWorldAssets
-            : null;
+            : null);
     if (!collection || !normalizedId) return false;
     const index = collection.findIndex((entry) => entry.id === normalizedId);
     if (index < 0) return false;
@@ -9264,7 +9071,7 @@
       }
       rebuildDefaultMapTiles();
     }
-    else {
+    else if (!interiorAssetScene) {
       linkedAssetPositions.delete(normalizedId);
       [...linkedEntrancePositions.keys()].filter((key) => key.startsWith(`${normalizedId}:`))
         .forEach((key) => linkedEntrancePositions.delete(key));
@@ -9370,25 +9177,29 @@
     open: openBuildingEditor,
     close: closeBuildingEditorPanel,
     isOpen: () => elements.buildingEditor.classList.contains("open"),
-    assets: () => cityWorldAssets,
+    assets: () => activeEditorAssets(),
     entities: runtimeEntities,
+    sceneInfo: () => currentInteriorSceneId()
+      ? { id: currentInteriorSceneId(), kind: "interior", label: state.interiorData?.label || "Casa", width: INDOOR_WORLD_WIDTH, height: INDOOR_WORLD_HEIGHT }
+      : { id: "world", kind: "world", label: CITY_MAP.name || "San Pablo", width: WORLD_WIDTH, height: WORLD_HEIGHT },
     playerPresence: () => ({
       x: Math.round(state.worldX * 100) / 100,
       y: Math.round(state.worldY * 100) / 100,
       direction: state.direction,
       dimension: state.dimension,
-      interior: state.interior || null,
+      interior: currentInteriorSceneId() || state.interior || null,
       moving: animationTime > 0,
       running: playerRunning,
       frame: animationFrame,
     }),
-    assetCatalog: () => window.CITY_MAP_LAYOUT?.assetCatalog || {},
+    assetCatalog: () => Object.fromEntries(Object.entries(window.CITY_MAP_LAYOUT?.assetCatalog || {})
+      .filter(([, prototype]) => currentInteriorSceneId() ? prototype?.interior === true : prototype?.interior !== true)),
     npcSpriteUrl: (sprite) => sprite === "guide" ? GUIDE_NPC_SHEET_URL : (NPC_ROSTER_SHEET_URLS[sprite] || ""),
     canvasToWorld(clientX, clientY) {
       const rect = elements.canvas.getBoundingClientRect();
       return {
-        x: clamp(camera.x + (clientX - rect.left) * (VIEW_WIDTH / rect.width), 0, WORLD_WIDTH),
-        y: clamp(camera.y + (clientY - rect.top) * (VIEW_HEIGHT / rect.height), 0, WORLD_HEIGHT),
+        x: clamp(camera.x + (clientX - rect.left) * (VIEW_WIDTH / rect.width), 0, currentWorldWidth()),
+        y: clamp(camera.y + (clientY - rect.top) * (VIEW_HEIGHT / rect.height), 0, currentWorldHeight()),
       };
     },
     worldToCanvas(worldX, worldY) {
@@ -9404,10 +9215,10 @@
       };
     },
     viewportCenter: () => ({
-      x: clamp(camera.x + VIEW_WIDTH / 2, 0, WORLD_WIDTH),
-      y: clamp(camera.y + VIEW_HEIGHT / 2, 0, WORLD_HEIGHT),
+      x: clamp(camera.x + VIEW_WIDTH / 2, 0, currentWorldWidth()),
+      y: clamp(camera.y + VIEW_HEIGHT / 2, 0, currentWorldHeight()),
     }),
-    grid: () => ({ tileSize: CITY_MAP.tileSize, cols: Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize), rows: Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize) }),
+    grid: () => ({ tileSize: CITY_MAP.tileSize, cols: Math.ceil(currentWorldWidth() / CITY_MAP.tileSize), rows: Math.ceil(currentWorldHeight() / CITY_MAP.tileSize) }),
     tileType: (col, row) => mapTileType(Number(col), Number(row)),
     tileOverrides: () => Object.fromEntries(tileOverrides),
     setTile(col, row, type) {
@@ -9472,20 +9283,20 @@
     },
     panBy(clientDeltaX, clientDeltaY) {
       const rect = elements.canvas.getBoundingClientRect();
-      camera.x = clamp(camera.x + Number(clientDeltaX) * (VIEW_WIDTH / rect.width), 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
-      camera.y = clamp(camera.y + Number(clientDeltaY) * (VIEW_HEIGHT / rect.height), 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      camera.x = clamp(camera.x + Number(clientDeltaX) * (VIEW_WIDTH / rect.width), 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
+      camera.y = clamp(camera.y + Number(clientDeltaY) * (VIEW_HEIGHT / rect.height), 0, Math.max(0, currentWorldHeight() - VIEW_HEIGHT));
       editorCameraActive = true; return { ...camera };
     },
     centerAt(worldX, worldY) {
-      camera.x = clamp(Number(worldX) - VIEW_WIDTH / 2, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
-      camera.y = clamp(Number(worldY) - VIEW_HEIGHT / 2, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      camera.x = clamp(Number(worldX) - VIEW_WIDTH / 2, 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
+      camera.y = clamp(Number(worldY) - VIEW_HEIGHT / 2, 0, Math.max(0, currentWorldHeight() - VIEW_HEIGHT));
       editorCameraActive = true; return { ...camera };
     },
     focusEntity(kind, id) {
       const position = editorEntityWorldPosition({ kind: normalizedEditorEntityKind(kind), id: runtimeEntityId(id) });
       if (!position) return false;
-      camera.x = clamp(position.x - VIEW_WIDTH / 2, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
-      camera.y = clamp(position.y - VIEW_HEIGHT / 2, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      camera.x = clamp(position.x - VIEW_WIDTH / 2, 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
+      camera.y = clamp(position.y - VIEW_HEIGHT / 2, 0, Math.max(0, currentWorldHeight() - VIEW_HEIGHT));
       editorCameraActive = true; return true;
     },
     zoom: () => editorZoom,
@@ -9494,13 +9305,13 @@
       const point = anchor && Number.isFinite(Number(anchor.x)) && Number.isFinite(Number(anchor.y)) ? anchor : { x: camera.x + oldWidth / 2, y: camera.y + oldHeight / 2 };
       const ratioX = oldWidth ? (point.x - camera.x) / oldWidth : .5; const ratioY = oldHeight ? (point.y - camera.y) / oldHeight : .5;
       editorZoom = nextZoom; syncWorldCanvasResolution();
-      camera.x = clamp(point.x - ratioX * VIEW_WIDTH, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
-      camera.y = clamp(point.y - ratioY * VIEW_HEIGHT, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+      camera.x = clamp(point.x - ratioX * VIEW_WIDTH, 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
+      camera.y = clamp(point.y - ratioY * VIEW_HEIGHT, 0, Math.max(0, currentWorldHeight() - VIEW_HEIGHT));
       editorCameraActive = true; editorOverlayDirty = true; return editorZoom;
     },
     fitWorld() {
       const rect = elements.canvas.getBoundingClientRect(); const aspect = rect.width / Math.max(1, rect.height);
-      editorZoom = Math.max(.25, Math.min(1, BASE_VIEW_HEIGHT / WORLD_HEIGHT, (BASE_VIEW_HEIGHT * aspect) / WORLD_WIDTH));
+      editorZoom = Math.max(.25, Math.min(1, BASE_VIEW_HEIGHT / currentWorldHeight(), (BASE_VIEW_HEIGHT * aspect) / currentWorldWidth()));
       syncWorldCanvasResolution(); camera.x = 0; camera.y = 0; editorCameraActive = true; editorOverlayDirty = true; return editorZoom;
     },
     previewEvent(event) { return runMapEvent(event, { preview: true }); },
@@ -9512,16 +9323,8 @@
     applySnapshot: applyRuntimeEditorData,
     addAsset(asset) {
       const assetId = runtimeEntityId(asset?.id);
-      const record = assetId ? normalizeRuntimeAsset(null, assetId, asset) : null;
-      if (!record || cityWorldAssets.some((entry) => entry.id === assetId)) return false;
-      Object.assign(asset, record);
-      asset.colliders = record.colliders.map((collider) => [...collider]);
-      cityWorldAssets.push(asset);
-      linkedAssetPositions.set(asset.id, { x: Number(asset.x), y: Number(asset.y) });
-      ensureCityWorldAssetImage(asset);
-      worldAssetColliderIndex = null;
-      updateWorldAssetDataset();
-      return asset;
+      if (!assetId || activeEditorAssets().some((entry) => entry.id === assetId)) return false;
+      return setRuntimeEntity("asset", assetId, asset);
     },
     removeAsset(id) {
       return deleteRuntimeEntity("asset", id);
@@ -9531,9 +9334,11 @@
       selectedEditorEntity = id ? { kind: "asset", id: String(id) } : null;
     },
     invalidateAssets() {
-      worldAssetColliderIndex = null;
-      syncLinkedEntrancesFromAssets();
-      updateWorldAssetDataset();
+      if (!currentInteriorSceneId()) {
+        worldAssetColliderIndex = null;
+        syncLinkedEntrancesFromAssets();
+        updateWorldAssetDataset();
+      }
     },
   });
 

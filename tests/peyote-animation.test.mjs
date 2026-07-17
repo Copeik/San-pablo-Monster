@@ -22,19 +22,22 @@ function webpChunks(buffer) {
 }
 
 const animations = [
-  { state: "idle", view: "front", loop: 0, duration: 84 },
-  { state: "idle", view: "back", loop: 0, duration: 84 },
-  { state: "attack", view: "front", loop: 1, duration: 75 },
-  { state: "attack", view: "back", loop: 1, duration: 75 },
+  { state: "idle", view: "front", loop: 0, duration: 120 },
+  { state: "idle", view: "back", loop: 0, duration: 120 },
+  { state: "attack", variant: "melee", view: "front", loop: 1, duration: 90 },
+  { state: "attack", variant: "melee", view: "back", loop: 1, duration: 90 },
+  { state: "attack", variant: "ranged", view: "front", loop: 1, duration: 90 },
+  { state: "attack", variant: "ranged", view: "back", loop: 1, duration: 90 },
 ];
 
-function animationPath({ state, view }) {
+function animationPath({ state, variant, view }) {
+  const action = variant ? `${state}-${variant}` : state;
   return path.join(
     root,
     "assets",
     "pokemon",
     "peyote-line",
-    `peyote-${state}-${view}-pixellab.webp`,
+    `peyote-${action}-${view}-pixellab.webp`,
   );
 }
 
@@ -43,7 +46,7 @@ function webpFrameDurations(buffer, chunks) {
 }
 
 for (const animation of animations) {
-  test(`Peyote ${animation.state} ${animation.view} is a compact 12-frame alpha WebP`, async () => {
+  test(`Peyote ${animation.variant || animation.state} ${animation.view} is an eight-cell alpha WebP`, async () => {
     const asset = await readFile(animationPath(animation));
     const chunks = webpChunks(asset);
     const vp8x = chunks.get("VP8X")?.[0];
@@ -56,24 +59,29 @@ for (const animation of animations) {
     assert.equal(asset.readUIntLE(vp8x.offset + 12, 3) + 1, 384);
     assert.equal(asset.readUIntLE(vp8x.offset + 15, 3) + 1, 384);
     assert.equal(asset.readUInt16LE(anim.offset + 12), animation.loop);
-    assert.equal(frames.length, 12);
-    assert.deepEqual([...new Set(webpFrameDurations(asset, chunks))], [animation.duration]);
+    const durations = webpFrameDurations(asset, chunks);
+    assert.ok(frames.length >= 1 && frames.length <= 8);
+    assert.ok(durations.every((duration) => duration > 0 && duration % animation.duration === 0));
+    assert.equal(durations.reduce((total, duration) => total + duration, 0), animation.duration * 8);
     assert.ok(asset.length < 1_200_000, `${path.basename(animationPath(animation))} exceeds 1.2 MB`);
   });
 }
 
-test("all four Peyote combat animations stay within 4.8 MB", async () => {
+test("all six Peyote combat animations stay within 7.2 MB", async () => {
   const assets = await Promise.all(animations.map((animation) => readFile(animationPath(animation))));
-  assert.ok(assets.reduce((total, asset) => total + asset.length, 0) < 4_800_000);
+  assert.ok(assets.reduce((total, asset) => total + asset.length, 0) < 7_200_000);
 });
 
 test("Peyote uses frame animation only in battle views with static and reduced-motion fallbacks", async () => {
-  const [script, styles] = await Promise.all([
+  const [script, styles, registry] = await Promise.all([
     readFile(path.join(root, "script.js"), "utf8"),
     readFile(path.join(root, "styles.css"), "utf8"),
+    readFile(path.join(root, "sanpledex-animation-data.js"), "utf8"),
   ]);
 
-  assert.match(script, /const CUSTOM_POKEMON_FRAME_ASSETS = Object\.freeze\(\{[\s\S]*?9101:[\s\S]*?peyote-idle-front\.webp[\s\S]*?peyote-idle-back\.webp/);
+  assert.match(registry, /9101: combatPack\("peyote-line", "peyote"\)/);
+  assert.match(script, /const SANPLEDEX_ANIMATION_ASSETS = globalThis\.SANPLEDEX_ANIMATION_ASSETS/);
+  assert.match(script, /function customPokemonAttackAnimation\(id, variant = "melee"\)/);
   assert.match(script, /function customPokemonFrameAsset[\s\S]*?if \(prefersReducedMotion\(\)\) return null;/);
   assert.match(script, /REDUCED_MOTION_QUERY\.addEventListener\("change", refreshVisiblePokemonFrameAssets\)/);
   assert.match(script, /function artworkUrl\(id\) \{ return customPokemonAsset\(id\)/);

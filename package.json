@@ -7,7 +7,7 @@
     "start:collab": "node server.mjs --collab",
     "editor:bundle": "node tools/build-map-editor-bundle.mjs",
     "map:new": "node tools/create-map.mjs",
-    "test": "node --test tests/*.test.mjs && node tools/validate-voice-npc.mjs"
+    "test": "node --test tests/*.test.mjs && node tools/validate-voice-npc.mjs && node tools/validate-prism-minigame.mjs"
   },
   "engines": {
     "node": ">=20"

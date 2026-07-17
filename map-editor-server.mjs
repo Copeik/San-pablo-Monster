@@ -76,6 +76,8 @@ function cleanAssetTransform(value, { id = "", requireIdentity = false } = {}) {
   if (typeof value.flipX === "boolean") transform.flipX = value.flipX;
   const label = cleanText(value.label, MAP_EDITOR_RULES.lengths.assetLabel);
   if (label) transform.label = label;
+  const scene = cleanToken(value.scene, 64);
+  if (scene) transform.scene = scene;
   if (requireIdentity) {
     transform.id = cleanEditorId(id || value.id);
     transform.sprite = cleanEditorId(value.sprite);
@@ -329,7 +331,10 @@ function normalizeOperation(rawOperation) {
   const id = cleanEditorId(rawOperation.id);
   if (!ENTITY_COLLECTIONS[entity]?.has(collection) || !id) fail("Entidad o colección del editor no válida");
   if (rawOperation.type === "entity.delete") {
-    return { type: "entity.delete", entity, collection, id, hide: rawOperation.hide !== false };
+    return {
+      type: "entity.delete", entity, collection, id, hide: rawOperation.hide !== false,
+      ...(rawOperation.rebuildRuntime === true ? { rebuildRuntime: true } : {}),
+    };
   }
   let value;
   if (collection === "assetOverrides") value = cleanAssetTransform(rawOperation.value);
@@ -339,7 +344,10 @@ function normalizeOperation(rawOperation) {
   else if (collection === "entrances") value = cleanEntrance(rawOperation.value, id);
   else value = cleanEvent(rawOperation.value, id);
   if (!value) fail("Datos de entidad no válidos");
-  return { type: "entity.set", entity, collection, id, value };
+  return {
+    type: "entity.set", entity, collection, id, value,
+    ...(rawOperation.rebuildRuntime === true ? { rebuildRuntime: true } : {}),
+  };
 }
 
 function operationKey(operation) {
