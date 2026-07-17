@@ -1,0 +1,10 @@
+{
+  "provider": "PixelLab MCP",
+  "character_job_id": "9ce255c4-2070-40a5-bf55-533204b7d300",
+  "animation_jobs": {},
+  "directions": {
+    "front": "south",
+    "back": "north"
+  },
+  "source": "../peyote-front.png"
+}
