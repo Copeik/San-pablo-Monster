@@ -19,6 +19,11 @@
   const SAVE_KEY = "pokemon-city-save-v3";
   const CITY_MAP = window.CITY_MAP_CONFIG;
   const ACTIVE_MAP_ID = MAP_REGISTRY.resolve(window.ACTIVE_GAME_MAP_ID || CITY_MAP.id || MAP_REGISTRY.defaultMapId);
+  const PERSPECTIVE_ZONE_ACTIVE = CITY_MAP.runtime === "perspective-platformer-v1";
+  const PERSPECTIVE_ZONE_CORE = globalThis.PERSPECTIVE_ZONE_CORE;
+  if (PERSPECTIVE_ZONE_ACTIVE && !PERSPECTIVE_ZONE_CORE) {
+    throw new Error("No se pudo cargar el runtime de Pradera Bifaz.");
+  }
   const MAP_REVISION = Number(CITY_MAP.revision) || 1;
   let CITY_GRID_COLS = Math.ceil(Number(CITY_MAP.width) / Number(CITY_MAP.tileSize));
   let CITY_GRID_ROWS = Math.ceil(Number(CITY_MAP.height) / Number(CITY_MAP.tileSize));
@@ -34,6 +39,11 @@
     return normalized || fallback;
   }
 
+  function runtimeSceneId(value, fallback = "world") {
+    const scene = String(value || fallback || "world");
+    return /^[a-z0-9][a-z0-9_.:-]{0,63}$/i.test(scene) ? scene : fallback;
+  }
+
   function normalizeRuntimeNpc(value, fallbackId = "") {
     if (!value || typeof value !== "object") return null;
     const id = runtimeEntityId(value.id, fallbackId);
@@ -44,6 +54,7 @@
     const npc = {
       ...value,
       id,
+      scene: runtimeSceneId(value.scene),
       col: Math.max(0, Math.min(CITY_MAX_COL, col)),
       row: Math.max(0, Math.min(CITY_MAX_ROW, row)),
       direction,
@@ -82,13 +93,15 @@
     if (!id) return null;
     const targetX = Number(value.targetX);
     const targetY = Number(value.targetY);
+    const requestedAction = String(value.action || (value.targetMap ? "transition" : "closed")).toLowerCase();
     return {
       ...value,
       id,
+      scene: runtimeSceneId(value.scene),
       col: Math.max(0, Math.min(CITY_MAX_COL, col)),
       row: Math.max(0, Math.min(CITY_MAX_ROW, row)),
       label: String(value.label || "Entrada").slice(0, MAP_EDITOR_RULES.lengths.label),
-      action: String(value.action || (value.targetMap ? "transition" : "closed")).toLowerCase(),
+      action: MAP_EDITOR_RULES.types.entranceAction.includes(requestedAction) ? requestedAction : "closed",
       targetMap: value.targetMap == null ? null : String(value.targetMap).slice(0, MAP_EDITOR_RULES.lengths.id),
       targetX: Number.isFinite(targetX) ? targetX : null,
       targetY: Number.isFinite(targetY) ? targetY : null,
@@ -104,7 +117,7 @@
     const row = Math.floor(Number(value.row));
     const id = runtimeEntityId(value.id, fallbackId);
     if (!id || !Number.isFinite(col) || !Number.isFinite(row)) return null;
-    const type = ["dialogue", "thought", "vibration", "teleport", "transition"].includes(value.type)
+    const type = MAP_EDITOR_RULES.types.event.includes(value.type)
       ? value.type
       : "thought";
     const targetX = Number(value.targetX);
@@ -112,6 +125,7 @@
     return {
       ...value,
       id,
+      scene: runtimeSceneId(value.scene),
       col: Math.max(0, Math.min(CITY_MAX_COL, col)),
       row: Math.max(0, Math.min(CITY_MAX_ROW, row)),
       label: String(value.label || "Evento").slice(0, MAP_EDITOR_RULES.lengths.label),
@@ -126,6 +140,13 @@
       targetDirection: ["up", "down", "left", "right"].includes(value.targetDirection) ? value.targetDirection : "down",
       duration: Math.max(MAP_EDITOR_RULES.ranges.duration[0], Math.min(MAP_EDITOR_RULES.ranges.duration[1], Number(value.duration) || 440)),
       intensity: Math.max(MAP_EDITOR_RULES.ranges.intensity[0], Math.min(MAP_EDITOR_RULES.ranges.intensity[1], Number(value.intensity) || 1)),
+      itemKind: MAP_EDITOR_RULES.types.eventItem.includes(value.itemKind) ? value.itemKind : "potions",
+      itemName: String(value.itemName || "Objeto").slice(0, MAP_EDITOR_RULES.lengths.label),
+      amount: Math.max(MAP_EDITOR_RULES.ranges.itemAmount[0], Math.min(MAP_EDITOR_RULES.ranges.itemAmount[1], Math.floor(Number(value.amount) || 1))),
+      flag: runtimeEntityId(value.flag),
+      requiresFlag: runtimeEntityId(value.requiresFlag),
+      requiredFlagValue: value.requiredFlagValue !== false,
+      jingle: MAP_EDITOR_RULES.types.jingle.includes(value.jingle) ? value.jingle : "success",
       effect: ["fade", "flash", "none"].includes(value.effect) ? value.effect : (type === "transition" ? "fade" : "none"),
       once: Boolean(value.once),
     };
@@ -182,20 +203,28 @@
   const cityNpcs = buildRuntimeNpcs(initialEditorData);
   const cityEntrances = buildRuntimeEntrances(initialEditorData);
   const cityEvents = buildRuntimeEvents(initialEditorData);
+  const baseCityEntranceIds = new Set(BASE_CITY_ENTRANCES
+    .map((entrance) => normalizeRuntimeEntrance(entrance)?.id)
+    .filter(Boolean));
   const BASE_VIEW_HEIGHT = 624;
   const MAX_RENDER_WIDTH = 3840;
   const MAX_RENDER_HEIGHT = 2160;
   const SPRITE_CELL_SIZE = 64;
-  const PLAYER_HEAD_LOCK_HEIGHT = 36;
+  const PLAYER_WALK_FRAME_COUNT = 6;
+  const PLAYER_DIRECTION_ROWS = Object.freeze({
+    down: 0,
+    "down-right": 1,
+    right: 2,
+    "up-right": 3,
+    up: 4,
+    "up-left": 5,
+    left: 6,
+    "down-left": 7,
+  });
+  const NPC_WALK_FRAME_COUNT = PLAYER_WALK_FRAME_COUNT;
+  const NPC_DIRECTION_ROWS = PLAYER_DIRECTION_ROWS;
   const NPC_COLLISION_RADIUS = 25;
   const npcPatrolStates = new Map();
-  const PLAYER_LEG_MASKS = {
-    down: [{ x: 20, y: 50, width: 24, height: 10 }],
-    left: [{ x: 18, y: 51, width: 28, height: 9 }],
-    right: [{ x: 17, y: 51, width: 28, height: 9 }],
-    up: [{ x: 20, y: 51, width: 24, height: 9 }],
-  };
-  const PLAYER_SUPPORT_ROW = 59;
   let VIEW_WIDTH = 960;
   let VIEW_HEIGHT = BASE_VIEW_HEIGHT;
   let WORLD_WIDTH = CITY_MAP.width;
@@ -232,10 +261,16 @@
     const target = params.get("debugPrism");
     if (!target) return null;
     return {
-      target: ["start", "market", "market_view", "goal"].includes(target) ? target : "start",
+      target: ["start", "market", "market_view", "goal", "stalePotion", "moldyBerry", "weakPokemon"].includes(target) ? target : "start",
       money: Math.max(0, Math.floor(Number(params.get("debugMoney")) || 2500)),
     };
   })();
+  const LOCAL_DEBUG_PERSPECTIVE = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
+    ? (() => {
+      const target = new URLSearchParams(window.location.search).get("debugPerspective");
+      return ["start", "flip", "checkpoint", "goal"].includes(target) ? target : target ? "start" : "";
+    })()
+    : "";
   const LOCAL_DEBUG_FRAGMENT_CINEMATIC = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
     && new URLSearchParams(window.location.search).has("debugFragmentCinematic");
   const LOCAL_DEBUG_PLAYER_ATLAS = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
@@ -245,7 +280,7 @@
     : "";
   function clampDebugLevel(value) { return Math.max(1, Math.min(50, Number(value) || 5)); }
   const NORMAL_START = { ...(LOCAL_DEBUG_SPAWN || CITY_MAP.spawn) };
-  const INITIAL_PORTAL_DOOR = cityEntrances.find((entrance) => entrance.action === "prism");
+  const INITIAL_PORTAL_DOOR = cityEntrances.find((entrance) => entrance.scene === "world" && entrance.action === "prism");
   const INITIAL_PORTAL_POSITION = INITIAL_PORTAL_DOOR
     ? { x: (INITIAL_PORTAL_DOOR.col + .5) * CITY_MAP.tileSize, y: (INITIAL_PORTAL_DOOR.row + .5) * CITY_MAP.tileSize }
     : { x: 1250, y: 1110 };
@@ -291,6 +326,10 @@
     { id: 9301, weight: 9 }, { id: 9401, weight: 7 }, { id: 9602, weight: 4 },
     { id: 9702, weight: 4 }, { id: 9202, weight: 3 }, { id: 9803, weight: 7 },
     { id: 9806, weight: 5 }, { id: 9811, weight: 7 },
+    { id: 9906, weight: 5 }, { id: 9909, weight: 5 }, { id: 9912, weight: 4 },
+    { id: 9919, weight: 5 }, { id: 9929, weight: 5 }, { id: 9933, weight: 4 },
+    { id: 9943, weight: 5 }, { id: 9945, weight: 4 }, { id: 9948, weight: 3 },
+    { id: 9951, weight: 4 },
   ];
 
   const INTERIOR_PALETTES = {
@@ -316,10 +355,10 @@
     jardinera: { spriteIndex: 9, sprite: "npc-13-gardener", layout: "studio", color: "#6aa84f", name: "Jardinera Sol", lines: ["Hablo con las plantas. Ellas responden con fotosíntesis pasivo-agresiva.", "La hierba alta esconde especies distintas y, en mi caso, las tijeras."] },
   };
 
-  const PLAYER_SHEET_URL = "assets/sprites/protagonist-walk.png";
-  const PLAYER_DIAGONAL_SHEET_URL = "assets/sprites/protagonist-walk-diagonal.png?v=4";
-  const NPC_SHEET_URL = "assets/sprites/hgss-npc-idle.png";
-  const GUIDE_NPC_SHEET_URL = "assets/sprites/npc-guide-walk.png";
+  const PLAYER_SHEET_URL = "assets/sprites/protagonist-walk-pixellab.png?v=1";
+  const NPC_SHEET_URL = "assets/sprites/npcs/source/hgss/hgss-npc-idle.png";
+  const NPC_OVERWORLD_SHEET_BASE_URL = "assets/sprites/npcs/overworld";
+  const GUIDE_NPC_SHEET_URL = `${NPC_OVERWORLD_SHEET_BASE_URL}/npc-guide-walk.png`;
   const DOCTOR_POTATO_PORTRAIT_URL = "assets/portraits/doctor-potato.png";
   const DOCTOR_POTATO_THEME_URL = "assets/audio/patata-de-barrio.mp3";
   const MICROPHONE_ACCESS_ENABLED = false;
@@ -349,21 +388,11 @@
     "Ea, me aburro; llámame otra vez cuando tu calva tenga algo nuevo que reflejar.",
   ];
   const NPC_IMPORTED_SPRITE_URLS = Object.freeze({
-    "nino-sol": "assets/sprites/npcs/nino-sol-walk.png",
-    "chica-lazo": "assets/sprites/npcs/chica-lazo-walk.png",
-    "skater-verde": "assets/sprites/npcs/skater-verde-walk.png",
-    mochilera: "assets/sprites/npcs/mochilera-walk.png",
-    campesino: "assets/sprites/npcs/campesino-walk.png",
-    "nino-polo": "assets/sprites/npcs/nino-polo-walk.png",
-    "nina-turquesa": "assets/sprites/npcs/nina-turquesa-walk.png",
-    "skater-capucha": "assets/sprites/npcs/skater-capucha-walk.png",
-    "chica-mochila": "assets/sprites/npcs/chica-mochila-walk.png",
-    hortelano: "assets/sprites/npcs/hortelano-walk.png",
-    "camarera-azul": "assets/sprites/npcs/camarera-azul-walk.png",
-    "camarero-bandeja": "assets/sprites/npcs/camarero-bandeja-walk.png",
-    bailaora: "assets/sprites/npcs/bailaora-walk.png",
-    "abuelo-cana": "assets/sprites/npcs/abuelo-cana-walk.png",
-    "abuela-morada": "assets/sprites/npcs/abuela-morada-walk.png",
+    ...Object.fromEntries([
+      "nino-sol", "chica-lazo", "skater-verde", "mochilera", "campesino",
+      "nino-polo", "nina-turquesa", "skater-capucha", "chica-mochila", "hortelano",
+      "camarera-azul", "camarero-bandeja", "bailaora", "abuelo-cana", "abuela-morada", "rival",
+    ].map((id) => [id, `${NPC_OVERWORLD_SHEET_BASE_URL}/${id}-walk.png`])),
   });
   const NPC_ROSTER_SHEET_URLS = Object.freeze({
     ...Object.fromEntries([
@@ -372,10 +401,10 @@
     "teen-girl", "teen-boy", "baker", "builder", "doctor", "vendor", "librarian", "tourist", "dancer", "ranger",
   ].map((role, index) => {
     const id = `npc-${String(index + 1).padStart(2, "0")}-${role}`;
-    return [id, `assets/sprites/npcs/${id}-walk.png`];
+    return [id, `${NPC_OVERWORLD_SHEET_BASE_URL}/${id}-walk.png`];
     })),
     ...NPC_IMPORTED_SPRITE_URLS,
-    "doctor-potato": "assets/sprites/npcs/doctor-potato-walk.png",
+    "doctor-potato": `${NPC_OVERWORLD_SHEET_BASE_URL}/doctor-potato-walk.png`,
   });
   const CUSTOM_POKEMON_ASSETS = Object.freeze({
     4: { front: "assets/pokemon/braspy-line/braspy-front.png", back: "assets/pokemon/braspy-line/braspy-back.png" },
@@ -418,6 +447,59 @@
     9813: { front: "assets/pokemon/ascuero-line/ascuero-front.png", back: "assets/pokemon/ascuero-line/ascuero-back.png" },
     9814: { front: "assets/pokemon/ascuero-line/tolebrasa-front.png", back: "assets/pokemon/ascuero-line/tolebrasa-back.png" },
     9815: { front: "assets/pokemon/ascuero-line/matallama-front.png", back: "assets/pokemon/ascuero-line/matallama-back.png" },
+    9901: { front: "assets/pokemon/cucarin-line/cucarin-front.png", back: "assets/pokemon/cucarin-line/cucarin-back.png" },
+    9902: { front: "assets/pokemon/cucarin-line/cucarrox-front.png", back: "assets/pokemon/cucarin-line/cucarrox-back.png" },
+    9903: { front: "assets/pokemon/cucarin-line/cucarrex-front.png", back: "assets/pokemon/cucarin-line/cucarrex-back.png" },
+    9904: { front: "assets/pokemon/burbixir-line/burbixir-front.png", back: "assets/pokemon/burbixir-line/burbixir-back.png" },
+    9905: { front: "assets/pokemon/burbixir-line/toxifizz-front.png", back: "assets/pokemon/burbixir-line/toxifizz-back.png" },
+    9906: { front: "assets/pokemon/alapina-line/alapina-front.png", back: "assets/pokemon/alapina-line/alapina-back.png" },
+    9907: { front: "assets/pokemon/alapina-line/pinorrin-front.png", back: "assets/pokemon/alapina-line/pinorrin-back.png" },
+    9908: { front: "assets/pokemon/alapina-line/conegal-front.png", back: "assets/pokemon/alapina-line/conegal-back.png" },
+    9909: { front: "assets/pokemon/tortihuevo-line/tortihuevo-front.png", back: "assets/pokemon/tortihuevo-line/tortihuevo-back.png" },
+    9910: { front: "assets/pokemon/tortihuevo-line/patatorti-front.png", back: "assets/pokemon/tortihuevo-line/patatorti-back.png" },
+    9911: { front: "assets/pokemon/tortihuevo-line/tortilloro-front.png", back: "assets/pokemon/tortihuevo-line/tortilloro-back.png" },
+    9912: { front: "assets/pokemon/lincacho-line/lincacho-front.png", back: "assets/pokemon/lincacho-line/lincacho-back.png" },
+    9913: { front: "assets/pokemon/lincacho-line/lincebrio-front.png", back: "assets/pokemon/lincacho-line/lincebrio-back.png" },
+    9914: { front: "assets/pokemon/aquachorro-line/aquachorro-front.png", back: "assets/pokemon/aquachorro-line/aquachorro-back.png" },
+    9915: { front: "assets/pokemon/aquachorro-line/hidrocanonazo-front.png", back: "assets/pokemon/aquachorro-line/hidrocanonazo-back.png" },
+    9916: { front: "assets/pokemon/cincco-line/cincco-front.png", back: "assets/pokemon/cincco-line/cincco-back.png" },
+    9917: { front: "assets/pokemon/cincco-line/cincabrio-front.png", back: "assets/pokemon/cincco-line/cincabrio-back.png" },
+    9918: { front: "assets/pokemon/currasma-line/currasma-front.png", back: "assets/pokemon/currasma-line/currasma-back.png" },
+    9919: { front: "assets/pokemon/gazpinito-line/gazpinito-front.png", back: "assets/pokemon/gazpinito-line/gazpinito-back.png" },
+    9920: { front: "assets/pokemon/gazpinito-line/gazpalado-front.png", back: "assets/pokemon/gazpinito-line/gazpalado-back.png" },
+    9921: { front: "assets/pokemon/turistin-line/turistin-front.png", back: "assets/pokemon/turistin-line/turistin-back.png" },
+    9922: { front: "assets/pokemon/turistin-line/turistardo-front.png", back: "assets/pokemon/turistin-line/turistardo-back.png" },
+    9923: { front: "assets/pokemon/turistin-line/turistimo-front.png", back: "assets/pokemon/turistin-line/turistimo-back.png" },
+    9924: { front: "assets/pokemon/freskito-line/freskito-front.png", back: "assets/pokemon/freskito-line/freskito-back.png" },
+    9925: { front: "assets/pokemon/freskito-line/freskon-front.png", back: "assets/pokemon/freskito-line/freskon-back.png" },
+    9926: { front: "assets/pokemon/freskito-line/freskeaire-front.png", back: "assets/pokemon/freskito-line/freskeaire-back.png" },
+    9927: { front: "assets/pokemon/castanin-line/castanin-front.png", back: "assets/pokemon/castanin-line/castanin-back.png" },
+    9928: { front: "assets/pokemon/castanin-line/castanon-front.png", back: "assets/pokemon/castanin-line/castanon-back.png" },
+    9929: { front: "assets/pokemon/cajito-line/cajito-front.png", back: "assets/pokemon/cajito-line/cajito-back.png" },
+    9930: { front: "assets/pokemon/cajito-line/fernacesto-front.png", back: "assets/pokemon/cajito-line/fernacesto-back.png" },
+    9931: { front: "assets/pokemon/heroiny-line/heroiny-front.png", back: "assets/pokemon/heroiny-line/heroiny-back.png" },
+    9932: { front: "assets/pokemon/heroiny-line/diacetyl-front.png", back: "assets/pokemon/heroiny-line/diacetyl-back.png" },
+    9933: { front: "assets/pokemon/cordillo-line/cordillo-front.png", back: "assets/pokemon/cordillo-line/cordillo-back.png" },
+    9934: { front: "assets/pokemon/cordillo-line/rasguelo-front.png", back: "assets/pokemon/cordillo-line/rasguelo-back.png" },
+    9935: { front: "assets/pokemon/cordillo-line/bordonte-front.png", back: "assets/pokemon/cordillo-line/bordonte-back.png" },
+    9936: { front: "assets/pokemon/vaporan-line/vaporan-front.png", back: "assets/pokemon/vaporan-line/vaporan-back.png" },
+    9937: { front: "assets/pokemon/canijo-line/canijo-front.png", back: "assets/pokemon/canijo-line/canijo-back.png" },
+    9938: { front: "assets/pokemon/canijo-line/macarrizo-front.png", back: "assets/pokemon/canijo-line/macarrizo-back.png" },
+    9939: { front: "assets/pokemon/canijo-line/sevillardo-front.png", back: "assets/pokemon/canijo-line/sevillardo-back.png" },
+    9940: { front: "assets/pokemon/cestin-line/cestin-front.png", back: "assets/pokemon/cestin-line/cestin-back.png" },
+    9941: { front: "assets/pokemon/cestin-line/cestaro-front.png", back: "assets/pokemon/cestin-line/cestaro-back.png" },
+    9942: { front: "assets/pokemon/cestin-line/cestarron-front.png", back: "assets/pokemon/cestin-line/cestarron-back.png" },
+    9943: { front: "assets/pokemon/coquinia-line/coquinia-front.png", back: "assets/pokemon/coquinia-line/coquinia-back.png" },
+    9944: { front: "assets/pokemon/coquinia-line/coquiterro-front.png", back: "assets/pokemon/coquinia-line/coquiterro-back.png" },
+    9945: { front: "assets/pokemon/podenin-line/podenin-front.png", back: "assets/pokemon/podenin-line/podenin-back.png" },
+    9946: { front: "assets/pokemon/podenin-line/sevipod-front.png", back: "assets/pokemon/podenin-line/sevipod-back.png" },
+    9947: { front: "assets/pokemon/nazarion-line/nazarion-front.png", back: "assets/pokemon/nazarion-line/nazarion-back.png" },
+    9948: { front: "assets/pokemon/pipator-line/pipator-front.png", back: "assets/pokemon/pipator-line/pipator-back.png" },
+    9949: { front: "assets/pokemon/pipator-line/pipator-comando-front.png", back: "assets/pokemon/pipator-line/pipator-comando-back.png" },
+    9950: { front: "assets/pokemon/pipator-line/pipator-paladin-front.png", back: "assets/pokemon/pipator-line/pipator-paladin-back.png" },
+    9951: { front: "assets/pokemon/culebrin-line/culebrin-front.png", back: "assets/pokemon/culebrin-line/culebrin-back.png" },
+    9952: { front: "assets/pokemon/culebrin-line/maldrina-front.png", back: "assets/pokemon/culebrin-line/maldrina-back.png" },
+    9953: { front: "assets/pokemon/culebrin-line/lumibrina-front.png", back: "assets/pokemon/culebrin-line/lumibrina-back.png" },
   });
   const CUSTOM_POKEMON_FRAME_ASSETS = Object.freeze({
     9101: {
@@ -523,6 +605,7 @@
   });
   const PETRILLO_ID = 9001;
   const SHADOW_SPRITE_URL = "assets/images/shadow-stalker.png";
+  const PRISM_PORTAL_FRAGMENTS_URL = "assets/effects/prisma/portal-fragments-pixellab.png?v=1";
   const HORROR_AUDIO_URLS = {
     chase: "assets/audio/shadow-chase.mp3",
     breathing: "assets/audio/shadow-breathing.ogg",
@@ -651,6 +734,59 @@
     9813: { id: 9813, name: "Ascuero", type: "Acero", secondaryType: "Fuego", baseHp: 22, catchRate: .48, moves: [MOVES.forgeSlash, MOVES.ember], description: "Monstruo Espada Poseída. Parpadea con curiosidad y juega con las chispas de la fragua.", evolvesTo: 9814, evolveLevel: 20 },
     9814: { id: 9814, name: "Tolebrasa", type: "Acero", secondaryType: "Fuego", baseHp: 33, catchRate: .19, moves: [MOVES.forgeSlash, MOVES.ember, MOVES.metalSound], description: "Monstruo Acero Toledano. Dibuja arcos elegantes mientras la llama de su hoja arde con orgullo.", evolvesTo: 9815, evolveLevel: 38 },
     9815: { id: 9815, name: "Matallama", type: "Acero", secondaryType: "Fuego", baseHp: 45, catchRate: .06, moves: [MOVES.forgeSlash, MOVES.metalSound, MOVES.ember], description: "Monstruo Filo de Honor. Su manto de fuego honra la tradición y su acero canta en cada duelo." },
+    9901: { id: 9901, name: "Cucarín", type: "Bicho", baseHp: 21, catchRate: .64, moves: [MOVES.tackle, MOVES.bugBite], description: "Pokémon Polvín. Se camufla con el polvo de rincones oscuros y desaparece en cuanto nota una vibración.", evolvesTo: 9902, evolveLevel: 18 },
+    9902: { id: 9902, name: "Cucarrox", type: "Bicho", baseHp: 32, catchRate: .23, moves: [MOVES.bugBite, MOVES.quickAttack, MOVES.wingFeint], description: "Pokémon Corredor. Detecta cambios mínimos del aire con sus antenas y recorre tuberías a gran velocidad.", evolvesTo: 9903, evolveLevel: 32 },
+    9903: { id: 9903, name: "Cucarrex", type: "Bicho", baseHp: 45, catchRate: .07, moves: [MOVES.bugBite, MOVES.headbutt, MOVES.wingFeint], description: "Pokémon Guardián. Su coraza casi impenetrable almacena nutrientes y protege a toda la colonia." },
+    9904: { id: 9904, name: "Burbixir", type: "Agua", secondaryType: "Veneno", baseHp: 22, catchRate: .58, moves: [MOVES.waterGun, MOVES.poisonSting], description: "Pokémon Burbuja Sintética. Se agita para formar una espuma traviesa en líquidos azucarados.", evolvesTo: 9905, evolveLevel: 28 },
+    9905: { id: 9905, name: "Toxifizz", type: "Agua", secondaryType: "Veneno", baseHp: 40, catchRate: .14, moves: [MOVES.toxicThread, MOVES.waterGun, MOVES.toxicFume], description: "Pokémon Efervescente. Su espuma corrosiva disuelve metales y deja charcos burbujeantes que aún humean." },
+    9906: { id: 9906, name: "Alapiña", type: "Volador", secondaryType: "Acero", baseHp: 22, catchRate: .57, moves: [MOVES.gust, MOVES.metalSound], description: "Pokémon Piña Alada. Vive en pinares profundos y se repliega como una piña cuando arrecia el viento.", evolvesTo: 9907, evolveLevel: 18 },
+    9907: { id: 9907, name: "Pinorrín", type: "Volador", secondaryType: "Acero", baseHp: 32, catchRate: .21, moves: [MOVES.wingFeint, MOVES.metalSound, MOVES.gust], description: "Pokémon Pinar. Sus escamas metálicas se alargan para dominar corrientes cada vez más fuertes.", evolvesTo: 9908, evolveLevel: 36 },
+    9908: { id: 9908, name: "Conegál", type: "Volador", secondaryType: "Acero", baseHp: 45, catchRate: .07, moves: [MOVES.prairieDive, MOVES.metalSound, MOVES.stormWing], description: "Pokémon Guardabosque. Desde las alturas vigila los pinares antiguos con alas de acero superpuestas." },
+    9909: { id: 9909, name: "Tortihuevo", type: "Normal", baseHp: 25, catchRate: .61, moves: [MOVES.tackle, MOVES.headbutt], description: "Pokémon Huevo de Tortilla. Su cuerpo tibio rebota con sorprendente suavidad y siempre huele a cocina.", evolvesTo: 9910, evolveLevel: 18 },
+    9910: { id: 9910, name: "Patatorti", type: "Normal", secondaryType: "Tierra", baseHp: 35, catchRate: .22, moves: [MOVES.headbutt, MOVES.earthPress, MOVES.tackle], description: "Pokémon Tortilla Patata. Endurece sus trozos de patata para resistir golpes sin perder su ternura.", evolvesTo: 9911, evolveLevel: 36 },
+    9911: { id: 9911, name: "Tortilloro", type: "Tierra", secondaryType: "Fuego", baseHp: 47, catchRate: .06, moves: [MOVES.earthPress, MOVES.ember, MOVES.headbutt], description: "Pokémon Tortilla Real. Una corona dorada aparece cuando domina el calor y la presión de la tierra." },
+    9912: { id: 9912, name: "Lincacho", type: "Lucha", secondaryType: "Siniestro", baseHp: 24, catchRate: .50, moves: [MOVES.scratch, MOVES.darkPilfer], description: "Pokémon Lince. Astuto y sigiloso, acecha desde las sombras y golpea con zarpazos certeros.", evolvesTo: 9913, evolveLevel: 28 },
+    9913: { id: 9913, name: "Lincebrío", type: "Lucha", secondaryType: "Siniestro", baseHp: 41, catchRate: .12, moves: [MOVES.mountainJab, MOVES.darkPilfer, MOVES.scratch], description: "Pokémon Lince Umbrío. Su instinto impecable y sus garras afiladas lo convierten en un depredador temido." },
+    9914: { id: 9914, name: "Aquachorro", type: "Agua", baseHp: 24, catchRate: .57, moves: [MOVES.waterGun, MOVES.quickAttack], description: "Pokémon Pistola de Agua. Dispara chorros a presión usando el depósito que lleva sobre el lomo.", evolvesTo: 9915, evolveLevel: 28 },
+    9915: { id: 9915, name: "Hidrocañonazo", type: "Agua", secondaryType: "Normal", baseHp: 41, catchRate: .13, moves: [MOVES.waterGun, MOVES.riverWhisker, MOVES.headbutt], description: "Pokémon Cañón de Agua. Su enorme depósito lanza ráfagas capaces de empapar todo a gran distancia." },
+    9916: { id: 9916, name: "Cincco", type: "Acero", secondaryType: "Hada", baseHp: 26, catchRate: .46, moves: [MOVES.metalSound, MOVES.moonGleam], description: "Pokémon Coche. Excava túneles con sus ruedas y entierra fragmentos metálicos cargados de energía feérica.", evolvesTo: 9917, evolveLevel: 28 },
+    9917: { id: 9917, name: "Cincabrío", type: "Acero", secondaryType: "Hada", baseHp: 43, catchRate: .10, moves: [MOVES.forgeSlash, MOVES.moonGleam, MOVES.metalSound], description: "Pokémon Coche Cristal. Refleja la luz de las hadas en sus placas y embiste desde túneles ocultos." },
+    9918: { id: 9918, name: "Currasma", type: "Volador", secondaryType: "Fantasma", baseHp: 36, catchRate: .18, moves: [MOVES.gust, MOVES.lick, MOVES.shadowPrank], description: "Pokémon Arcoíris. El espíritu de una exposición olvidada guía a viajeros entre luces que se desvanecen." },
+    9919: { id: 9919, name: "Gazpinito", type: "Agua", secondaryType: "Planta", baseHp: 23, catchRate: .58, moves: [MOVES.waterGun, MOVES.absorb], description: "Pokémon Sopa Fresca. Nace en huertos bien regados y prepara una sopa dulce para sus amigos.", evolvesTo: 9920, evolveLevel: 28 },
+    9920: { id: 9920, name: "Gazpalado", type: "Agua", secondaryType: "Planta", baseHp: 39, catchRate: .14, moves: [MOVES.riverWhisker, MOVES.vineWhip, MOVES.absorb], description: "Pokémon Sopa Vigilante. Protege los huertos y usa sus ingredientes para ahuyentar intrusos." },
+    9921: { id: 9921, name: "Turistín", type: "Fuego", secondaryType: "Normal", baseHp: 24, catchRate: .55, moves: [MOVES.ember, MOVES.tackle], description: "Pokémon Veraniego. Busca sol y diversión, siempre listo para conseguir la foto perfecta.", evolvesTo: 9922, evolveLevel: 18 },
+    9922: { id: 9922, name: "Turistardo", type: "Fuego", secondaryType: "Normal", baseHp: 34, catchRate: .20, moves: [MOVES.ember, MOVES.headbutt, MOVES.quickAttack], description: "Pokémon Bronceador. Presume de camisa chillona, crema solar y muchas horas bajo el sol.", evolvesTo: 9923, evolveLevel: 36 },
+    9923: { id: 9923, name: "Turístimo", type: "Fuego", secondaryType: "Normal", baseHp: 46, catchRate: .07, moves: [MOVES.ember, MOVES.headbutt, MOVES.quickAttack], description: "Pokémon Vacacional. Su energía ardiente domina cualquier playa y contagia a todos sus ganas de fiesta." },
+    9924: { id: 9924, name: "Freskito", type: "Hielo", baseHp: 22, catchRate: .60, moves: [MOVES.iceFist, MOVES.gust], description: "Pokémon Brisa Fría. Genera una corriente de aire seco para refrescar habitaciones cálidas.", evolvesTo: 9925, evolveLevel: 20 },
+    9925: { id: 9925, name: "Freskón", type: "Hielo", baseHp: 34, catchRate: .20, moves: [MOVES.iceFist, MOVES.gust, MOVES.stormWing], description: "Pokémon Climatización. Sus aletas orientan el aire frío y reducen la temperatura en segundos.", evolvesTo: 9926, evolveLevel: 40 },
+    9926: { id: 9926, name: "Freskeaire", type: "Hielo", secondaryType: "Volador", baseHp: 46, catchRate: .06, moves: [MOVES.iceFist, MOVES.stormWing, MOVES.gust], description: "Pokémon Aire Glacial. Canaliza vientos helados por grandes alas y puede recorrer edificios enteros." },
+    9927: { id: 9927, name: "Castañín", type: "Normal", baseHp: 25, catchRate: .54, moves: [MOVES.tackle, MOVES.headbutt], description: "Pokémon Castañuela. Choca sus dos cáscaras a gran velocidad para ahuyentar intrusos con un ritmo seco.", evolvesTo: 9928, evolveLevel: 28 },
+    9928: { id: 9928, name: "Castañón", type: "Normal", secondaryType: "Psíquico", baseHp: 41, catchRate: .12, moves: [MOVES.confusion, MOVES.headbutt, MOVES.dreamWhisper], description: "Pokémon Castañuela Mayor. Sus redobles resuenan como un eco hipnótico que invoca lluvias." },
+    9929: { id: 9929, name: "Cajito", type: "Planta", baseHp: 24, catchRate: .56, moves: [MOVES.vineWhip, MOVES.tackle], description: "Pokémon Canasta. Juega con una pelota de semillas y aprende a botarla antes de caminar.", evolvesTo: 9930, evolveLevel: 28 },
+    9930: { id: 9930, name: "Fernacesto", type: "Planta", secondaryType: "Lucha", baseHp: 42, catchRate: .11, moves: [MOVES.vineWhip, MOVES.mountainJab, MOVES.quickAttack], description: "Pokémon Ala-Pívot. Sus lianas forman redes y sus potentes saltos rara vez fallan una canasta." },
+    9931: { id: 9931, name: "Heroiny", type: "Psíquico", baseHp: 21, catchRate: .48, moves: [MOVES.confusion, MOVES.moonGleam], description: "Pokémon Polvo Puro. Flota impulsado por partículas finas que transmiten una calma engañosa.", evolvesTo: 9932, evolveLevel: 38 },
+    9932: { id: 9932, name: "Diacetyl", type: "Psíquico", secondaryType: "Siniestro", baseHp: 43, catchRate: .08, moves: [MOVES.confusion, MOVES.toxicFume, MOVES.darkPilfer], description: "Pokémon Dependencia. Manipula deseos ajenos con una niebla violeta que se acumula en callejones oscuros." },
+    9933: { id: 9933, name: "Cordillo", type: "Tierra", secondaryType: "Volador", baseHp: 22, catchRate: .58, moves: [MOVES.gust, MOVES.stoneSeal], description: "Pokémon Acorde. Picotea la tierra con ritmo y agita su cola como si rasgueara el aire.", evolvesTo: 9934, evolveLevel: 18 },
+    9934: { id: 9934, name: "Rasguelo", type: "Tierra", secondaryType: "Volador", baseHp: 33, catchRate: .20, moves: [MOVES.gust, MOVES.earthPress, MOVES.wingFeint], description: "Pokémon Rasgueo. Marca su territorio con aleteos rítmicos y un canto seco de guitarra.", evolvesTo: 9935, evolveLevel: 36 },
+    9935: { id: 9935, name: "Bordonte", type: "Tierra", secondaryType: "Volador", baseHp: 45, catchRate: .07, moves: [MOVES.prairieDive, MOVES.earthPress, MOVES.gust], description: "Pokémon Bordón. Sus plumas vibran con el viento y producen un eco profundo sobre barrancos y llanuras." },
+    9936: { id: 9936, name: "Vaporan", type: "Agua", secondaryType: "Acero", baseHp: 37, catchRate: .17, moves: [MOVES.waterGun, MOVES.metalSound, MOVES.toxicFume], description: "Pokémon Bruma. Expulsa vapor de agua y partículas metálicas que puede condensar en anillos." },
+    9937: { id: 9937, name: "Cañijo", type: "Siniestro", secondaryType: "Lucha", baseHp: 23, catchRate: .54, moves: [MOVES.darkPilfer, MOVES.mountainJab], description: "Pokémon Callejero. Aprende observando a los mayores y presume de su cresta incluso cuando pierde.", evolvesTo: 9938, evolveLevel: 18 },
+    9938: { id: 9938, name: "Macarrizo", type: "Siniestro", secondaryType: "Lucha", baseHp: 34, catchRate: .19, moves: [MOVES.darkPilfer, MOVES.mountainJab, MOVES.quickAttack], description: "Pokémon Barrial. Defiende su territorio con amagos rápidos y mucha labia.", evolvesTo: 9939, evolveLevel: 36 },
+    9939: { id: 9939, name: "Sevillardo", type: "Siniestro", secondaryType: "Lucha", baseHp: 46, catchRate: .07, moves: [MOVES.darkPilfer, MOVES.mountainJab, MOVES.headbutt], description: "Pokémon Cabecilla. Lidera grupos callejeros con orgullo, picardía y un fuerte instinto protector." },
+    9940: { id: 9940, name: "Cestín", type: "Acero", secondaryType: "Planta", baseHp: 25, catchRate: .52, moves: [MOVES.metalSound, MOVES.vineWhip], description: "Pokémon Canasta Pequeña. Recorre pasillos en busca de bayas y brotes tiernos para guardar.", evolvesTo: 9941, evolveLevel: 18 },
+    9941: { id: 9941, name: "Cestaró", type: "Acero", secondaryType: "Planta", baseHp: 36, catchRate: .18, moves: [MOVES.metalSound, MOVES.vineWhip, MOVES.quickAttack], description: "Pokémon Carrito Cesta. Carga muchos objetos sin perder agilidad y acompaña a su Entrenador a todas partes.", evolvesTo: 9942, evolveLevel: 36 },
+    9942: { id: 9942, name: "Cestarrón", type: "Acero", secondaryType: "Planta", baseHp: 48, catchRate: .06, moves: [MOVES.forgeSlash, MOVES.vineWhip, MOVES.earthPress], description: "Pokémon Carro Mayor. Su armazón y gran cesta dorsal protegen a la manada y transportan recursos." },
+    9943: { id: 9943, name: "Coquinia", type: "Agua", baseHp: 24, catchRate: .59, moves: [MOVES.waterGun, MOVES.tackle], description: "Pokémon Coquina. Se oculta bajo arena húmeda y aprovecha las olas para deslizarse sin ser vista.", evolvesTo: 9944, evolveLevel: 24 },
+    9944: { id: 9944, name: "Coquiterro", type: "Agua", secondaryType: "Tierra", baseHp: 42, catchRate: .11, moves: [MOVES.waterGun, MOVES.earthPress, MOVES.headbutt], description: "Pokémon Orillal. Endurece su concha con arena y limo costero para tender emboscadas." },
+    9945: { id: 9945, name: "Podenín", type: "Normal", baseHp: 24, catchRate: .55, moves: [MOVES.quickAttack, MOVES.headbutt], description: "Pokémon Rastro. Su excelente olfato y curiosidad lo llevan siempre a explorar caminos nuevos.", evolvesTo: 9946, evolveLevel: 28 },
+    9946: { id: 9946, name: "Sevipod", type: "Normal", baseHp: 40, catchRate: .12, moves: [MOVES.quickAttack, MOVES.headbutt, MOVES.gust], description: "Pokémon Cazador. Corre con elegancia y resistencia en perfecta sincronía con su Entrenador." },
+    9947: { id: 9947, name: "Nazarion", type: "Fantasma", secondaryType: "Acero", baseHp: 47, catchRate: .05, moves: [MOVES.lick, MOVES.metalSound, MOVES.eternalNight], description: "Pokémon Procesional. Aparece de madrugada entre incienso y campanas para proteger caminos sagrados." },
+    9948: { id: 9948, name: "Pipator", type: "Siniestro", secondaryType: "Normal", baseHp: 23, catchRate: .47, moves: [MOVES.darkPilfer, MOVES.tackle], description: "Pokémon Hámster Ruso. Recorre campos de girasoles con una mochila repleta de pipas.", evolutionBranches: [9949, 9950], evolveLevel: 20 },
+    9949: { id: 9949, name: "Pipator Comando", type: "Siniestro", secondaryType: "Normal", baseHp: 40, catchRate: .10, moves: [MOVES.darkPilfer, MOVES.metalSound, MOVES.quickAttack], description: "Pokémon Comando. Su cerbatana dispara pipas de girasol con una precisión sorprendente." },
+    9950: { id: 9950, name: "Pipator Paladín", type: "Normal", secondaryType: "Hada", baseHp: 42, catchRate: .10, moves: [MOVES.moonGleam, MOVES.astralGuard, MOVES.tackle], description: "Pokémon Paladín. Su escudo y su capa irradian una luz que protege a los inocentes." },
+    9951: { id: 9951, name: "Culebrín", type: "Veneno", baseHp: 22, catchRate: .53, moves: [MOVES.poisonSting, MOVES.tackle], description: "Pokémon Culebrina. Se oculta entre hierbas altas y usa su veneno suave para defender el territorio.", evolutionBranches: [9952, 9953], evolveLevel: 20 },
+    9952: { id: 9952, name: "Maldrina", type: "Veneno", secondaryType: "Siniestro", baseHp: 41, catchRate: .10, moves: [MOVES.toxicThread, MOVES.darkPilfer, MOVES.poisonSting], description: "Pokémon Víbora Rival. Sus escamas afiladas y mirada calculadora intimidan incluso a los más audaces." },
+    9953: { id: 9953, name: "Lumibrina", type: "Veneno", secondaryType: "Hada", baseHp: 40, catchRate: .10, moves: [MOVES.toxicThread, MOVES.moonGleam, MOVES.absorb], description: "Pokémon Culebra Sagrada. Transforma su veneno en una sustancia luminosa que protege campos y flores." },
   };
 
   const SANPLEDEX_FAMILIES = Object.freeze([
@@ -670,6 +806,29 @@
     { name: "Linaje del Azahar", ids: [9808, 9809, 9810] },
     { name: "Linaje del Barbo", ids: [9811, 9812] },
     { name: "Linaje de la Fragua", ids: [9813, 9814, 9815] },
+    { name: "Familia Cucarín", ids: [9901, 9902, 9903] },
+    { name: "Linaje Efervescente", ids: [9904, 9905] },
+    { name: "Linaje del Pinar", ids: [9906, 9907, 9908] },
+    { name: "Linaje de la Tortilla", ids: [9909, 9910, 9911] },
+    { name: "Linaje del Lince", ids: [9912, 9913] },
+    { name: "Linaje del Chorro", ids: [9914, 9915] },
+    { name: "Linaje del Coche Feérico", ids: [9916, 9917] },
+    { name: "Espectro Arcoíris", ids: [9918] },
+    { name: "Linaje de la Sopa", ids: [9919, 9920] },
+    { name: "Linaje Vacacional", ids: [9921, 9922, 9923] },
+    { name: "Linaje del Aire Frío", ids: [9924, 9925, 9926] },
+    { name: "Linaje de la Castañuela", ids: [9927, 9928] },
+    { name: "Linaje de la Canasta", ids: [9929, 9930] },
+    { name: "Linaje del Polvo", ids: [9931, 9932] },
+    { name: "Linaje del Acorde", ids: [9933, 9934, 9935] },
+    { name: "Espíritu de Vapor", ids: [9936] },
+    { name: "Linaje Callejero", ids: [9937, 9938, 9939] },
+    { name: "Linaje de la Cesta", ids: [9940, 9941, 9942] },
+    { name: "Linaje de la Coquina", ids: [9943, 9944] },
+    { name: "Linaje Podenín", ids: [9945, 9946] },
+    { name: "Leyenda Procesional", ids: [9947] },
+    { name: "Destinos de Pipator", ids: [9948, 9949, 9950] },
+    { name: "Destinos de Culebrín", ids: [9951, 9952, 9953] },
   ]);
   const SANPLEDEX_IDS = Object.freeze(SANPLEDEX_FAMILIES.flatMap((family) => family.ids));
 
@@ -689,6 +848,10 @@
     { id: 9001, weight: 14 }, { id: 9101, weight: 10 }, { id: 9301, weight: 8 },
     { id: 9401, weight: 6 }, { id: 9201, weight: 4 }, { id: 9805, weight: 5 },
     { id: 9808, weight: 8 },
+    { id: 9901, weight: 5 }, { id: 9904, weight: 4 }, { id: 9914, weight: 4 },
+    { id: 9916, weight: 3 }, { id: 9921, weight: 3 }, { id: 9924, weight: 4 },
+    { id: 9927, weight: 3 }, { id: 9936, weight: 2 }, { id: 9937, weight: 4 },
+    { id: 9940, weight: 4 },
   ];
 
   const PRISM_WILD_TABLE = [
@@ -697,12 +860,42 @@
     { id: 9101, weight: 8 }, { id: 9501, weight: 8 }, { id: 9602, weight: 7 },
     { id: 9702, weight: 7 }, { id: 9102, weight: 4 }, { id: 9801, weight: 7 },
     { id: 9813, weight: 4 },
+    { id: 9918, weight: 4 }, { id: 9931, weight: 4 }, { id: 9947, weight: 1 },
   ];
 
   const buildings = createMapBuildings();
   const field = CITY_MAP.field || { x: 1250, y: 900, w: 320, h: 210, a: 0 };
+  let perspectiveGateCache;
+  let perspectiveGatePositionCache = null;
+  let perspectiveGatePositionSignature = "";
+  function currentPerspectiveGate() {
+    if (perspectiveGateCache === undefined) {
+      perspectiveGateCache = cityEntrances.find((entrance) => entrance.scene === "world"
+        && (entrance.id === "pradera-bifaz-gate" || entrance.targetMap === "pradera-bifaz")) || null;
+    }
+    return perspectiveGateCache;
+  }
+
+  function currentPerspectiveGatePosition() {
+    const entrance = currentPerspectiveGate();
+    if (!entrance) {
+      perspectiveGatePositionCache = null;
+      perspectiveGatePositionSignature = "";
+      return null;
+    }
+    const signature = `${entrance.col}:${entrance.row}:${CITY_MAP.tileSize}`;
+    if (signature !== perspectiveGatePositionSignature) {
+      perspectiveGatePositionCache = {
+        x: (entrance.col + .5) * CITY_MAP.tileSize,
+        y: (entrance.row + .5) * CITY_MAP.tileSize,
+      };
+      perspectiveGatePositionSignature = signature;
+    }
+    return perspectiveGatePositionCache;
+  }
+
   function currentPortalDoor() {
-    return cityEntrances.find((entrance) => entrance.action === "prism") || null;
+    return cityEntrances.find((entrance) => entrance.scene === "world" && entrance.action === "prism") || null;
   }
 
   function currentPortalPosition() {
@@ -719,7 +912,7 @@
   }
 
   function currentHealthReturn() {
-    const entrance = cityEntrances.find((item) => item.action === "heal");
+    const entrance = cityEntrances.find((item) => item.scene === "world" && item.action === "heal");
     return Array.isArray(entrance?.approach)
       ? { x: Number(entrance.approach[0]), y: Number(entrance.approach[1]) }
       : { ...NORMAL_START };
@@ -769,13 +962,24 @@
     { key: "rareCandies", name: "Caramelo Raro", sprite: "rare-candy", description: "Sube inmediatamente un nivel." },
     { key: "prismBatteries", name: "Batería Prisma", sprite: "cell-battery", description: "Recupera una carga de luz dentro del laberinto." },
     { key: "prismShards", name: "Fragmento Prisma", sprite: "odd-keystone", description: "Tres fragmentos abren el portal dimensional." },
+    { key: "stalePotions", name: "Poción Caducada", sprite: "potion", description: "Huele a metal. Apenas restaura 1 PS.", tainted: true },
+    { key: "moldyBerries", name: "Baya Mohosa", sprite: "oran-berry", description: "La dimensión la ha estropeado. Restaura 2 PS.", tainted: true },
   ];
 
   const BLACK_MARKET_LIMITS = Object.freeze({ rareCandy: 2, masterBall: 1, prismBattery: 3 });
+  const PRISM_ENDING_IDS = Object.freeze(["rarePokemon", "stalePotion", "moldyBerry", "weakPokemon"]);
+  const PRISM_WEAK_EXIT_IDS = Object.freeze([10, 19, 43, 9601, 9701]);
 
+
+  const BIFAZ_PROGRESS_VERSION = 2;
+  const BIFAZ_KNOWN_PROGRESS_VERSIONS = Object.freeze([1, BIFAZ_PROGRESS_VERSION]);
+  const BIFAZ_CHALLENGE_IDS = Object.freeze(["naturalista", "acrobata", "origamista", "virtuoso"]);
+  const BIFAZ_FLIP_STAGES = Object.freeze(["anticipation", "fold", "cross", "settle"]);
+  const BIFAZ_FLOW_TIERS = Object.freeze(["calm", "rhythm", "fold", "rush"]);
+  const BIFAZ_FLOW_LABELS = Object.freeze({ calm: "CALMA", rhythm: "RITMO", fold: "PLIEGUE", rush: "PAPER RUSH" });
 
   const defaultState = () => ({
-    version: 7, mapRevision: MAP_REVISION, started: false, starterChosen: false,
+    version: 10, mapRevision: MAP_REVISION, started: false, starterChosen: false,
     doctorPotatoIntroPending: false, doctorPotatoIntroSeen: false,
     fragmentCinematicSeen: false,
     worldX: NORMAL_START.x, worldY: NORMAL_START.y, direction: NORMAL_START.direction,
@@ -783,17 +987,305 @@
     activeTeamIndex: 0, caught: [], seen: [], team: [], questStage: 0,
     clinicGiftClaimed: false, sound: true, buildingSkins: {},
     mapId: ACTIVE_MAP_ID, dimension: "san_pablo", dimensionVisited: false, caughtDimension: false,
-    returnPosition: null, collectedObjects: [], triggeredEvents: [], interior: null, interiorData: null, maintenanceReturn: null,
+    returnPosition: null, collectedObjects: [], triggeredEvents: [], eventFlags: {}, interior: null, interiorData: null, maintenanceReturn: null,
     maze: null, secretPokemonSaved: false, secretPokemonId: null,
     money: 500, battlesWon: 0, gifts: {},
     blackMarket: { discovered: false, purchases: { rareCandy: 0, masterBall: 0, prismBattery: 0 } },
+    prismProgress: { endings: [] },
+    perspectiveZone: {
+      version: BIFAZ_PROGRESS_VERSION, snapshotVersion: BIFAZ_PROGRESS_VERSION,
+      checkpointId: "start", collected: [], pulses: 3, introSeen: false, complete: false,
+      bestTime: null, deaths: 0, rewarded: false, rewardedChallenges: [], assist: false, cameraX: 0,
+      missionTitle: "EL PLIEGUE VIVO", missionObjective: "Descubre los secretos de la Pradera Bifaz.",
+      missionProgress: 0, missionStage: 0, missionCount: 5,
+      mission: { version: 1, completed: [], currentIndex: 0 },
+      discoveries: [], wildlifeDiscovered: [], wildlifeTotal: 6,
+      challengesCompleted: 0, completedChallenges: [],
+      challenges: {
+        naturalista: { progress: 0, target: 6, complete: false },
+        acrobata: { progress: 0, target: 3, complete: false },
+        origamista: { progress: 0, target: 3, complete: false },
+        virtuoso: { progress: 0, target: 1, complete: false },
+      },
+      flipCombo: 0, bestFlipCombo: 0, flipComboTimer: 0, flipsCompleted: 0,
+      perfectLandings: 0, precisionLandingIds: [], flipComboAnchorIds: [], flipStage: null,
+      paperFlow: 0, flowTier: "calm", flowLabel: "CALMA",
+      styleChain: 0, bestStyleChain: 0, rushTimer: 0, paperRushes: 0,
+    },
     inventory: {
       potions: 1, maxPotions: 0, berries: 1,
       ultraBalls: 0, masterBalls: 0, rareCandies: 0, prismBatteries: 0, prismShards: 0,
+      stalePotions: 0, moldyBerries: 0,
     },
   });
 
+  const cleanBifazIds = (value, fallback = [], maximum = 24) => {
+    const source = Array.isArray(value) ? value : (Array.isArray(fallback) ? fallback : []);
+    return [...new Set(source
+      .filter((id) => typeof id === "string")
+      .map((id) => id.trim().slice(0, 64))
+      .filter((id) => /^[a-z0-9_-]+$/i.test(id)))]
+      .slice(0, maximum);
+  };
+  const cleanBifazText = (value, fallback, maximum) => {
+    if (typeof value !== "string") return fallback;
+    return value.replace(/\s+/g, " ").trim().slice(0, maximum) || fallback;
+  };
+  const finiteBifazNumber = (value, fallback, minimum, maximum, integer = true) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    const bounded = Math.max(minimum, Math.min(maximum, numeric));
+    return integer ? Math.floor(bounded) : bounded;
+  };
+  const bifazMissionProgress = (normalizedValue, rawValue, rawTarget, fallback = 0) => {
+    const normalized = normalizedValue == null ? Number.NaN : Number(normalizedValue);
+    if (Number.isFinite(normalized)) return Math.max(0, Math.min(1, normalized));
+    const raw = rawValue == null ? Number.NaN : Number(rawValue);
+    if (!Number.isFinite(raw)) return Math.max(0, Math.min(1, Number(fallback) || 0));
+    const target = Number(rawTarget);
+    return Math.max(0, Math.min(1, Number.isFinite(target) && target > 0 ? raw / target : raw));
+  };
+  const bifazLevelIdSchema = () => {
+    const level = globalThis.PERSPECTIVE_ZONE_CORE?.DEFAULT_LEVEL;
+    if (!level || typeof level !== "object") return null;
+    const ids = (records) => new Set((Array.isArray(records) ? records : [])
+      .map((record) => record?.id)
+      .filter((id) => typeof id === "string"));
+    return {
+      collected: ids(level.collectibles),
+      discoveries: ids(level.wildlife),
+      checkpoints: ids(level.checkpoints),
+      challenges: ids(level.challenges),
+      platforms: ids(level.platforms),
+      precisionPlatforms: new Set((Array.isArray(level.platforms) ? level.platforms : [])
+        .filter((platform) => platform?.precision)
+        .map((platform) => platform.id)
+        .filter((id) => typeof id === "string")),
+      anchors: ids(level.foldAnchors),
+    };
+  };
+  const filterKnownBifazIds = (ids, allowed) => allowed instanceof Set ? ids.filter((id) => allowed.has(id)) : ids;
+  const normalizeBifazProgress = (value = {}, fallback = defaultState().perspectiveZone) => {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const base = fallback && typeof fallback === "object" && !Array.isArray(fallback)
+      ? fallback
+      : defaultState().perspectiveZone;
+    // El snapshot del core separa la versión de su API (`version`, actualmente
+    // 2.1) de la versión persistente (`snapshotVersion`, actualmente 2). Cuando
+    // existe la segunda, es la única que define la compatibilidad del guardado;
+    // `version` sólo actúa como alias para snapshots legados que no la incluían.
+    const requestedSnapshotVersion = Number(
+      source.snapshotVersion === undefined ? source.version : source.snapshotVersion,
+    );
+    const hasUnknownVersion = (source.snapshotVersion !== undefined || source.version !== undefined) && (
+      !Number.isInteger(requestedSnapshotVersion)
+      || !BIFAZ_KNOWN_PROGRESS_VERSIONS.includes(requestedSnapshotVersion)
+    );
+    if (hasUnknownVersion) {
+      const baseVersion = Number(base.version ?? BIFAZ_PROGRESS_VERSION);
+      return base !== source && BIFAZ_KNOWN_PROGRESS_VERSIONS.includes(baseVersion)
+        ? normalizeBifazProgress(base, defaultState().perspectiveZone)
+        : defaultState().perspectiveZone;
+    }
+    const levelIds = bifazLevelIdSchema();
+    const mission = source.mission && typeof source.mission === "object" && !Array.isArray(source.mission)
+      ? source.mission
+      : {};
+    const challengeRecords = Array.isArray(source.challenges)
+      ? Object.fromEntries(source.challenges.filter((record) => record && typeof record.id === "string").map((record) => [record.id, record]))
+      : (source.challenges && typeof source.challenges === "object" ? source.challenges : {});
+    const challengeIds = levelIds?.challenges?.size
+      ? BIFAZ_CHALLENGE_IDS.filter((id) => levelIds.challenges.has(id))
+      : BIFAZ_CHALLENGE_IDS;
+    const challengeCompletedAliases = challengeIds.filter((id) => Boolean(challengeRecords[id]?.complete));
+    const challengeCompletedSource = Array.isArray(source.completedChallenges) || challengeCompletedAliases.length
+      ? [...(Array.isArray(source.completedChallenges) ? source.completedChallenges : []), ...challengeCompletedAliases]
+      : undefined;
+    const completedChallenges = cleanBifazIds(
+      challengeCompletedSource,
+      base.completedChallenges,
+      challengeIds.length,
+    ).filter((id) => challengeIds.includes(id));
+    const discoveries = filterKnownBifazIds(cleanBifazIds(
+      source.discoveries ?? source.wildlifeDiscovered,
+      base.discoveries ?? base.wildlifeDiscovered,
+      64,
+    ), levelIds?.discoveries);
+    const missionCompleted = cleanBifazIds(mission.completed, base.mission?.completed, 5);
+    const missionCount = finiteBifazNumber(
+      source.missionCount ?? source.count ?? mission.count,
+      finiteBifazNumber(base.missionCount, 5, 1, 20),
+      1,
+      20,
+    );
+    const missionStage = finiteBifazNumber(
+      source.missionStage ?? source.stage ?? mission.stage
+        ?? (Number.isFinite(Number(mission.currentIndex)) ? Number(mission.currentIndex) + 1 : undefined),
+      finiteBifazNumber(base.missionStage, 0, 0, missionCount),
+      0,
+      missionCount,
+    );
+    const missionProgress = bifazMissionProgress(
+      source.missionProgress,
+      source.progress ?? mission.progress,
+      mission.target,
+      finiteBifazNumber(base.missionProgress, 0, 0, 1, false),
+    );
+    const flipCombo = finiteBifazNumber(source.flipCombo, finiteBifazNumber(base.flipCombo, 0, 0, 999), 0, 999);
+    const bestFlipCombo = Math.max(flipCombo, finiteBifazNumber(
+      source.bestFlipCombo,
+      finiteBifazNumber(base.bestFlipCombo, 0, 0, 999),
+      0,
+      999,
+    ));
+    const requestedFlipStage = source.flipStage === undefined ? base.flipStage : source.flipStage;
+    const challenges = Object.fromEntries(challengeIds.map((id) => {
+      const record = challengeRecords[id] && typeof challengeRecords[id] === "object" ? challengeRecords[id] : {};
+      const baseRecord = base.challenges?.[id] && typeof base.challenges[id] === "object" ? base.challenges[id] : {};
+      const defaultTarget = id === "naturalista" ? 6 : (id === "virtuoso" ? 1 : 3);
+      const target = finiteBifazNumber(record.target, finiteBifazNumber(baseRecord.target, defaultTarget, 1, 999), 1, 999);
+      return [id, {
+        progress: finiteBifazNumber(record.progress, finiteBifazNumber(baseRecord.progress, 0, 0, target), 0, target),
+        target,
+        complete: completedChallenges.includes(id) || Boolean(record.complete),
+      }];
+    }));
+    const checkpointCandidates = cleanBifazIds(
+        source.checkpointId === undefined ? undefined : [source.checkpointId],
+        [base.checkpointId || "start"],
+        1,
+      );
+    const checkpointId = filterKnownBifazIds(checkpointCandidates, levelIds?.checkpoints)[0]
+      || (levelIds?.checkpoints?.has("start") ? "start" : [...(levelIds?.checkpoints || [])][0])
+      || "start";
+    const rewarded = source.rewarded === undefined ? Boolean(base.rewarded) : Boolean(source.rewarded);
+    const rewardedChallengeSource = source.rewardedChallenges === undefined && source.rewarded === true
+      ? completedChallenges
+      : source.rewardedChallenges;
+    const rewardedChallenges = filterKnownBifazIds(cleanBifazIds(
+      rewardedChallengeSource,
+      base.rewardedChallenges,
+      challengeIds.length,
+    ), levelIds?.challenges).filter((id) => completedChallenges.includes(id));
+    const requestedFlowTier = cleanBifazIds(
+      source.flowTier === undefined ? undefined : [source.flowTier],
+      [base.flowTier || "calm"],
+      1,
+    )[0];
+    const flowTier = BIFAZ_FLOW_TIERS.includes(requestedFlowTier) ? requestedFlowTier : "calm";
+    const styleChain = finiteBifazNumber(source.styleChain, finiteBifazNumber(base.styleChain, 0, 0, 999), 0, 999);
+    const perfectLandings = finiteBifazNumber(
+      source.perfectLandings ?? challengeRecords.acrobata?.progress,
+      finiteBifazNumber(base.perfectLandings, 0, 0, 999),
+      0,
+      999,
+    );
+    const hasLegacyPrecisionCounter = source.precisionLandingIds === undefined
+      && (source.perfectLandings !== undefined || challengeRecords.acrobata?.progress !== undefined);
+    const migratedPrecisionIds = hasLegacyPrecisionCounter && levelIds?.precisionPlatforms?.size
+      ? [...levelIds.precisionPlatforms].slice(0, perfectLandings)
+      : undefined;
+    const precisionLandingSource = Array.isArray(source.precisionLandingIds)
+      ? source.precisionLandingIds
+      : (migratedPrecisionIds ?? (hasLegacyPrecisionCounter ? undefined : base.precisionLandingIds));
+    const hasLegacyFlipCounter = source.flipComboAnchorIds === undefined && source.flipCombo !== undefined;
+    const migratedFlipAnchorIds = hasLegacyFlipCounter && levelIds?.anchors?.size
+      ? [...levelIds.anchors].slice(0, flipCombo)
+      : undefined;
+    const flipComboAnchorSource = Array.isArray(source.flipComboAnchorIds)
+      ? source.flipComboAnchorIds
+      : (migratedFlipAnchorIds ?? (hasLegacyFlipCounter ? undefined : base.flipComboAnchorIds));
+    return {
+      version: BIFAZ_PROGRESS_VERSION,
+      snapshotVersion: BIFAZ_PROGRESS_VERSION,
+      checkpointId,
+      collected: filterKnownBifazIds(cleanBifazIds(source.collected, base.collected, 24), levelIds?.collected),
+      pulses: finiteBifazNumber(source.pulses, finiteBifazNumber(base.pulses, 3, 0, 3), 0, 3),
+      introSeen: source.introSeen === undefined ? Boolean(base.introSeen) : Boolean(source.introSeen),
+      complete: source.complete === undefined ? Boolean(base.complete) : Boolean(source.complete),
+      bestTime: source.bestTime != null && Number.isFinite(Number(source.bestTime))
+        ? Math.max(0, Number(source.bestTime))
+        : (base.bestTime != null && Number.isFinite(Number(base.bestTime)) ? Math.max(0, Number(base.bestTime)) : null),
+      deaths: finiteBifazNumber(source.deaths, finiteBifazNumber(base.deaths, 0, 0, 9999), 0, 9999),
+      rewarded,
+      rewardedChallenges,
+      assist: source.assist === undefined ? Boolean(base.assist) : Boolean(source.assist),
+      cameraX: finiteBifazNumber(source.cameraX, finiteBifazNumber(base.cameraX, 0, 0, 100000, false), 0, 100000, false),
+      missionTitle: cleanBifazText(source.missionTitle ?? mission.title, base.missionTitle || "EL PLIEGUE VIVO", 80),
+      missionObjective: cleanBifazText(
+        source.missionObjective ?? source.objective ?? mission.objective,
+        base.missionObjective || "Descubre los secretos de la Pradera Bifaz.",
+        160,
+      ),
+      missionProgress,
+      missionStage,
+      missionCount,
+      mission: {
+        version: finiteBifazNumber(mission.version, finiteBifazNumber(base.mission?.version, 1, 1, 99), 1, 99),
+        completed: missionCompleted,
+        currentIndex: finiteBifazNumber(mission.currentIndex, Math.max(0, missionStage - 1), 0, missionCount),
+      },
+      discoveries,
+      wildlifeDiscovered: [...discoveries],
+      wildlifeTotal: finiteBifazNumber(source.wildlifeTotal, finiteBifazNumber(base.wildlifeTotal, 6, 0, 64), 0, 64),
+      challengesCompleted: Math.max(completedChallenges.length, finiteBifazNumber(
+        source.challengesCompleted,
+        finiteBifazNumber(base.challengesCompleted, 0, 0, BIFAZ_CHALLENGE_IDS.length),
+        0,
+        challengeIds.length,
+      )),
+      completedChallenges,
+      challenges,
+      flipCombo,
+      bestFlipCombo,
+      flipComboTimer: finiteBifazNumber(
+        source.flipComboTimer,
+        finiteBifazNumber(base.flipComboTimer, 0, 0, 60, false),
+        0,
+        60,
+        false,
+      ),
+      flipsCompleted: finiteBifazNumber(
+        source.flipsCompleted,
+        finiteBifazNumber(base.flipsCompleted, 0, 0, 9999),
+        0,
+        9999,
+      ),
+      perfectLandings,
+      precisionLandingIds: precisionLandingSource === undefined ? undefined : filterKnownBifazIds(
+        cleanBifazIds(precisionLandingSource, [], 64),
+        levelIds?.precisionPlatforms || levelIds?.platforms,
+      ),
+      flipComboAnchorIds: flipComboAnchorSource === undefined ? undefined : filterKnownBifazIds(
+        cleanBifazIds(flipComboAnchorSource, [], 24),
+        levelIds?.anchors,
+      ),
+      flipStage: BIFAZ_FLIP_STAGES.includes(requestedFlipStage) ? requestedFlipStage : null,
+      paperFlow: finiteBifazNumber(source.paperFlow, finiteBifazNumber(base.paperFlow, 0, 0, 100, false), 0, 100, false),
+      flowTier,
+      flowLabel: cleanBifazText(source.flowLabel, BIFAZ_FLOW_LABELS[flowTier] || base.flowLabel || "CALMA", 32),
+      styleChain,
+      bestStyleChain: Math.max(styleChain, finiteBifazNumber(
+        source.bestStyleChain,
+        finiteBifazNumber(base.bestStyleChain, 0, 0, 999),
+        0,
+        999,
+      )),
+      rushTimer: finiteBifazNumber(source.rushTimer, finiteBifazNumber(base.rushTimer, 0, 0, 60, false), 0, 60, false),
+      paperRushes: finiteBifazNumber(source.paperRushes, finiteBifazNumber(base.paperRushes, 0, 0, 999), 0, 999),
+    };
+  };
+
   let state = defaultState();
+  let perspectiveZoneRuntime = null;
+  let perspectiveHudSignature = "";
+  let perspectiveA11ySignature = "";
+  let perspectiveExitPending = false;
+  let perspectivePaused = false;
+  const perspectiveFeedbackHistory = new Map();
+  let perspectiveFlowTierAnnounced = null;
+  let perspectiveFeedbackPending = null;
+  let perspectiveFeedbackFrame = null;
   let battle = null;
   let inputLocked = false;
   let dialogQueue = [];
@@ -842,6 +1334,9 @@
   let flashlightBurst = 0;
   let sprintScare = null;
   let sprintScareCooldown = 7;
+  let prismApparition = null;
+  let prismDangerStatus = "";
+  let prismFootstepSide = -1;
   let chaseMusicVolume = 0;
   let chasePlayPending = false;
   let breathingVolume = 0;
@@ -888,10 +1383,10 @@
   const input = {
     up: false, down: false, left: false, right: false,
     strafeLeft: false, strafeRight: false, run: false,
+    jumpHeld: false, jumpPressed: false, flipPressed: false, restartPressed: false,
   };
 
   const playerSheet = new Image();
-  const playerDiagonalSheet = new Image();
   const npcSheet = new Image();
   const guideNpcSheet = new Image();
   const npcRosterSheets = new Map();
@@ -910,6 +1405,28 @@
     colliders: (asset.colliders || []).map((collider) => [...collider]),
   })) : [];
   const interiorAssetsByScene = new Map();
+  const interiorGroundOverridesByScene = new Map();
+  const INTERIOR_FLOOR_SOURCES = Object.freeze({
+    "interior-oak-honey": "assets/interiors/pixellab-house/floors/oak-honey.png",
+    "interior-walnut-dark": "assets/interiors/pixellab-house/floors/walnut-dark.png",
+    "interior-parquet-herringbone": "assets/interiors/pixellab-house/floors/parquet-herringbone.png",
+    "interior-ceramic-cream": "assets/interiors/pixellab-house/floors/ceramic-cream.png",
+    "interior-ceramic-blue": "assets/interiors/pixellab-house/floors/ceramic-blue.png",
+    "interior-terracotta": "assets/interiors/pixellab-house/floors/terracotta.png",
+    "interior-stone-light": "assets/interiors/pixellab-house/floors/stone-light.png",
+    "interior-stone-dark": "assets/interiors/pixellab-house/floors/stone-dark.png",
+    "interior-laboratory-mint": "assets/interiors/pixellab-house/floors/laboratory-mint.png",
+    "interior-clinic-white": "assets/interiors/pixellab-house/floors/clinic-white.png",
+    "interior-carpet-beige": "assets/interiors/pixellab-house/floors/carpet-beige.png",
+    "interior-carpet-red": "assets/interiors/pixellab-house/floors/carpet-red.png",
+    "interior-wood-amber": "assets/interiors/pixellab-house/floors/wood-amber.png",
+    "interior-wood-farmhouse": "assets/interiors/pixellab-house/floors/wood-farmhouse.png",
+    "interior-kitchen-checker": "assets/interiors/pixellab-house/floors/kitchen-checker.png",
+    "interior-carpet-lavender": "assets/interiors/pixellab-house/floors/carpet-lavender.png",
+  });
+  const interiorFloorImages = new Map(Object.entries(INTERIOR_FLOOR_SOURCES).map(([type, source]) => {
+    const image = new Image(); image.src = source; return [type, image];
+  }));
   let runtimeEditorAssetSnapshot = cloneRuntimeRecord(initialEditorData);
   const initialAddedAssetIds = new Set((Array.isArray(initialEditorData.addedAssets) ? initialEditorData.addedAssets : [])
     .map((asset) => String(asset?.id || ""))
@@ -934,6 +1451,7 @@
   const MAP_UNLOAD_MARGIN = Number(CITY_MAP.unloadMargin) || 160;
   const MAP_UNLOAD_DELAY_MS = Number(CITY_MAP.unloadDelayMs) || 500;
   const shadowStalkerImage = new Image();
+  const prismPortalFragmentsImage = new Image();
   const itemImages = new Map();
   const pokemonArtworkImages = new Map();
   const horrorAudio = Object.fromEntries(Object.entries(HORROR_AUDIO_URLS).map(([key, url]) => {
@@ -956,7 +1474,6 @@
   let activeDialogMusicSource = null;
   const activeScareClips = new Set();
   let playerSheetReady = false;
-  let playerDiagonalSheetReady = false;
   let npcSheetReady = false;
   let guideNpcSheetReady = false;
   let cityMapPreviewReady = false;
@@ -1006,6 +1523,8 @@
     skipFragmentCinematic: $("#skipFragmentCinematic"),
     continueButton: $("#continueButton"), closeStarter: $("#closeStarter"), canvas: $("#worldCanvas"),
     assetNotice: $("#assetNotice"), runBadge: $("#runBadge"), interactPrompt: $("#interactPrompt"),
+    perspectiveGateGuide: $("#perspectiveGateGuide"), perspectiveGateGuideDistance: $("#perspectiveGateGuideDistance"),
+    perspectiveGateAnnouncer: $("#perspectiveGateAnnouncer"),
     areaToast: $("#areaToast"), flashOverlay: $("#flashOverlay"), areaName: $("#areaName"),
     trainerLevel: $("#trainerLevel"), ballCount: $("#ballCount"), caughtCount: $("#caughtCount"),
     questPill: $("#questPill"), dialogBox: $("#dialogBox"), dialogAvatar: $("#dialogAvatar"),
@@ -1058,7 +1577,28 @@
     gameCard: $("#gameCard"), fullscreenButton: $("#fullscreenButton"),
     mazeHud: $("#mazeHud"), lightCharges: $("#lightCharges"), shadowStatus: $("#shadowStatus"),
     mazeObjective: $("#mazeObjective"), noiseLabel: $("#noiseLabel"),
-    noiseMeter: $("#noiseMeter"), jumpScare: $("#jumpScare"), captureBadge: $("#captureBadge"),
+    noiseMeter: $("#noiseMeter"), prismStressMeter: $("#prismStressMeter"),
+    prismStressLabel: $("#prismStressLabel"), prismThreatLevel: $("#prismThreatLevel"),
+    prismEndingTracker: $("#prismEndingTracker"), prismWhisper: $("#prismWhisper"),
+    prismControlHint: $("#prismControlHint"), prismDangerAnnouncer: $("#prismDangerAnnouncer"),
+    prismFlashButton: $("#prismFlashButton"), prismAtmosphere: $("#prismAtmosphere"),
+    jumpScare: $("#jumpScare"), captureBadge: $("#captureBadge"),
+    perspectiveHud: $("#perspectiveHud"), perspectiveModeLabel: $("#perspectiveModeLabel"),
+    perspectivePulses: $("#perspectivePulses"), perspectiveSeals: $("#perspectiveSeals"),
+    perspectiveTimer: $("#perspectiveTimer"), perspectiveTutorial: $("#perspectiveTutorial"),
+    perspectiveMissionTitle: $("#perspectiveMissionTitle"), perspectiveMissionObjective: $("#perspectiveMissionObjective"),
+    perspectiveMissionProgress: $("#perspectiveMissionProgress"), perspectiveMissionProgressTrack: $("#perspectiveMissionProgressTrack"),
+    perspectiveMissionStage: $("#perspectiveMissionStage"), perspectiveMissionCount: $("#perspectiveMissionCount"),
+    perspectiveFlow: $("#perspectiveFlow"), perspectiveFlowTrack: $("#perspectiveFlowTrack"),
+    perspectiveFlowBar: $("#perspectiveFlowBar"), perspectiveFlowValue: $("#perspectiveFlowValue"),
+    perspectiveFlowTier: $("#perspectiveFlowTier"), perspectiveStyleChain: $("#perspectiveStyleChain"),
+    perspectiveBestStyleChain: $("#perspectiveBestStyleChain"),
+    perspectiveDiscoveries: $("#perspectiveDiscoveries"), perspectiveWildlifeTotal: $("#perspectiveWildlifeTotal"),
+    perspectiveFlipCombo: $("#perspectiveFlipCombo"), perspectiveBestFlipCombo: $("#perspectiveBestFlipCombo"),
+    perspectivePerfectLandings: $("#perspectivePerfectLandings"), perspectiveChallenges: $("#perspectiveChallenges"),
+    perspectiveAnchorLabel: $("#perspectiveAnchorLabel"), perspectiveAssistButton: $("#perspectiveAssistButton"),
+    perspectiveExitButton: $("#perspectiveExitButton"),
+    perspectiveTouchControls: $("#perspectiveTouchControls"), perspectiveAnnouncer: $("#perspectiveAnnouncer"),
     captureAreaName: $("#captureAreaName"), captureActivity: $("#captureActivity"),
     miniMap: $("#miniMap"), miniMapCanvas: $("#miniMapCanvas"), miniMapArea: $("#miniMapArea"),
     saveStatus: $("#saveStatus"), coordinateHud: $("#coordinateHud"),
@@ -1117,6 +1657,45 @@
     return value - Math.floor(value);
   }
 
+  function mazeCellDegree(grid, cell) {
+    return [[1,0],[-1,0],[0,1],[0,-1]]
+      .filter(([dx, dy]) => grid[cell.y + dy]?.[cell.x + dx] === 0).length;
+  }
+
+  function pickMazeExitCells(grid, cells, criticalPoints, goalDistance) {
+    const blocked = new Set(criticalPoints.map((point) => `${point.x},${point.y}`));
+    const deadEnds = cells.filter((cell) => cell.distance > goalDistance * .26
+      && !blocked.has(`${cell.x},${cell.y}`)
+      && mazeCellDegree(grid, cell) === 1);
+    const fallback = cells.filter((cell) => cell.distance > goalDistance * .2
+      && !blocked.has(`${cell.x},${cell.y}`));
+    const pool = deadEnds.length >= 3 ? deadEnds : fallback;
+    const selected = [];
+    const targets = [.34, .61, .79];
+    targets.forEach((target, index) => {
+      const targetDistance = goalDistance * target;
+      const candidate = pool
+        .filter((cell) => !selected.some((entry) => entry.x === cell.x && entry.y === cell.y))
+        .sort((a, b) => {
+          const separationPenalty = (cell) => selected.reduce((penalty, entry) => {
+            const distance = Math.abs(cell.x - entry.x) + Math.abs(cell.y - entry.y);
+            return penalty + Math.max(0, 8 - distance) * 2.4;
+          }, 0);
+          const scoreA = Math.abs(a.distance - targetDistance) + separationPenalty(a)
+            + seededRandom(a.x * 13 + a.y * 29 + index * 71) * .35;
+          const scoreB = Math.abs(b.distance - targetDistance) + separationPenalty(b)
+            + seededRandom(b.x * 13 + b.y * 29 + index * 71) * .35;
+          return scoreA - scoreB;
+        })[0];
+      if (candidate) selected.push(candidate);
+    });
+    return [
+      { id: "stalePotion", kind: "junk", reward: "stalePotions", ...selected[0] },
+      { id: "moldyBerry", kind: "junk", reward: "moldyBerries", ...selected[1] },
+      { id: "weakPokemon", kind: "battle", ...selected[2] },
+    ].filter((exit) => Number.isFinite(exit.x) && Number.isFinite(exit.y));
+  }
+
   function generateMaze(size = 21) {
     const grid = Array.from({ length: size }, () => Array(size).fill(1));
     const start = { x: 1, y: size - 2 };
@@ -1165,11 +1744,18 @@
     goalPath.reverse();
     const marketIndex = clamp(Math.round((goalPath.length - 1) * .42), 1, Math.max(1, goalPath.length - 2));
     const market = goalPath[marketIndex] || start;
+    const exits = pickMazeExitCells(
+      grid,
+      cells,
+      [start, goal, monster, market],
+      goal.distance,
+    );
     return {
       grid, size, start,
       goal: { x: goal.x, y: goal.y },
       monster: { x: monster.x, y: monster.y },
       market: { x: market.x, y: market.y },
+      exits: exits.map((exit) => ({ id: exit.id, kind: exit.kind, reward: exit.reward, x: exit.x, y: exit.y })),
     };
   }
 
@@ -1209,12 +1795,25 @@
         playerX: start.x + .5, playerY: start.y + .5, angle: firstOpenDirection(grid, start),
         lightCharges: 3, monsterX: monster.x + .5, monsterY: monster.y + .5,
         monsterRepel: 0, captures: 0, steps: 0, alertTimer: 0, marketReached: false,
+        timeInside: 0, recoveryTimer: 4, dread: 0, footstepDistance: 0,
+        heartbeatTimer: 0, ambienceTimer: 7, flicker: 0, flickerTimer: 5,
+        apparitionCooldown: 9, hintStage: 0,
       };
       shadowPath = []; shadowPathTimer = 0; sprintScare = null; sprintScareCooldown = 5;
-      quietStillTime = 0;
+      quietStillTime = 0; prismApparition = null; prismDangerStatus = "";
       mazeMotion.forward = 0; mazeMotion.strafe = 0; mazeMotion.turn = 0;
     }
     if (!Number.isFinite(state.maze.alertTimer)) state.maze.alertTimer = 0;
+    if (!Number.isFinite(state.maze.timeInside)) state.maze.timeInside = 0;
+    if (!Number.isFinite(state.maze.recoveryTimer)) state.maze.recoveryTimer = 0;
+    if (!Number.isFinite(state.maze.dread)) state.maze.dread = 0;
+    if (!Number.isFinite(state.maze.footstepDistance)) state.maze.footstepDistance = 0;
+    if (!Number.isFinite(state.maze.heartbeatTimer)) state.maze.heartbeatTimer = 0;
+    if (!Number.isFinite(state.maze.ambienceTimer)) state.maze.ambienceTimer = 7;
+    if (!Number.isFinite(state.maze.flicker)) state.maze.flicker = 0;
+    if (!Number.isFinite(state.maze.flickerTimer)) state.maze.flickerTimer = 5;
+    if (!Number.isFinite(state.maze.apparitionCooldown)) state.maze.apparitionCooldown = 9;
+    if (!Number.isFinite(state.maze.hintStage)) state.maze.hintStage = 0;
     return state.maze;
   }
 
@@ -1312,12 +1911,12 @@
     return clip;
   }
 
-  function updateChaseMusic(deltaSeconds, chasing) {
+  function updateChaseMusic(deltaSeconds, chasing, pressure = 0) {
     const music = horrorAudio.chase;
-    const target = state.sound && chasing && !jumpScareActive ? .46 : 0;
+    const target = state.sound && chasing && !jumpScareActive ? clamp(.3 + pressure * .22, .3, .52) : 0;
     const smoothing = 1 - Math.pow(target > chaseMusicVolume ? .012 : .0015, deltaSeconds);
     chaseMusicVolume += (target - chaseMusicVolume) * smoothing;
-    music.volume = clamp(chaseMusicVolume, 0, .46);
+    music.volume = clamp(chaseMusicVolume, 0, .52);
     if (target > 0 && music.paused && !chasePlayPending) {
       chasePlayPending = true;
       music.play().catch(() => {}).finally(() => { chasePlayPending = false; });
@@ -1661,7 +2260,7 @@
       voiceNpc.replyAt = now;
       updateVoiceNpcUi();
     }
-    const available = state.started && state.dimension === "san_pablo" && !state.interior && !doctorPotatoScene;
+    const available = !PERSPECTIVE_ZONE_ACTIVE && state.started && state.dimension === "san_pablo" && !state.interior && !doctorPotatoScene;
     if (!available || !voiceNpc.active) { voiceNpc.moving = false; return; }
     placeVoiceNpcNearPlayer();
     const dx = state.worldX - voiceNpc.x;
@@ -1695,6 +2294,69 @@
 
   function customPokemonAsset(id, view = "front") { return CUSTOM_POKEMON_ASSETS[id]?.[view] || null; }
   function prefersReducedMotion() { return Boolean(REDUCED_MOTION_QUERY?.matches); }
+  const perspectiveGateDiagnostics = { wayfinder: "", minimap: "" };
+  const setPerspectiveGateDiagnostic = (key, value) => {
+    if (perspectiveGateDiagnostics[key] === value) return;
+    perspectiveGateDiagnostics[key] = value;
+    document.documentElement.dataset[key === "wayfinder" ? "perspectiveGateWayfinder" : "perspectiveGateMinimap"] = value;
+  };
+  let perspectiveGateGuideSignature = "";
+  let perspectiveGateAnnouncementSignature = "";
+  function updatePerspectiveGateGuide() {
+    const guide = elements.perspectiveGateGuide;
+    if (!guide) return;
+    const hiddenContext = PERSPECTIVE_ZONE_ACTIVE || !state.started || state.dimension !== "san_pablo"
+      || Boolean(state.interior) || elements.worldScreen.classList.contains("hidden");
+    const gateEntrance = hiddenContext ? null : currentPerspectiveGate();
+    const gate = gateEntrance ? currentPerspectiveGatePosition() : null;
+    const hidden = hiddenContext || !gateEntrance || !gate;
+    if (hidden) {
+      if (perspectiveGateGuideSignature !== "hidden") {
+        guide.classList.add("hidden");
+        guide.setAttribute("aria-hidden", "true");
+        if (elements.perspectiveGateAnnouncer) elements.perspectiveGateAnnouncer.textContent = "";
+        document.documentElement.dataset.perspectiveGateGuide = "hidden";
+        perspectiveGateGuideSignature = "hidden";
+        perspectiveGateAnnouncementSignature = "hidden";
+      }
+      return;
+    }
+
+    const dx = gate.x - state.worldX;
+    const dy = gate.y - state.worldY;
+    const distanceToGate = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const arrows = ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"];
+    const directionWords = ["este", "sureste", "sur", "suroeste", "oeste", "noroeste", "norte", "noreste"];
+    const directionIndex = (Math.round(angle / (Math.PI / 4)) + arrows.length) % arrows.length;
+    const arrow = arrows[directionIndex];
+    const tilesAway = Math.max(0, Math.ceil(distanceToGate / CITY_MAP.tileSize));
+    const interaction = distanceToGate <= CITY_MAP.tileSize * 2.5 ? nearbyMapInteraction() : null;
+    const near = interaction?.id === "map_entrance"
+      && (interaction.entrance?.id === gateEntrance.id || interaction.entrance?.targetMap === "pradera-bifaz");
+    const distanceLabel = near ? `${arrow} YA ESTÁS AQUÍ · PULSA E` : `${arrow} A ${tilesAway} CASILLAS`;
+    const signature = `${directionIndex}:${tilesAway}:${near}`;
+    if (signature === perspectiveGateGuideSignature) return;
+
+    guide.classList.remove("hidden");
+    guide.setAttribute("aria-hidden", "false");
+    guide.dataset.near = String(near);
+    guide.dataset.direction = String(directionIndex);
+    guide.style.setProperty("--gate-direction", `${angle}rad`);
+    guide.setAttribute("aria-label", near
+      ? "Pabellón Bifaz, acceso delante; pulsa E"
+      : `Pabellón Bifaz, minijuego de perspectiva, ${tilesAway} casillas hacia el ${directionWords[directionIndex]}`);
+    if (elements.perspectiveGateGuideDistance) elements.perspectiveGateGuideDistance.textContent = distanceLabel;
+    const announcementSignature = near ? "near" : `${directionIndex}:${Math.ceil(tilesAway / 10)}`;
+    if (elements.perspectiveGateAnnouncer && announcementSignature !== perspectiveGateAnnouncementSignature) {
+      elements.perspectiveGateAnnouncer.textContent = near
+        ? "Pabellón Bifaz delante. Pulsa E para entrar al minijuego de perspectiva."
+        : `Pabellón Bifaz a ${tilesAway} casillas hacia el ${directionWords[directionIndex]}.`;
+      perspectiveGateAnnouncementSignature = announcementSignature;
+    }
+    document.documentElement.dataset.perspectiveGateGuide = near ? "near" : "visible";
+    perspectiveGateGuideSignature = signature;
+  }
   function moveDelivery(move) { return move?.delivery === "ranged" ? "ranged" : "melee"; }
   function customPokemonAnimation(id) { return SANPLEDEX_ANIMATION_ASSETS[Number(id)] || null; }
   function customPokemonAttackAnimation(id, variant = "melee") {
@@ -1869,7 +2531,7 @@
       const totalDeltaY = current.y - baselineAsset.y;
       const previousTotalDeltaX = previous.x - baselineAsset.x;
       const previousTotalDeltaY = previous.y - baselineAsset.y;
-      cityEntrances.filter((entrance) => entrance.linkedAssetId === asset.id).forEach((entrance) => {
+      cityEntrances.filter((entrance) => entrance.scene === "world" && entrance.linkedAssetId === asset.id).forEach((entrance) => {
         const trackingKey = `${asset.id}:${entrance.id}`;
         const entranceX = (entrance.col + .5) * CITY_MAP.tileSize;
         const entranceY = (entrance.row + .5) * CITY_MAP.tileSize;
@@ -1983,18 +2645,17 @@
   }
 
   function loadAssets() {
+    if (PERSPECTIVE_ZONE_ACTIVE) {
+      document.documentElement.dataset.cityMapReady = "true";
+      document.documentElement.dataset.navigationMaskReady = "runtime";
+      document.documentElement.dataset.encounterGrassReady = "runtime";
+      document.documentElement.dataset.pathTexturesReady = "unused";
+      document.documentElement.dataset.perspectiveAssetStrategy = "lazy-cull";
+      elements.assetNotice.classList.add("hidden");
+      return;
+    }
     playerSheet.onload = () => { buildPlayerFrames(); playerSheetReady = true; updateAssetNotice(); };
     playerSheet.onerror = () => { playerSheetReady = false; elements.assetNotice.textContent = "Personaje en modo alternativo"; };
-    playerDiagonalSheet.onload = () => {
-      playerDiagonalSheetReady = true;
-      document.documentElement.dataset.playerDiagonalSheetReady = "true";
-      if (playerSheetReady) buildPlayerFrames();
-    };
-    playerDiagonalSheet.onerror = () => {
-      playerDiagonalSheetReady = false;
-      document.documentElement.dataset.playerDiagonalSheetReady = "error";
-      console.warn("No se pudo cargar el sprite diagonal del protagonista.");
-    };
     npcSheet.onload = () => { npcSheetReady = true; };
     npcSheet.onerror = () => { npcSheetReady = false; };
     guideNpcSheet.onload = () => { guideNpcSheetReady = true; updateAssetNotice(); };
@@ -2037,8 +2698,6 @@
     shadowStalkerImage.onload = () => { shadowStalkerReady = true; };
     shadowStalkerImage.onerror = () => { shadowStalkerReady = false; };
     playerSheet.src = PLAYER_SHEET_URL;
-    playerDiagonalSheet.decoding = "async";
-    playerDiagonalSheet.src = PLAYER_DIAGONAL_SHEET_URL;
     npcSheet.src = NPC_SHEET_URL;
     guideNpcSheet.src = GUIDE_NPC_SHEET_URL;
     loadNpcRosterSprites();
@@ -2065,6 +2724,7 @@
     loadCityWorldAssets();
     updateMapTileStreaming();
     shadowStalkerImage.src = SHADOW_SPRITE_URL;
+    prismPortalFragmentsImage.src = PRISM_PORTAL_FRAGMENTS_URL;
     Object.values(horrorAudio).forEach((audio) => audio.load());
   }
 
@@ -2384,9 +3044,11 @@
     const parts = value.split(GROUND_LAYER_SEPARATOR);
     if (parts.length > 2) return null;
     const isBase = (entry) => Object.hasOwn(GROUND_PALETTE_INDEX, entry);
+    const isInterior = (entry) => Object.hasOwn(INTERIOR_FLOOR_SOURCES, entry);
     const isPath = (entry) => entry.startsWith(GROUND_PATH_PREFIX) && isBase(entry.slice(GROUND_PATH_PREFIX.length));
     if (parts.length === 1) {
       if (isBase(parts[0])) return { base: parts[0], path: null };
+      if (isInterior(parts[0])) return { base: parts[0], path: null };
       if (isPath(parts[0])) return { base: null, path: parts[0] };
       return null;
     }
@@ -2654,6 +3316,7 @@
   }
 
   function tileKey(col, row) { return `${col},${row}`; }
+  function sceneTileKey(scene, col, row) { return `${runtimeSceneId(scene)}|${tileKey(col, row)}`; }
 
   function setDefaultTileRect(type, rect) {
     const [startCol, startRow, endCol, endRow] = rect;
@@ -2683,15 +3346,16 @@
   function rebuildRuntimeEntityIndexes() {
     npcTileIndex = new Map();
     cityNpcs.filter((npc) => npc.enabled !== false).forEach((npc) => {
-      const key = tileKey(npc.col, npc.row);
+      const key = sceneTileKey(npc.scene, npc.col, npc.row);
       if (!npcTileIndex.has(key)) npcTileIndex.set(key, []);
       npcTileIndex.get(key).push(npc);
     });
     entranceTileIndex = new Map();
-    cityEntrances.forEach((entrance) => entranceTileIndex.set(tileKey(entrance.col, entrance.row), entrance));
+    cityEntrances.filter((entrance) => entrance.enabled !== false)
+      .forEach((entrance) => entranceTileIndex.set(sceneTileKey(entrance.scene, entrance.col, entrance.row), entrance));
     eventTileIndex = new Map();
     cityEvents.filter((event) => event.enabled !== false).forEach((event) => {
-      const key = tileKey(event.col, event.row);
+      const key = sceneTileKey(event.scene, event.col, event.row);
       if (!eventTileIndex.has(key)) eventTileIndex.set(key, []);
       eventTileIndex.get(key).push(event);
     });
@@ -2705,9 +3369,10 @@
     (CITY_MAP.blockedRects || []).forEach((rect) => setDefaultTileRect("blocked", rect));
     (CITY_MAP.encounterRects || []).forEach((rect) => setDefaultTileRect("encounter", rect));
     (CITY_MAP.encounterTiles || []).forEach(([col, row]) => defaultMapTiles.set(tileKey(col, row), "encounter"));
-    cityEvents.filter((event) => event.enabled !== false)
+    cityEvents.filter((event) => event.enabled !== false && String(event.scene || "world") === "world")
       .forEach((event) => defaultMapTiles.set(tileKey(event.col, event.row), "event"));
-    cityEntrances.forEach((entrance) => defaultMapTiles.set(tileKey(entrance.col, entrance.row), "door"));
+    cityEntrances.filter((entrance) => runtimeSceneId(entrance.scene) === "world" && entrance.enabled !== false)
+      .forEach((entrance) => defaultMapTiles.set(tileKey(entrance.col, entrance.row), "door"));
     rebuildRuntimeEntityIndexes();
   }
 
@@ -2718,11 +3383,31 @@
     });
   }
 
-  function applyRuntimeGroundOverrides(overrides = {}) {
+  function applyRuntimeGroundOverrides(overrides = {}, interiorOverrides = {}) {
     groundOverrides.clear();
     Object.entries(overrides && typeof overrides === "object" ? overrides : {}).forEach(([key, type]) => {
-      if (/^\d+,\d+$/.test(key) && isGroundPaintType(type)) groundOverrides.set(key, type);
+      if (/^\d+,\d+$/.test(key) && isGroundPaintType(type) && !String(type).startsWith("interior-")) groundOverrides.set(key, type);
     });
+    interiorGroundOverridesByScene.clear();
+    Object.entries(interiorOverrides && typeof interiorOverrides === "object" ? interiorOverrides : {}).forEach(([scene, entries]) => {
+      if (!/^[a-z0-9][a-z0-9_.:-]{0,63}$/i.test(scene) || !entries || typeof entries !== "object" || Array.isArray(entries)) return;
+      const tiles = new Map();
+      Object.entries(entries).forEach(([key, type]) => {
+        if (/^\d+,\d+$/.test(key) && INTERIOR_FLOOR_SOURCES[type]) tiles.set(key, type);
+      });
+      if (tiles.size) interiorGroundOverridesByScene.set(scene, tiles);
+    });
+  }
+
+  function interiorGroundOverridesForScene(scene, { create = false } = {}) {
+    const id = String(scene || "");
+    if (!id) return null;
+    if (create && !interiorGroundOverridesByScene.has(id)) interiorGroundOverridesByScene.set(id, new Map());
+    return interiorGroundOverridesByScene.get(id) || null;
+  }
+
+  function activeInteriorGroundOverrides() {
+    return interiorGroundOverridesForScene(currentInteriorSceneId()) || new Map();
   }
 
   function resizeRuntimeWorld(cols, rows) {
@@ -2745,7 +3430,10 @@
   function initializeMapTiles() {
     rebuildDefaultMapTiles();
     applyRuntimeTileOverrides(window.CITY_MAP_EDITOR_DATA?.tileOverrides || {});
-    applyRuntimeGroundOverrides(window.CITY_MAP_EDITOR_DATA?.groundOverrides || {});
+    applyRuntimeGroundOverrides(
+      window.CITY_MAP_EDITOR_DATA?.groundOverrides || {},
+      window.CITY_MAP_EDITOR_DATA?.interiorGroundOverrides || {},
+    );
   }
 
   function saveMapTiles() {
@@ -2813,7 +3501,7 @@
 
   function updateNpcPatrols(deltaSeconds) {
     if (!state.started || state.dimension !== "san_pablo" || state.interior || deltaSeconds <= 0) return;
-    cityNpcs.forEach((npc) => {
+    entitiesInScene(cityNpcs, "world").forEach((npc) => {
       const patrol = npcPatrolState(npc);
       if (!patrol) return;
       patrol.moving = false;
@@ -2833,7 +3521,7 @@
         const nextX = patrol.x + dx / distanceToTarget * travelled;
         const nextY = patrol.y + dy / distanceToTarget * travelled;
         if (segmentHitsPlayer(patrol.x, patrol.y, nextX, nextY)) return;
-        const blockedByNpc = cityNpcs.some((other) => {
+        const blockedByNpc = entitiesInScene(cityNpcs, "world").some((other) => {
           if (other.id === npc.id || other.solid === false) return false;
           const position = mapNpcPosition(other);
           return Math.hypot(nextX - position.x, nextY - position.y) < NPC_COLLISION_RADIUS;
@@ -2853,9 +3541,9 @@
   }
 
   function nearbyWorldNpc(maxDistance = 58) {
-    if (state.dimension !== "san_pablo" || state.interior) return null;
+    if (state.dimension !== "san_pablo" || (state.interior && state.interior !== "building")) return null;
     const player = { x: state.worldX, y: state.worldY };
-    return cityNpcs
+    return activeSceneNpcs()
       .map((npc) => ({ npc, position: mapNpcPosition(npc) }))
       .map((entry) => ({ ...entry, distance: distance(player, entry.position) }))
       .filter((entry) => entry.distance <= maxDistance)
@@ -2889,8 +3577,8 @@
     return candidates[0] || null;
   }
 
-  function worldNpcBlocksPosition(x, y) {
-    return cityNpcs.some((npc) => {
+  function worldNpcBlocksPosition(x, y, scene = currentRuntimeSceneId()) {
+    return entitiesInScene(cityNpcs, scene).some((npc) => {
       if (npc.solid === false) return false;
       const position = mapNpcPosition(npc);
       return Math.hypot(x - position.x, y - position.y) < NPC_COLLISION_RADIUS;
@@ -3111,12 +3799,26 @@
   }
 
   function entranceAt(col, row) {
-    return entranceTileIndex.get(tileKey(col, row)) || null;
+    return entranceTileIndex.get(sceneTileKey(currentRuntimeSceneId(), col, row)) || null;
   }
 
   function mapEventsAt(col, row, trigger = null) {
-    const events = eventTileIndex.get(tileKey(col, row)) || [];
-    return trigger ? events.filter((event) => event.trigger === trigger) : [...events];
+    const scene = state.interior === "building" ? currentInteriorSceneId() : "world";
+    const events = (eventTileIndex.get(sceneTileKey(scene, col, row)) || [])
+      .filter((event) => !event.requiresFlag || Boolean(state.eventFlags[event.requiresFlag]) === event.requiredFlagValue);
+    return trigger ? events.filter((event) => event.trigger === trigger) : events;
+  }
+
+  function nearbyMapEventInteraction() {
+    const offsets = { up: [0, -24], down: [0, 24], left: [-24, 0], right: [24, 0] };
+    const [offsetX, offsetY] = offsets[state.direction] || [0, 0];
+    const candidates = [worldToTile(state.worldX + offsetX, state.worldY + offsetY), worldToTile(state.worldX, state.worldY)];
+    for (const tile of candidates) {
+      const event = mapEventsAt(tile.col, tile.row, "interact")
+        .find((entry) => !entry.once || !state.triggeredEvents.includes(entry.id));
+      if (event) return { id: "map_event", type: "event", ...tile, event };
+    }
+    return null;
   }
 
   function nearbyMapInteraction() {
@@ -3124,7 +3826,7 @@
     const [offsetX, offsetY] = offsets[state.direction] || [0, 0];
     const candidates = [worldToTile(state.worldX + offsetX, state.worldY + offsetY), worldToTile(state.worldX, state.worldY)];
     for (const tile of candidates) {
-      const type = mapTileType(tile.col, tile.row);
+      const type = state.interior === "building" ? "walkable" : mapTileType(tile.col, tile.row);
       const entrance = entranceAt(tile.col, tile.row);
       if (entrance) return { id: "map_entrance", type: "door", ...tile, entrance };
       const configuredEvents = mapEventsAt(tile.col, tile.row);
@@ -3145,42 +3847,6 @@
     return canvas;
   }
 
-  function copyPlayerFrame(source, mirror = false) {
-    const canvas = createPlayerFrameCanvas();
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (mirror) {
-      context.save();
-      context.translate(SPRITE_CELL_SIZE, 0);
-      context.scale(-1, 1);
-      context.drawImage(source, 0, 0);
-      context.restore();
-    } else {
-      context.drawImage(source, 0, 0);
-    }
-    return canvas;
-  }
-
-  function lockPlayerFrameHead(frame, canonical) {
-    const context = frame.getContext("2d", { willReadFrequently: true });
-    context.clearRect(0, 0, SPRITE_CELL_SIZE, PLAYER_HEAD_LOCK_HEIGHT);
-    context.drawImage(canonical, 0, 0, SPRITE_CELL_SIZE, PLAYER_HEAD_LOCK_HEIGHT,
-      0, 0, SPRITE_CELL_SIZE, PLAYER_HEAD_LOCK_HEIGHT);
-  }
-
-  function replacePlayerFrameLegs(frame, oppositeStride, direction) {
-    const context = frame.getContext("2d", { willReadFrequently: true });
-    const masks = PLAYER_LEG_MASKS[direction];
-    masks.forEach((mask) => context.clearRect(mask.x, mask.y, mask.width, mask.height));
-    context.save();
-    context.beginPath();
-    masks.forEach((mask) => context.rect(mask.x, mask.y, mask.width, mask.height));
-    context.clip();
-    context.translate(SPRITE_CELL_SIZE, 0);
-    context.scale(-1, 1);
-    context.drawImage(oppositeStride, 0, 0);
-    context.restore();
-  }
-
   function resetPlayerAnimation() {
     animationFrame = 0;
     animationTime = 0;
@@ -3196,80 +3862,24 @@
     document.documentElement.dataset.playerVelocity = "0,0";
   }
 
-  function playerFramePixels(frame) {
-    return frame.getContext("2d", { willReadFrequently: true })
-      .getImageData(0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE).data;
-  }
-
-  function playerFrameRegionEqual(first, second, top = 0, bottom = SPRITE_CELL_SIZE) {
-    const firstPixels = playerFramePixels(first); const secondPixels = playerFramePixels(second);
-    for (let y = top; y < bottom; y += 1) {
-      for (let x = 0; x < SPRITE_CELL_SIZE; x += 1) {
-        const start = (y * SPRITE_CELL_SIZE + x) * 4;
-        for (let channel = 0; channel < 4; channel += 1) {
-          if (firstPixels[start + channel] !== secondPixels[start + channel]) return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  function playerFrameOutsideMasksEqual(first, second, masks, top = 0) {
-    const firstPixels = playerFramePixels(first); const secondPixels = playerFramePixels(second);
-    for (let y = top; y < SPRITE_CELL_SIZE; y += 1) {
-      for (let x = 0; x < SPRITE_CELL_SIZE; x += 1) {
-        const masked = masks.some((mask) => x >= mask.x && x < mask.x + mask.width
-          && y >= mask.y && y < mask.y + mask.height);
-        if (masked) continue;
-        const start = (y * SPRITE_CELL_SIZE + x) * 4;
-        for (let channel = 0; channel < 4; channel += 1) {
-          if (firstPixels[start + channel] !== secondPixels[start + channel]) return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  function playerFrameBottom(frame) {
-    const pixels = playerFramePixels(frame);
-    for (let y = SPRITE_CELL_SIZE - 1; y >= 0; y -= 1) {
-      for (let x = 0; x < SPRITE_CELL_SIZE; x += 1) {
-        if (pixels[(y * SPRITE_CELL_SIZE + x) * 4 + 3] > 0) return y;
-      }
-    }
-    return -1;
-  }
-
-  function playerSupportIoU(first, second) {
-    const firstPixels = playerFramePixels(first); const secondPixels = playerFramePixels(second);
-    let intersection = 0; let union = 0;
-    for (let x = 0; x < SPRITE_CELL_SIZE; x += 1) {
-      const pixel = (PLAYER_SUPPORT_ROW * SPRITE_CELL_SIZE + x) * 4 + 3;
-      const firstOpaque = firstPixels[pixel] > 0; const secondOpaque = secondPixels[pixel] > 0;
-      if (firstOpaque && secondOpaque) intersection += 1;
-      if (firstOpaque || secondOpaque) union += 1;
-    }
-    return union ? intersection / union : 1;
-  }
-
   function renderPlayerAnimationDebugAtlas() {
     if (!LOCAL_DEBUG_PLAYER_ATLAS) return;
     document.querySelector("#playerAnimationDebugAtlas")?.remove();
     const canvas = document.createElement("canvas");
     canvas.id = "playerAnimationDebugAtlas";
-    canvas.width = 512; canvas.height = 1024;
+    canvas.width = PLAYER_WALK_FRAME_COUNT * 128; canvas.height = 8 * 128;
     canvas.setAttribute("role", "img");
-    canvas.setAttribute("aria-label", "Atlas del protagonista con cuatro direcciones cardinales y cuatro diagonales");
+    canvas.setAttribute("aria-label", "Ciclo de caminar PixelLab del protagonista en ocho direcciones");
     canvas.style.cssText = "position:fixed;inset:50% auto auto 50%;width:auto;height:min(1024px,92vh);transform:translate(-50%,-50%);z-index:9999;border:4px solid #fff;background:#17212b;box-shadow:0 18px 60px rgba(0,0,0,.65);image-rendering:pixelated";
     const context = canvas.getContext("2d");
     context.imageSmoothingEnabled = false;
-    for (let row = 0; row < 16; row += 1) {
-      for (let col = 0; col < 8; col += 1) {
+    for (let row = 0; row < 8; row += 1) {
+      for (let col = 0; col < PLAYER_WALK_FRAME_COUNT; col += 1) {
         context.fillStyle = (row + col) % 2 ? "#263442" : "#1d2934";
-        context.fillRect(col * 64, row * 64, 64, 64);
+        context.fillRect(col * 128, row * 128, 128, 128);
       }
     }
-    ["down", "left", "right", "up", "down-left", "down-right", "up-left", "up-right"].forEach((direction, row) => {
+    Object.keys(PLAYER_DIRECTION_ROWS).forEach((direction, row) => {
       const frames = playerFrames.get(`walk-${direction}`) || [];
       frames.forEach((frame, column) => {
         context.drawImage(frame, column * 128, row * 128, 128, 128);
@@ -3283,6 +3893,33 @@
 
   function buildPlayerFrames() {
     playerFrames.clear();
+    const sourceWidth = playerSheet.naturalWidth / PLAYER_WALK_FRAME_COUNT;
+    const sourceHeight = playerSheet.naturalHeight / Object.keys(PLAYER_DIRECTION_ROWS).length;
+    Object.entries(PLAYER_DIRECTION_ROWS).forEach(([direction, row]) => {
+      const frames = Array.from({ length: PLAYER_WALK_FRAME_COUNT }, (_, index) => {
+        const canvas = createPlayerFrameCanvas();
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(
+          playerSheet,
+          index * sourceWidth, row * sourceHeight, sourceWidth, sourceHeight,
+          0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE,
+        );
+        return canvas;
+      });
+      playerFrames.set(`walk-${direction}`, frames);
+      playerFrames.set(`run-${direction}`, frames);
+    });
+    document.documentElement.dataset.playerAnimationSource = "pixellab:b96197cb-8527-4fdf-bd6d-d48c01c41804:walk";
+    document.documentElement.dataset.playerSpriteStandard = "64x64;8-directions;6-frame-walk";
+    document.documentElement.dataset.playerFrames = [...playerFrames]
+      .map(([name, frames]) => `${name}:${frames.length}`)
+      .join(",");
+    document.documentElement.dataset.playerDiagonalFrames = ["down-left", "down-right", "up-left", "up-right"]
+      .map((direction) => `${direction}:${playerFrames.get(`walk-${direction}`)?.length || 0}`)
+      .join(",");
+    renderPlayerAnimationDebugAtlas();
+    return;
+
     const directionRows = { down: 0, left: 1, right: 2, up: 3 };
     const rawFrames = new Map();
     Object.entries(directionRows).forEach(([direction, row]) => {
@@ -3534,7 +4171,7 @@
       if (["balls", "ultraBalls", "masterBalls"].includes(item.key)) {
         action = inventoryOpenedFromBattle ? "LANZAR" : "COMBATE";
         disabled = disabled || !inventoryOpenedFromBattle;
-      } else if (["potions", "maxPotions", "berries"].includes(item.key)) {
+      } else if (["potions", "maxPotions", "berries", "stalePotions", "moldyBerries"].includes(item.key)) {
         action = "USAR";
         disabled = disabled || !active || active.hp >= active.maxHp;
       } else if (item.key === "rareCandies") {
@@ -3547,7 +4184,7 @@
         action = "CLAVE";
         disabled = true;
       }
-      return `<article class="inventory-item ${count <= 0 ? "locked" : ""}">
+      return `<article class="inventory-item ${count <= 0 ? "locked" : ""} ${item.tainted ? "tainted" : ""}">
         <img src="${itemSpriteUrl(item.sprite)}" alt="${item.name}" draggable="false" />
         <div class="inventory-item-info"><div><strong>${item.name}</strong><b>× ${count}</b></div><p>${item.description}</p></div>
         <button type="button" data-inventory-use="${item.key}" ${disabled ? "disabled" : ""}>${action}</button>
@@ -3578,9 +4215,12 @@
 
     const active = activePokemon();
     if (!active) return;
-    if (["potions", "maxPotions", "berries"].includes(key)) {
+    if (["potions", "maxPotions", "berries", "stalePotions", "moldyBerries"].includes(key)) {
       if (active.hp >= active.maxHp) return;
-      const healing = key === "maxPotions" ? active.maxHp : key === "potions" ? 20 : 10;
+      const healing = key === "maxPotions" ? active.maxHp
+        : key === "potions" ? 20
+          : key === "berries" ? 10
+            : key === "moldyBerries" ? 2 : 1;
       const recovered = Math.min(healing, active.maxHp - active.hp);
       state.inventory[key] -= 1;
       active.hp = Math.min(active.maxHp, active.hp + healing);
@@ -3589,7 +4229,7 @@
       if (battle) {
         setBattleBusy(true); updateBattleHealth(); setBattleMessage(`¡${speciesOf(active).name} recuperó ${recovered} PS!`);
         await wait(800); await enemyTurn();
-      } else showAreaToast(`${speciesOf(active).name.toUpperCase()} RECUPERA ${recovered} PS`);
+      } else showAreaToast(`${speciesOf(active).name.toUpperCase()} RECUPERA ${recovered} PS${["stalePotions", "moldyBerries"].includes(key) ? " · QUÉ ASCO" : ""}`);
       return;
     }
 
@@ -3619,11 +4259,28 @@
     return { id, level, exp: 0, hp: maxHp, maxHp };
   }
 
+  function evolutionTargetFor(species) {
+    const branches = Array.isArray(species?.evolutionBranches)
+      ? species.evolutionBranches.filter((id) => POKEMON[id])
+      : [];
+    if (!branches.length) return species?.evolvesTo || null;
+    if (branches.length === 1) return branches[0];
+    const [firstId, secondId] = branches;
+    const first = POKEMON[firstId];
+    const second = POKEMON[secondId];
+    const chooseFirst = typeof window.confirm !== "function" || window.confirm(
+      `${species.name} puede seguir dos caminos.\n\nAceptar: ${first.name}\nCancelar: ${second.name}`,
+    );
+    return chooseFirst ? firstId : secondId;
+  }
+
   function evolvePokemonIfReady(member) {
     const evolutions = [];
     let species = speciesOf(member);
-    while (species?.evolvesTo && member.level >= species.evolveLevel && POKEMON[species.evolvesTo]) {
-      const nextSpecies = POKEMON[species.evolvesTo];
+    while (species?.evolveLevel && member.level >= species.evolveLevel) {
+      const targetId = evolutionTargetFor(species);
+      const nextSpecies = POKEMON[targetId];
+      if (!nextSpecies) break;
       evolutions.push({ from: species.name, to: nextSpecies.name, fromId: species.id, toId: nextSpecies.id });
       const hpDelta = nextSpecies.baseHp - species.baseHp;
       member.maxHp = Math.max(1, member.maxHp + hpDelta);
@@ -3694,6 +4351,17 @@
       next.doctorPotatoIntroPending = Boolean(saved.doctorPotatoIntroPending) && !next.doctorPotatoIntroSeen;
       next.fragmentCinematicSeen = Boolean(saved.fragmentCinematicSeen);
       next.inventory = { ...defaultState().inventory, ...(saved.inventory || {}) };
+      const savedPrismProgress = saved.prismProgress && typeof saved.prismProgress === "object"
+        ? saved.prismProgress
+        : {};
+      next.prismProgress = {
+        endings: Array.isArray(savedPrismProgress.endings)
+          ? [...new Set(savedPrismProgress.endings.filter((id) => PRISM_ENDING_IDS.includes(id)))]
+          : [],
+      };
+      if (saved.secretPokemonSaved && !next.prismProgress.endings.includes("rarePokemon")) {
+        next.prismProgress.endings.push("rarePokemon");
+      }
       const defaultBlackMarket = defaultState().blackMarket;
       const savedBlackMarket = saved.blackMarket && typeof saved.blackMarket === "object" ? saved.blackMarket : {};
       const savedBlackMarketPurchases = savedBlackMarket.purchases && typeof savedBlackMarket.purchases === "object"
@@ -3708,10 +4376,17 @@
       Object.entries(BLACK_MARKET_LIMITS).forEach(([key, limit]) => {
         next.blackMarket.purchases[key] = clamp(Math.floor(Number(savedBlackMarketPurchases[key]) || 0), 0, limit);
       });
+      const savedPerspective = saved.perspectiveZone && typeof saved.perspectiveZone === "object"
+        ? saved.perspectiveZone
+        : {};
+      next.perspectiveZone = normalizeBifazProgress(savedPerspective);
       next.collectedObjects = Array.isArray(saved.collectedObjects) ? [...new Set(saved.collectedObjects)] : [];
       next.triggeredEvents = Array.isArray(saved.triggeredEvents)
         ? [...new Set(saved.triggeredEvents.filter((id) => typeof id === "string").slice(0, 500))]
         : [];
+      next.eventFlags = saved.eventFlags && typeof saved.eventFlags === "object" && !Array.isArray(saved.eventFlags)
+        ? Object.fromEntries(Object.entries(saved.eventFlags).filter(([key, value]) => runtimeEntityId(key) === key && typeof value === "boolean").slice(0, 200))
+        : {};
       next.secretPokemonId = normalizeMonsterId(saved.secretPokemonId);
       next.interior = saved.interior === "maintenance" ? "maintenance" : null;
       next.interiorData = null;
@@ -3746,7 +4421,7 @@
         next.worldY = LOCAL_DEBUG_SPAWN.y;
         next.direction = LOCAL_DEBUG_SPAWN.direction;
       }
-      if (next.dimension === "san_pablo" && !next.interior && !cityMapCanOccupy(next.worldX, next.worldY)) {
+      if (!PERSPECTIVE_ZONE_ACTIVE && next.dimension === "san_pablo" && !next.interior && !cityMapCanOccupy(next.worldX, next.worldY)) {
         next.worldX = NORMAL_START.x;
         next.worldY = NORMAL_START.y;
         next.direction = NORMAL_START.direction;
@@ -3755,7 +4430,7 @@
       next.activeTeamIndex = clamp(Number(saved.activeTeamIndex) || 0, 0, Math.max(0, next.team.length - 1));
       state = next;
       state.team.forEach((member) => evolvePokemonIfReady(member));
-      updateMapTileStreaming();
+      if (!PERSPECTIVE_ZONE_ACTIVE) updateMapTileStreaming();
       camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, currentWorldWidth() - VIEW_WIDTH);
       camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, currentWorldHeight() - VIEW_HEIGHT);
       return state.started && state.team.length > 0;
@@ -3949,7 +4624,8 @@
     requestGameFullscreen();
     if (!loadGame()) return;
     showWorld();
-    beginWorldEvents(() => showAreaToast("CIUDAD POKÉMON"));
+    if (PERSPECTIVE_ZONE_ACTIVE) showAreaToast("PRADERA BIFAZ · DIORAMA");
+    else beginWorldEvents(() => showAreaToast("CIUDAD POKÉMON"));
   }
 
   function showWorld() {
@@ -3957,10 +4633,14 @@
     elements.starterIntroScreen.classList.add("hidden");
     elements.battleScreen.classList.add("hidden");
     elements.worldScreen.classList.remove("hidden");
-    elements.buildingEditorButton.disabled = state.dimension === "prism" || Boolean(state.interior && state.interior !== "building");
+    elements.buildingEditorButton.disabled = PERSPECTIVE_ZONE_ACTIVE || state.dimension === "prism" || Boolean(state.interior && state.interior !== "building");
     elements.worldScreen.classList.toggle("maze-mode", state.dimension === "prism");
+    elements.worldScreen.classList.toggle("perspective-mode", PERSPECTIVE_ZONE_ACTIVE);
     elements.mazeHud.classList.toggle("hidden", state.dimension !== "prism");
-    if (VOICE_NPC_ENABLED && state.dimension === "san_pablo" && !state.interior) placeVoiceNpcNearPlayer();
+    elements.perspectiveHud?.classList.toggle("hidden", !PERSPECTIVE_ZONE_ACTIVE);
+    elements.perspectiveTouchControls?.classList.toggle("hidden", !PERSPECTIVE_ZONE_ACTIVE);
+    if (PERSPECTIVE_ZONE_ACTIVE) ensurePerspectiveZoneRuntime();
+    if (VOICE_NPC_ENABLED && !PERSPECTIVE_ZONE_ACTIVE && state.dimension === "san_pablo" && !state.interior) placeVoiceNpcNearPlayer();
     renderHud();
     if (state.started) startBackgroundMusic();
   }
@@ -3983,8 +4663,10 @@
       "Visita el Centro de Salud (C18, F21)",
       "¡Objetivo cumplido! Sigue explorando",
     ];
-    let objective = objectives[clamp(state.questStage, 0, 4)];
-    let completed = state.questStage >= 4;
+    let objective = PERSPECTIVE_ZONE_ACTIVE
+      ? "Reúne 3 Sellos y abre la Puerta Bifaz"
+      : objectives[clamp(state.questStage, 0, 4)];
+    let completed = PERSPECTIVE_ZONE_ACTIVE ? Boolean(state.perspectiveZone?.complete) : state.questStage >= 4;
     elements.questPill.querySelector("strong").textContent = objective;
     elements.questPill.querySelector(":scope > span").textContent = completed ? "✓" : "!";
     renderTeam();
@@ -4269,7 +4951,7 @@
   function nearestOpenCityTarget(targetX, targetY) {
     const x = clamp(Number(targetX), 16, WORLD_WIDTH - 16);
     const y = clamp(Number(targetY), 16, WORLD_HEIGHT - 16);
-    if (cityMapCanOccupy(x, y) && !worldNpcBlocksPosition(x, y)) return { x, y };
+    if (cityMapCanOccupy(x, y) && !worldNpcBlocksPosition(x, y, "world")) return { x, y };
     const origin = worldToTile(x, y);
     for (let radius = 1; radius <= 8; radius += 1) {
       const candidates = [];
@@ -4278,7 +4960,7 @@
           if (Math.max(Math.abs(colOffset), Math.abs(rowOffset)) !== radius) continue;
           const candidateX = (origin.col + colOffset + .5) * CITY_MAP.tileSize;
           const candidateY = (origin.row + rowOffset + .5) * CITY_MAP.tileSize;
-          if (cityMapCanOccupy(candidateX, candidateY) && !worldNpcBlocksPosition(candidateX, candidateY)) {
+          if (cityMapCanOccupy(candidateX, candidateY) && !worldNpcBlocksPosition(candidateX, candidateY, "world")) {
             candidates.push({ x: candidateX, y: candidateY, distance: Math.hypot(candidateX - x, candidateY - y) });
           }
         }
@@ -4295,7 +4977,7 @@
   function mapNavigationUrl(mapId) {
     const url = new URL(window.location.href);
     url.searchParams.set("map", mapId);
-    ["debugSpawn", "debugBattle", "debugPrism", "debugVoice"].forEach((key) => url.searchParams.delete(key));
+    ["debugSpawn", "debugBattle", "debugPrism", "debugPerspective", "debugVoice"].forEach((key) => url.searchParams.delete(key));
     return url.href;
   }
 
@@ -4312,7 +4994,15 @@
     state.worldY = destination.y;
     state.direction = direction;
     saveGame();
-    try { window.sessionStorage.setItem("pokemon-map-transfer-resume", target.id); } catch { /* opcional */ }
+    try {
+      window.sessionStorage.setItem("pokemon-map-transfer-resume", target.id);
+      window.sessionStorage.setItem("pokemon-map-transfer-destination", JSON.stringify({
+        mapId: target.id,
+        x: destination.x,
+        y: destination.y,
+        direction,
+      }));
+    } catch { /* opcional */ }
     window.location.assign(mapNavigationUrl(target.id));
     return true;
   }
@@ -4362,11 +5052,28 @@
       camera.x = clamp(destination.x - VIEW_WIDTH / 2, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
       camera.y = clamp(destination.y - VIEW_HEIGHT / 2, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
       lastArea = "";
-      lastStepEventTile = tileKey(worldToTile(destination.x, destination.y).col, worldToTile(destination.x, destination.y).row);
+      lastStepEventTile = `world|${tileKey(worldToTile(destination.x, destination.y).col, worldToTile(destination.x, destination.y).row)}`;
     });
     updateAreaLabel();
     updateInteractPrompt();
     if (persist) saveGame();
+    return true;
+  }
+
+  function eventPickupCount(event) {
+    if (event.itemKind === "balls") return state.balls;
+    if (event.itemKind === "money") return state.money;
+    return Math.max(0, Number(state.inventory[event.itemKind]) || 0);
+  }
+
+  function grantEventPickup(event) {
+    const pickupId = `event:${event.id}`;
+    if (state.collectedObjects.includes(pickupId)) return false;
+    state.collectedObjects.push(pickupId);
+    if (event.itemKind === "balls") state.balls += event.amount;
+    else if (event.itemKind === "money") state.money += event.amount;
+    else state.inventory[event.itemKind] = eventPickupCount(event) + event.amount;
+    renderHud();
     return true;
   }
 
@@ -4392,9 +5099,36 @@
     clearDirectionalInput();
     let completed = true;
     try {
-      if (event.type === "thought" || event.type === "dialogue") {
+      if (["thought", "dialogue", "computer", "letter"].includes(event.type)) {
         const thought = event.type === "thought";
-        await showDialogAsync(mapEventMessages(event), thought ? "…" : (event.label || "N").charAt(0), thought ? {} : { speaker: event.label });
+        const avatar = event.type === "computer" ? "PC" : event.type === "letter" ? "✉" : thought ? "…" : (event.label || "N").charAt(0);
+        const speaker = event.type === "computer" ? (event.label || "PC") : event.type === "letter" ? (event.label || "Carta") : event.label;
+        await showDialogAsync(mapEventMessages(event), avatar, thought ? {} : { speaker });
+      } else if (event.type === "pickup") {
+        const pickupId = `event:${event.id}`;
+        if (!preview && state.collectedObjects.includes(pickupId)) {
+          await showDialogAsync(["No queda nada que recoger."], "·");
+        } else {
+          if (!preview) grantEventPickup(event);
+          playJingle(event.jingle || "success");
+          const itemName = event.itemName || "Objeto";
+          const lines = mapEventHasMessage(event) ? mapEventMessages(event) : [`Has obtenido ${itemName} × ${event.amount}.`];
+          await showDialogAsync(lines, "!", { speaker: itemName });
+        }
+      } else if (event.type === "heal") {
+        if (!preview) state.team.forEach((member) => { member.hp = member.maxHp; });
+        playJingle("success");
+        await showDialogAsync(mapEventHasMessage(event) ? mapEventMessages(event) : ["Tu equipo ha recuperado toda su energía."], "+", { speaker: event.label || "Descanso" });
+        if (!preview) renderHud();
+      } else if (event.type === "switch") {
+        const nextValue = !Boolean(state.eventFlags[event.flag]);
+        if (!preview) state.eventFlags[event.flag] = nextValue;
+        playTone(nextValue ? 660 : 330, .12, "square", .03);
+        const stateLabel = nextValue ? "ACTIVADO" : "DESACTIVADO";
+        await showDialogAsync(mapEventHasMessage(event) ? [...mapEventMessages(event), stateLabel] : [`${event.label || "Interruptor"}: ${stateLabel}.`], "◉");
+      } else if (event.type === "sound") {
+        playJingle(event.jingle);
+        if (mapEventHasMessage(event)) await showDialogAsync(mapEventMessages(event), "♫", { speaker: event.label || "Sonido" });
       } else if (event.type === "vibration") {
         await playWorldVibration(event.duration, event.intensity);
         if (mapEventHasMessage(event)) {
@@ -4427,6 +5161,8 @@
       if (completed && !preview && event.once && !state.triggeredEvents.includes(event.id)) {
         state.triggeredEvents.push(event.id);
         saveGame();
+      } else if (completed && !preview && ["pickup", "heal", "switch"].includes(event.type)) {
+        saveGame();
       }
       return completed;
     } finally {
@@ -4437,9 +5173,9 @@
   }
 
   function triggerStepMapEvent() {
-    if (state.dimension !== "san_pablo" || state.interior || mapEventRunning) return false;
+    if (state.dimension !== "san_pablo" || (state.interior && state.interior !== "building") || mapEventRunning) return false;
     const tile = worldToTile(state.worldX, state.worldY);
-    const key = tileKey(tile.col, tile.row);
+    const key = `${state.interior === "building" ? currentInteriorSceneId() : "world"}|${tileKey(tile.col, tile.row)}`;
     if (key === lastStepEventTile) return false;
     lastStepEventTile = key;
     const event = mapEventsAt(tile.col, tile.row, "step")
@@ -4636,8 +5372,13 @@
     }
     if (state.interior === "building") {
       const player = { x: state.worldX, y: state.worldY };
-      if (distance(player, INDOOR_NPC) <= INDOOR_NPC.radius) return { id: "interior_npc" };
-      if (distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
+      const event = nearbyMapEventInteraction();
+      if (event) return event;
+      const npc = nearbyWorldNpc();
+      if (npc) return { id: "world_npc", npc: npc.npc };
+      const entrance = nearbyMapInteraction();
+      if (entrance?.id === "map_entrance") return entrance;
+      if (!hasCustomInteriorEntrance() && distance(player, INDOOR_EXIT) <= INDOOR_EXIT.radius) return { id: "interior_exit" };
       return null;
     }
     if (state.interior === "route") {
@@ -4652,6 +5393,9 @@
       if (market && Math.hypot(maze.playerX - (market.x + .5), maze.playerY - (market.y + .5)) < .9) {
         return { id: "black_market" };
       }
+      const prismExit = (mazeDefinition.exits || []).find((exit) =>
+        Math.hypot(maze.playerX - (exit.x + .5), maze.playerY - (exit.y + .5)) < .9);
+      if (prismExit) return { id: "prism_decoy_exit", exit: prismExit };
       return Math.hypot(maze.playerX - (start.x + .5), maze.playerY - (start.y + .5)) < .85
         ? { id: "dimension_exit" }
         : null;
@@ -4688,15 +5432,23 @@
       map_event: "Interactuar",
       building_door: "Entrar al edificio", maintenance_exit: "Volver al exterior",
       maintenance_terminal: "Usar terminal", dimension_portal: "Examinar portal",
-      dimension_exit: "Regresar a San Pablo", black_market: "Entrar al mercado negro", health: "Hablar", cafe: "Hablar",
+      dimension_exit: "Regresar a San Pablo", prism_decoy_exit: "Cruzar el umbral", black_market: "Entrar al mercado negro", health: "Hablar", cafe: "Hablar",
       uned: "Consultar", school: "Leer", field: "Examinar",
       interior_npc: "Hablar", world_npc: "Hablar", voice_npc: "Hablar con Manolín", interior_exit: "Salir",
       world_blocker: "Examinar obstáculo",
     };
     const entranceAction = poi.entrance?.action;
+    const eventLabels = {
+      computer: "Leer PC", letter: "Abrir carta", pickup: "Coger objeto", heal: "Descansar",
+      switch: "Usar interruptor", sound: "Escuchar",
+    };
     const label = poi.entrance?.prompt
+      || (poi.id === "prism_decoy_exit" && poi.exit?.kind === "battle" ? "Tocar la figura inmóvil" : null)
+      || (poi.id === "prism_decoy_exit" ? "Abrir la salida deformada" : null)
+      || (entranceAction === "exit" ? "Salir" : null)
       || (entranceAction === "prism" ? "Examinar portal" : null)
       || (entranceAction === "closed" ? "Examinar entrada" : null)
+      || eventLabels[poi.event?.type]
       || labels[poi.id]
       || "Interactuar";
     elements.interactPrompt.innerHTML = "<kbd>E</kbd> ";
@@ -4704,6 +5456,14 @@
   }
 
   function areaForPosition(x, y) {
+    if (PERSPECTIVE_ZONE_ACTIVE) {
+      if (x < 900) return "Pradera Bifaz · Umbral Diorama";
+      if (x < 1750) return "Pradera Bifaz · Toldos Paralelos";
+      if (x < 2900) return "Pradera Bifaz · Patio Acordeón";
+      if (x < 3900) return "Pradera Bifaz · Barranco de Canto";
+      if (x < 4750) return "Pradera Bifaz · Tejados";
+      return "Pradera Bifaz · Puerta del Pliegue";
+    }
     if (state.interior === "maintenance") return "Sala de mantenimiento";
     if (state.interior === "building") return state.interiorData?.label || "Interior";
     if (state.interior === "route") return currentEncounterZone() ? "Ruta Silvestre · Hierba" : "Ruta Silvestre";
@@ -4778,7 +5538,9 @@
     if (poi.id === "map_tile" || poi.id === "map_entrance") {
       const door = poi.entrance || poi.event;
       if (!door) { showDialog([`Evento en C${poi.col}, F${poi.row}.`], "!"); return; }
-      if (door.action === "closed") {
+      if (door.action === "exit") {
+        void leaveInterior();
+      } else if (door.action === "closed") {
         showDialog([`${door.label}: La puerta está cerrada por ahora.`], "!");
       } else if (door.action === "prism") {
         if (state.inventory.prismShards < 3) {
@@ -4833,7 +5595,6 @@
       showDialog(lines, "!");
       return;
     }
-    if (poi.id === "interior_npc") { useInteriorNpc(); return; }
     if (poi.id === "interior_exit") { leaveInterior(); return; }
 
     if (poi.id === "building_door") {
@@ -4874,6 +5635,11 @@
 
     if (poi.id === "black_market") {
       openBlackMarket();
+      return;
+    }
+
+    if (poi.id === "prism_decoy_exit") {
+      activatePrismExit(poi.exit);
       return;
     }
 
@@ -4966,7 +5732,8 @@
     const r = INDOOR_ROOM;
     if (!(x > r.x + r.wall && x < r.x + r.w - r.wall && y > r.y + r.wall && y < r.y + r.h - r.wall)) return false;
     return !activeInteriorAssets().some((asset) => asset.solid !== false
-      && worldAssetColliderRects(asset).some((rect) => circleIntersectsRect(x, y, 14, rect)));
+      && worldAssetColliderRects(asset).some((rect) => circleIntersectsRect(x, y, 14, rect)))
+      && !worldNpcBlocksPosition(x, y);
   }
 
   function stableInteriorSceneId(type, door) {
@@ -4982,6 +5749,30 @@
 
   function currentInteriorSceneId() {
     return state.interior === "building" ? String(state.interiorData?.scene || "") : "";
+  }
+
+  function currentRuntimeSceneId() {
+    return currentInteriorSceneId() || "world";
+  }
+
+  function currentPresenceSceneId() {
+    return currentInteriorSceneId() || state.interior || null;
+  }
+
+  function entitiesInScene(records, scene = currentRuntimeSceneId()) {
+    return records.filter((record) => runtimeSceneId(record?.scene) === scene && record.enabled !== false);
+  }
+
+  function activeSceneNpcs() {
+    return entitiesInScene(cityNpcs);
+  }
+
+  function activeSceneEntrances() {
+    return entitiesInScene(cityEntrances);
+  }
+
+  function hasCustomInteriorEntrance() {
+    return state.interior === "building" && activeSceneEntrances().length > 0;
   }
 
   function activeInteriorAssets() {
@@ -5011,11 +5802,17 @@
       /* Las salas están diseñadas exactamente para el viewport 960×624. */
       camera.x = 0;
       camera.y = 0;
+      selectedMapTile = null;
+      selectedEditorEntity = null;
+      selectedEditorEntities = [];
+      selectedEditorAssetId = null;
+      editorOverlayDirty = true;
       lastArea = "";
       elements.buildingEditorButton.disabled = type === "route";
       closeBuildingEditorPanel();
     });
     inputLocked = false;
+    document.dispatchEvent(new CustomEvent("map-editor-player-presence-change"));
     playTone(330, .08, "square", .025);
     updateAreaLabel(); updateInteractPrompt(); saveGame();
     showAreaToast((state.interiorData?.label || "Interior").toUpperCase());
@@ -5033,10 +5830,16 @@
       state.interiorData = null;
       camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
       camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
+      selectedMapTile = null;
+      selectedEditorEntity = null;
+      selectedEditorEntities = [];
+      selectedEditorAssetId = null;
+      editorOverlayDirty = true;
       lastArea = "";
       elements.buildingEditorButton.disabled = false;
     });
     inputLocked = false;
+    document.dispatchEvent(new CustomEvent("map-editor-player-presence-change"));
     playTone(440, .08, "square", .025);
     updateAreaLabel(); updateInteractPrompt(); saveGame();
     showAreaToast("CIUDAD POKÉMON");
@@ -5145,6 +5948,8 @@
     maze.marketReached = true;
     maze.monsterRepel = Math.max(maze.monsterRepel, 5);
     maze.alertTimer = 0;
+    maze.recoveryTimer = Math.max(maze.recoveryTimer, 4);
+    maze.dread = Math.min(maze.dread, .12);
     shadowPath = []; shadowPathTimer = 0;
     const firstVisit = !state.blackMarket.discovered;
     state.blackMarket.discovered = true;
@@ -5206,6 +6011,47 @@
     else interact();
   }
 
+  function registerPrismEnding(id) {
+    if (!PRISM_ENDING_IDS.includes(id)) return false;
+    if (!state.prismProgress || typeof state.prismProgress !== "object") state.prismProgress = { endings: [] };
+    if (!Array.isArray(state.prismProgress.endings)) state.prismProgress.endings = [];
+    const isNew = !state.prismProgress.endings.includes(id);
+    if (isNew) state.prismProgress.endings.push(id);
+    updatePrismEndingHud();
+    return isNew;
+  }
+
+  function resetPrismVisualState() {
+    ["--prism-danger", "--prism-noise", "--prism-bob", "--prism-sway", "--prism-flicker"]
+      .forEach((property) => elements.worldScreen.style.removeProperty(property));
+    elements.worldScreen.classList.remove("prism-chase", "prism-flicker", "prism-safe");
+    document.documentElement.dataset.prismThreat = "0";
+    prismApparition = null;
+    prismDangerStatus = "";
+  }
+
+  function activatePrismExit(exit) {
+    if (!exit || state.dimension !== "prism" || battle || inputLocked) return;
+    if (exit.kind === "battle") {
+      startPrismExitBattle(exit);
+      return;
+    }
+    const endingId = exit.id === "moldyBerry" ? "moldyBerry" : "stalePotion";
+    const inventoryKey = endingId === "moldyBerry" ? "moldyBerries" : "stalePotions";
+    const itemName = endingId === "moldyBerry" ? "Baya Mohosa" : "Poción Caducada";
+    const firstDiscovery = registerPrismEnding(endingId);
+    if (firstDiscovery) state.inventory[inventoryKey] = (Number(state.inventory[inventoryKey]) || 0) + 1;
+    saveGame();
+    const discoveryLine = firstDiscovery
+      ? `Dentro solo hay una ${itemName}. La guardas, aunque parece prácticamente inútil.`
+      : `La misma ${itemName} te espera al otro lado. Esta vez no la tocas.`;
+    showDialog([
+      "La puerta se abre hacia un pasillo demasiado corto. Huele a humedad y medicamento viejo.",
+      discoveryLine,
+      "Al levantar la vista, ya estás cayendo fuera de la Dimensión Prisma.",
+    ], endingId === "moldyBerry" ? "☣" : "×", leavePrismDimension);
+  }
+
   async function enterPrismDimension() {
     const noiseMode = await requestMicrophoneAccess();
     state.returnPosition = { x: state.worldX, y: state.worldY };
@@ -5226,6 +6072,8 @@
     elements.worldScreen.classList.add("maze-mode");
     elements.mazeHud.classList.remove("hidden");
     if (elements.noiseLabel) elements.noiseLabel.textContent = noiseMode === "microphone" ? "MICRÓFONO" : "MOVIMIENTO";
+    updatePrismEndingHud();
+    setPrismWhisper("Hay cuatro formas de despertar. Ninguna parece honesta.");
     playJingle("capture");
     renderHud(); saveGame();
     const objective = state.secretPokemonSaved
@@ -5245,6 +6093,7 @@
   function leavePrismDimension() {
     closeShop();
     stopMicrophone();
+    resetPrismVisualState();
     const destination = state.returnPosition || currentPortalReturn();
     state.dimension = "san_pablo";
     state.worldX = destination.x;
@@ -5257,13 +6106,15 @@
     elements.buildingEditorButton.disabled = false;
     elements.worldScreen.classList.remove("maze-mode");
     elements.mazeHud.classList.add("hidden");
+    elements.battleScreen.classList.remove("prism-exit-battle");
     playJingle("success");
-    renderHud(); saveGame(); showAreaToast("SAN PABLO · SEVILLA");
+    renderHud(); updateAreaLabel(); updateInteractPrompt(); saveGame(); showAreaToast("SAN PABLO · SEVILLA");
   }
 
   function clearDirectionalInput() {
     input.up = false; input.down = false; input.left = false; input.right = false;
     input.strafeLeft = false; input.strafeRight = false; input.run = false;
+    input.jumpHeld = false; input.jumpPressed = false; input.flipPressed = false; input.restartPressed = false;
     resetPlayerMotion();
   }
 
@@ -5300,6 +6151,169 @@
       const [x, y] = key.split(",").map(Number); path.push({ x, y }); key = previous.get(key);
     }
     return path.reverse();
+  }
+
+  function updatePrismEndingHud() {
+    if (!elements.prismEndingTracker) return;
+    const endings = new Set(state.prismProgress?.endings || []);
+    if (state.secretPokemonSaved) endings.add("rarePokemon");
+    const symbols = { rarePokemon: "◇", stalePotion: "×", moldyBerry: "☣", weakPokemon: "!" };
+    elements.prismEndingTracker.querySelectorAll("[data-ending]").forEach((marker) => {
+      const found = endings.has(marker.dataset.ending);
+      marker.classList.toggle("found", found);
+      marker.textContent = found ? symbols[marker.dataset.ending] || "◆" : "?";
+    });
+    elements.prismEndingTracker.dataset.found = String(endings.size);
+  }
+
+  function playPrismSpatialTone(frequency, duration, volume, pan = 0, wave = "sine", delay = 0) {
+    const context = ensureAudio();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const panner = context.createStereoPanner?.();
+    const start = context.currentTime + delay;
+    oscillator.type = wave;
+    oscillator.frequency.setValueAtTime(frequency, start);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(24, frequency * .72), start + duration);
+    gain.gain.setValueAtTime(Math.max(.0001, volume), start);
+    gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
+    oscillator.connect(gain);
+    if (panner) {
+      panner.pan.setValueAtTime(clamp(pan, -1, 1), start);
+      gain.connect(panner); panner.connect(context.destination);
+    } else gain.connect(context.destination);
+    oscillator.start(start); oscillator.stop(start + duration);
+  }
+
+  function playPrismFootstep(running = false) {
+    prismFootstepSide *= -1;
+    playPrismSpatialTone(running ? 92 : 72, running ? .09 : .12, running ? .018 : .012, prismFootstepSide * .42, "triangle");
+    playPrismSpatialTone(running ? 46 : 38, .08, running ? .014 : .009, prismFootstepSide * .3, "sine", .025);
+  }
+
+  function playPrismHeartbeat(danger) {
+    const volume = .012 + danger * .026;
+    playPrismSpatialTone(56 + danger * 9, .13, volume, -.08, "sine");
+    playPrismSpatialTone(48 + danger * 7, .16, volume * .72, .08, "sine", .17);
+  }
+
+  function setPrismWhisper(message, danger = false) {
+    if (elements.prismWhisper) {
+      elements.prismWhisper.textContent = message;
+      elements.prismWhisper.classList.toggle("danger", danger);
+    }
+  }
+
+  function updatePrismAtmosphere(deltaSeconds, effectiveNoise, movementDistance, shadowDistance, playerStill) {
+    const maze = ensureMazeState();
+    const market = mazeDefinition.market;
+    const insideMarket = Boolean(maze.marketReached && market
+      && Math.hypot(maze.playerX - (market.x + .5), maze.playerY - (market.y + .5)) < 1.25);
+    maze.timeInside += deltaSeconds;
+    maze.recoveryTimer = Math.max(0, maze.recoveryTimer - deltaSeconds);
+    const proximity = clamp((9.5 - shadowDistance) / 8.6, 0, 1);
+    const timePressure = clamp((maze.timeInside - 18) / 150, 0, .72);
+    const chargePressure = maze.lightCharges <= 0 ? .28 : maze.lightCharges === 1 ? .13 : 0;
+    const targetDread = insideMarket ? .06 : clamp(Math.max(
+      proximity * .9,
+      maze.alertTimer > 0 ? .62 + effectiveNoise * .32 : 0,
+      timePressure + chargePressure + effectiveNoise * .28,
+      sprintScare ? .94 : 0,
+    ), 0, 1);
+    const smoothing = 1 - Math.pow(targetDread > maze.dread ? .018 : .09, deltaSeconds);
+    maze.dread += (targetDread - maze.dread) * smoothing;
+    const danger = clamp(maze.dread, 0, 1);
+    const threatTier = clamp(1 + Math.floor(danger * 3.98), 1, 4);
+
+    const motionAllowed = !prefersReducedMotion();
+    const stepWave = motionAllowed && movementDistance > .0001 ? Math.sin(maze.steps * (playerRunning ? 12 : 8.5)) : 0;
+    const swayWave = motionAllowed ? Math.sin(maze.timeInside * 1.7) : 0;
+    elements.worldScreen.style.setProperty("--prism-danger", danger.toFixed(3));
+    elements.worldScreen.style.setProperty("--prism-noise", clamp(effectiveNoise, 0, 1).toFixed(3));
+    elements.worldScreen.style.setProperty("--prism-bob", `${(stepWave * (playerRunning ? 2.6 : 1.15)).toFixed(2)}px`);
+    elements.worldScreen.style.setProperty("--prism-sway", `${(swayWave * (.25 + danger * .8)).toFixed(2)}px`);
+    elements.worldScreen.style.setProperty("--prism-flicker", clamp(maze.flicker, 0, 1).toFixed(3));
+    elements.worldScreen.classList.toggle("prism-chase", maze.alertTimer > 0 || Boolean(sprintScare));
+    elements.worldScreen.classList.toggle("prism-safe", insideMarket);
+    document.documentElement.dataset.prismThreat = String(threatTier);
+
+    maze.footstepDistance += movementDistance;
+    const stepLength = playerRunning ? .47 : .68;
+    if (maze.footstepDistance >= stepLength) {
+      maze.footstepDistance %= stepLength;
+      playPrismFootstep(playerRunning);
+    }
+
+    maze.heartbeatTimer -= deltaSeconds;
+    if (!insideMarket && danger > .27 && maze.heartbeatTimer <= 0) {
+      playPrismHeartbeat(danger);
+      maze.heartbeatTimer = .98 - danger * .5;
+    }
+
+    maze.flicker = Math.max(0, maze.flicker - deltaSeconds * 3.8);
+    maze.flickerTimer -= deltaSeconds;
+    if (!insideMarket && maze.flickerTimer <= 0) {
+      if (danger > .24 && Math.random() < .35 + danger * .42) {
+        maze.flicker = .58 + Math.random() * .42;
+        elements.worldScreen.classList.add("prism-flicker");
+        window.setTimeout(() => elements.worldScreen.classList.remove("prism-flicker"), 170);
+        playPrismSpatialTone(118, .08, .014, Math.random() * 2 - 1, "square");
+      }
+      maze.flickerTimer = 3.8 + Math.random() * 6.2;
+    }
+
+    maze.ambienceTimer -= deltaSeconds;
+    if (!insideMarket && maze.ambienceTimer <= 0) {
+      const whispers = [
+        "No todas las puertas quieren salvarte.",
+        "Algo respira detrás del muro.",
+        "Has pasado antes por aquí. ¿Verdad?",
+        "La salida débil también tiene hambre.",
+        "No mires la grieta demasiado tiempo.",
+      ];
+      setPrismWhisper(whispers[Math.floor(Math.random() * whispers.length)], danger > .6);
+      const pan = Math.random() < .5 ? -.86 : .86;
+      playHorrorClip(horrorAudio.snarl, .12 + danger * .12, pan, -pan * .4, .72);
+      maze.ambienceTimer = 8 + Math.random() * 10 - danger * 3;
+    }
+
+    maze.apparitionCooldown -= deltaSeconds;
+    if (!prismApparition && !insideMarket && danger > .38 && maze.apparitionCooldown <= 0 && Math.random() < .34) {
+      prismApparition = { elapsed: 0, duration: .48 + Math.random() * .38, side: Math.random() < .5 ? -1 : 1 };
+      maze.apparitionCooldown = 10 + Math.random() * 15;
+    }
+    if (prismApparition) {
+      prismApparition.elapsed += deltaSeconds;
+      if (!playerStill || prismApparition.elapsed >= prismApparition.duration) prismApparition = null;
+    }
+
+    const hintStage = maze.steps < 2 ? 0 : maze.steps < 8 ? 1 : 2;
+    if (hintStage !== maze.hintStage || elements.prismControlHint?.dataset.stage !== String(hintStage)) {
+      maze.hintStage = hintStage;
+      if (elements.prismControlHint) {
+        elements.prismControlHint.dataset.stage = String(hintStage);
+        elements.prismControlHint.textContent = hintStage === 0
+          ? "W/S avanzar · A/D desplazarse · ←/→ girar · F luz"
+          : hintStage === 1 ? "Corre solo si aceptas que te oiga." : "El pulso detecta umbrales, no promesas.";
+      }
+    }
+
+    const dangerStatus = insideMarket ? "REFUGIO SEGURO"
+      : sprintScare ? "NO TE MUEVAS"
+        : danger > .82 ? "PELIGRO CRÍTICO"
+          : maze.alertTimer > 0 ? "PERSECUCIÓN"
+            : danger > .54 ? "PRESENCIA CERCANA" : "ALTERACIÓN";
+    if (dangerStatus !== prismDangerStatus) {
+      prismDangerStatus = dangerStatus;
+      if (elements.prismDangerAnnouncer && ["NO TE MUEVAS", "PELIGRO CRÍTICO", "PERSECUCIÓN"].includes(dangerStatus)) {
+        elements.prismDangerAnnouncer.textContent = dangerStatus;
+      }
+      if (dangerStatus === "PELIGRO CRÍTICO" && navigator.vibrate && !prefersReducedMotion()) navigator.vibrate([35, 45, 35]);
+    }
+    if (elements.prismThreatLevel) elements.prismThreatLevel.textContent = insideMarket ? "ZONA SEGURA" : `ALTERACIÓN ${["I", "II", "III", "IV"][threatTier - 1]}`;
+    if (elements.prismStressMeter) elements.prismStressMeter.style.width = `${Math.round(danger * 100)}%`;
+    if (elements.prismStressLabel) elements.prismStressLabel.textContent = insideMarket ? "REFUGIO" : danger > .82 ? "CRÍTICA" : danger > .56 ? "ALTA" : danger > .3 ? "MEDIA" : "ESTABLE";
   }
 
   function startSprintScare(direction = Math.random() < .5 ? -1 : 1) {
@@ -5377,7 +6391,16 @@
     shadowPathTimer -= deltaSeconds;
     const repelled = maze.monsterRepel > 0;
     const chasing = !repelled && maze.alertTimer > 0;
-    updateChaseMusic(deltaSeconds, chasing);
+    const pressure = clamp(maze.timeInside / 150 + (maze.captures || 0) * .08, 0, 1);
+    const relativeShadowAngle = Math.abs(normalizeAngle(Math.atan2(
+      maze.monsterY - maze.playerY,
+      maze.monsterX - maze.playerX,
+    ) - maze.angle));
+    const shadowDistance = Math.hypot(maze.monsterX - maze.playerX, maze.monsterY - maze.playerY);
+    const watched = !repelled && shadowDistance < 7.2 && relativeShadowAngle < .2
+      && rayClear(maze.playerX, maze.playerY, maze.monsterX, maze.monsterY);
+    maze.shadowWatched = watched;
+    updateChaseMusic(deltaSeconds, chasing, pressure);
     if (insideMarketRefuge) { sprintScare = null; quietStillTime = 0; }
     else {
       if (updateSprintScare(deltaSeconds, effectiveNoise, playerStill)) return;
@@ -5400,15 +6423,17 @@
       const target = shadowPath[1];
       const targetX = target.x + .5; const targetY = target.y + .5;
       const dx = targetX - maze.monsterX; const dy = targetY - maze.monsterY; const length = Math.hypot(dx, dy) || 1;
-      const speed = repelled ? 3.25 : chasing
-        ? (1.24 + effectiveNoise * 2.15 + (maze.steps > 12 ? .2 : 0))
-        : (.7 + effectiveNoise * 1.25 + (maze.steps > 12 ? .12 : 0));
+      const baseSpeed = repelled ? 3.25 : chasing
+        ? (1.24 + effectiveNoise * 2.15 + (maze.steps > 12 ? .2 : 0) + pressure * .38)
+        : (.7 + effectiveNoise * 1.25 + (maze.steps > 12 ? .12 : 0) + pressure * .18);
+      const speed = baseSpeed * (watched && !chasing ? .38 : 1);
       const amount = Math.min(length, speed * deltaSeconds);
       maze.monsterX += dx / length * amount; maze.monsterY += dy / length * amount;
       if (length < .12) shadowPath.shift();
     }
 
-    if (!repelled && Math.hypot(maze.monsterX - maze.playerX, maze.monsterY - maze.playerY) < .48) triggerJumpScare();
+    if (!repelled && maze.recoveryTimer <= 0
+      && Math.hypot(maze.monsterX - maze.playerX, maze.monsterY - maze.playerY) < .48) triggerJumpScare();
   }
 
   function updateMazeMovement(deltaSeconds, drawerOpen) {
@@ -5459,6 +6484,7 @@
       + Math.sin(maze.angle + Math.PI / 2) * mazeMotion.strafe;
     const movementSpeed = Math.hypot(velocityX, velocityY);
     let actualMovementSpeed = 0;
+    let movementDistance = 0;
     if (movementSpeed > .025) {
       const previousX = maze.playerX; const previousY = maze.playerY;
       const nextX = maze.playerX + velocityX * deltaSeconds;
@@ -5466,12 +6492,13 @@
       if (mazeCanOccupy(nextX, maze.playerY)) maze.playerX = nextX;
       if (mazeCanOccupy(maze.playerX, nextY)) maze.playerY = nextY;
       const actualMovement = Math.hypot(maze.playerX - previousX, maze.playerY - previousY);
+      movementDistance = actualMovement;
       actualMovementSpeed = deltaSeconds > 0 ? actualMovement / deltaSeconds : 0;
       if (actualMovement > .0001) {
         maze.steps += actualMovement;
         animationTime += deltaSeconds * 1000;
-        animationPhase = (animationPhase + deltaSeconds * 1000 / (playerRunning ? 82 : 145)) % 4;
-        animationFrame = Math.floor(animationPhase) % 4;
+        animationPhase = (animationPhase + deltaSeconds * 1000 / (playerRunning ? 82 : 145)) % PLAYER_WALK_FRAME_COUNT;
+        animationFrame = Math.floor(animationPhase) % PLAYER_WALK_FRAME_COUNT;
       } else resetPlayerAnimation();
     } else resetPlayerAnimation();
 
@@ -5484,6 +6511,8 @@
     const effectiveNoise = Math.max(micNoise, movementNoise, turnNoise);
     updateMazeMonster(deltaSeconds, effectiveNoise, playerStill && perfectlyQuiet);
     if (jumpScareActive) return;
+    const updatedShadowDistance = Math.hypot(maze.monsterX - maze.playerX, maze.monsterY - maze.playerY);
+    updatePrismAtmosphere(deltaSeconds, effectiveNoise, movementDistance, updatedShadowDistance, playerStill && perfectlyQuiet);
     flashlightBurst = Math.max(0, flashlightBurst - deltaSeconds);
     updateMazeHud(effectiveNoise);
     updateInteractPrompt();
@@ -5506,7 +6535,14 @@
   function useFlashlight() {
     if (state.dimension !== "prism" || battle || inputLocked || jumpScareActive) return;
     const maze = ensureMazeState();
-    if (maze.lightCharges <= 0) { playTone(80, .12, "square", .02); return; }
+    if (maze.lightCharges <= 0) {
+      maze.flicker = 1;
+      playPrismSpatialTone(54, .18, .025, 0, "square");
+      setPrismWhisper("La linterna está muerta. La Sombra lo sabe.", true);
+      showAreaToast("SIN CARGAS · NO HAY LUZ");
+      if (navigator.vibrate && !prefersReducedMotion()) navigator.vibrate(28);
+      return;
+    }
     const dx = maze.monsterX - maze.playerX; const dy = maze.monsterY - maze.playerY;
     const monsterDistance = Math.hypot(dx, dy);
     const angleDifference = Math.abs(normalizeAngle(Math.atan2(dy, dx) - maze.angle));
@@ -5517,6 +6553,8 @@
       shadowPath = []; shadowPathTimer = 0;
       playTone(980, .18, "sawtooth", .055); playTone(620, .25, "square", .035, .04);
       showAreaToast(`LA SOMBRA RETROCEDE · ${maze.lightCharges} USOS`);
+      setPrismWhisper(maze.lightCharges ? "La has herido. No la has detenido." : "Era la última carga.", maze.lightCharges === 0);
+      if (navigator.vibrate && !prefersReducedMotion()) navigator.vibrate([18, 25, 38]);
     } else playTone(210, .06, "square", .018);
     updateMazeHud(microphoneLevel);
   }
@@ -5530,25 +6568,34 @@
     else if (maze.monsterRepel > 0) status = "HUYENDO";
     else if (shadowDistance < 2.5) status = "MUY CERCA";
     else if (maze.alertTimer > 0) status = "TE PERSIGUE";
+    else if (maze.shadowWatched) status = "NO PARPADEA";
     else if (noise > .42) status = "TE OYE";
     else if (shadowDistance < 6) status = "ACECHANDO";
     elements.shadowStatus.textContent = status;
     elements.shadowStatus.style.color = ["MUY CERCA", "TE HA OÍDO"].includes(status)
       ? "#f06d6d"
       : ["TE OYE", "TE PERSIGUE", "NO HAGAS RUIDO"].includes(status) ? "#f0bd64" : "#7fe0e8";
-    const objectiveTarget = state.secretPokemonSaved ? mazeDefinition.market : mazeDefinition.goal;
+    const objectiveCandidates = state.secretPokemonSaved
+      ? [mazeDefinition.market, ...(mazeDefinition.exits || [])]
+      : [mazeDefinition.goal, ...(mazeDefinition.exits || [])];
+    const objectiveTarget = objectiveCandidates
+      .filter(Boolean)
+      .sort((a, b) => Math.hypot(maze.playerX - (a.x + .5), maze.playerY - (a.y + .5))
+        - Math.hypot(maze.playerX - (b.x + .5), maze.playerY - (b.y + .5)))[0];
     const objectiveDistance = objectiveTarget
       ? Math.hypot(maze.playerX - (objectiveTarget.x + .5), maze.playerY - (objectiveTarget.y + .5))
       : Infinity;
     const signal = objectiveDistance < 2.2 ? "AQUÍ" : objectiveDistance < 5 ? "INTENSA" : objectiveDistance < 9 ? "FUERTE" : objectiveDistance < 14 ? "MEDIA" : "DÉBIL";
-    if (elements.mazeObjective) elements.mazeObjective.textContent = `${state.secretPokemonSaved ? "MERCADO" : "MONSTRUO"} · ${signal}`;
+    if (elements.mazeObjective) elements.mazeObjective.textContent = `UMBRAL · ${signal}`;
     if (elements.noiseLabel) elements.noiseLabel.textContent = microphoneFallbackMode ? "MOVIMIENTO" : "MICRÓFONO";
     document.documentElement.dataset.prismNoiseMode = microphoneFallbackMode ? "movement" : "microphone";
     document.documentElement.dataset.prismMarketCheckpoint = String(Boolean(maze.marketReached));
     document.documentElement.dataset.prismPlayer = `${maze.playerX.toFixed(3)},${maze.playerY.toFixed(3)}`;
     document.documentElement.dataset.prismShadow = `${maze.monsterX.toFixed(3)},${maze.monsterY.toFixed(3)}`;
+    document.documentElement.dataset.prismExitCount = String(mazeDefinition.exits?.length || 0);
     elements.noiseMeter.style.width = `${Math.round(noise * 100)}%`;
     elements.noiseMeter.style.background = noise > .55 ? "#ef6666" : noise > .3 ? "#e5b75e" : "#68d19b";
+    updatePrismEndingHud();
   }
 
   function playJumpScareSound() {
@@ -5623,6 +6670,8 @@
       maze.monsterY = monster.y + .5;
       maze.monsterRepel = checkpointReached ? 3.5 : 0;
       maze.alertTimer = 0;
+      maze.recoveryTimer = checkpointReached ? 5.5 : 4;
+      maze.dread = checkpointReached ? .16 : .08;
       maze.lightCharges = checkpointReached ? Math.max(1, remainingLightCharges) : 3;
       maze.steps = 0;
       maze.captures = (maze.captures || 0) + 1;
@@ -5630,6 +6679,7 @@
       shadowPathTimer = 0;
       sprintScareCooldown = 8;
       flashlightBurst = 0;
+      prismApparition = null;
       stopHorrorAudio();
       elements.jumpScare.classList.add("hidden");
       jumpScareActive = false;
@@ -5641,10 +6691,550 @@
     }, 1620);
   }
 
+  function perspectiveLevel() {
+    return CITY_MAP.perspective?.level || PERSPECTIVE_ZONE_CORE?.DEFAULT_LEVEL || null;
+  }
+
+  const flushBifazFeedback = () => {
+    perspectiveFeedbackFrame = null;
+    const feedback = perspectiveFeedbackPending;
+    perspectiveFeedbackPending = null;
+    if (!feedback) return;
+    if (feedback.text) showAreaToast(feedback.text);
+    if (feedback.announcement && elements.perspectiveAnnouncer) {
+      elements.perspectiveAnnouncer.textContent = feedback.announcement;
+    }
+    feedback.sound?.();
+  };
+
+  const presentBifazFeedback = (channel, signature, text, cooldown = 900, options = {}) => {
+    const now = globalThis.performance?.now?.() ?? Date.now();
+    const previous = perspectiveFeedbackHistory.get(channel);
+    if (previous?.signature === signature || (previous && now - previous.time < cooldown)) return false;
+    perspectiveFeedbackHistory.set(channel, { signature, time: now });
+    const feedback = {
+      channel,
+      signature,
+      text,
+      priority: Number(options.priority) || 0,
+      sound: typeof options.sound === "function" ? options.sound : null,
+      announcement: typeof options.announcement === "string" ? options.announcement : "",
+    };
+    if (!perspectiveFeedbackPending || feedback.priority > perspectiveFeedbackPending.priority) {
+      perspectiveFeedbackPending = feedback;
+    }
+    if (perspectiveFeedbackFrame == null) {
+      const schedule = globalThis.requestAnimationFrame
+        || ((callback) => globalThis.setTimeout(callback, 0));
+      perspectiveFeedbackFrame = schedule(flushBifazFeedback);
+    }
+    return true;
+  };
+
+  function syncPerspectiveProgress({ persist = false } = {}) {
+    if (!perspectiveZoneRuntime) {
+      state.perspectiveZone = normalizeBifazProgress(state.perspectiveZone);
+      if (persist) saveGame();
+      return state.perspectiveZone;
+    }
+    const snapshot = perspectiveZoneRuntime.snapshot() || {};
+    state.perspectiveZone = normalizeBifazProgress(snapshot, state.perspectiveZone);
+    state.worldX = perspectiveZoneRuntime.state.player.x;
+    state.worldY = perspectiveZoneRuntime.state.player.y;
+    state.direction = perspectiveZoneRuntime.state.player.facing < 0 ? "left" : "right";
+    if (persist) saveGame();
+    return state.perspectiveZone;
+  }
+
+  function awardBifazRewards() {
+    const result = { changed: false, baseAwarded: false, challengeIds: [], amount: 0 };
+    if (!state.perspectiveZone.complete) return result;
+    if (!state.perspectiveZone.rewarded) {
+      state.perspectiveZone.rewarded = true;
+      state.money += 450;
+      state.inventory.rareCandies += 1;
+      result.changed = true;
+      result.baseAwarded = true;
+      result.amount += 450;
+    }
+    const completed = new Set(state.perspectiveZone.completedChallenges);
+    const rewardedChallenges = new Set(state.perspectiveZone.rewardedChallenges);
+    BIFAZ_CHALLENGE_IDS.forEach((challengeId) => {
+      if (!completed.has(challengeId) || rewardedChallenges.has(challengeId)) return;
+      rewardedChallenges.add(challengeId);
+      state.money += 100;
+      result.changed = true;
+      result.challengeIds.push(challengeId);
+      result.amount += 100;
+    });
+    state.perspectiveZone.rewardedChallenges = [...rewardedChallenges];
+    return result;
+  }
+
+  function playBifazFlipStageTone(stage) {
+    const cue = {
+      anticipation: [330, .04, "triangle", .012],
+      fold: [466, .05, "square", .014],
+      cross: [659, .055, "square", .018],
+      settle: [831, .07, "triangle", .016],
+    }[stage];
+    if (cue) playTone(...cue);
+  }
+
+  function handlePerspectiveZoneEvent(event) {
+    if (!event || !PERSPECTIVE_ZONE_ACTIVE) return;
+    if (event.type === "jump") playTone(440, .07, "square", .018);
+    else if (event.type === "flip-start") {
+      if (navigator.vibrate && !prefersReducedMotion()) navigator.vibrate(24);
+    } else if (event.type === "flip-commit") {
+      syncPerspectiveProgress();
+    } else if (event.type === "flip-stage") {
+      const stage = BIFAZ_FLIP_STAGES.includes(event.stage) ? event.stage : "settle";
+      const tick = Math.floor((globalThis.performance?.now?.() ?? Date.now()) / 80);
+      presentBifazFeedback("flip-stage", `${stage}|${tick}`, "", 0, {
+        priority: 20 + BIFAZ_FLIP_STAGES.indexOf(stage),
+        sound: () => playBifazFlipStageTone(stage),
+      });
+    } else if (event.type === "flip-denied") {
+      const reason = cleanBifazText(event.reason, "bloqueado", 32);
+      const reasonLabel = {
+        anchor: "BUSCA UNA BISAGRA",
+        airborne: "ATERRIZA ANTES DE PLEGAR",
+        pulses: "EL COMPÁS NECESITA UN PULSO",
+        "unsafe-projection": "PLIEGUE INESTABLE",
+        "unsafe-commit": "PLIEGUE CANCELADO",
+      }[reason] || "NO SE PUEDE PLEGAR";
+      const tick = Math.floor((globalThis.performance?.now?.() ?? Date.now()) / 600);
+      presentBifazFeedback("flip-denied", `${reason}|${tick}`, reasonLabel, 480, {
+        priority: 55,
+        sound: () => {
+          playTone(165, .07, "sawtooth", .018);
+          playTone(123, .09, "square", .012, .055);
+        },
+      });
+    } else if (event.type === "flow" || event.type === "paper-flow"
+      || event.type === "paper-flow-break" || event.type === "paper-rush-end") {
+      syncPerspectiveProgress();
+    } else if (event.type === "paper-rush") {
+      syncPerspectiveProgress({ persist: true });
+      const rushCount = finiteBifazNumber(event.count ?? event.paperRushes, state.perspectiveZone.paperRushes, 1, 999);
+      presentBifazFeedback("paper-rush", String(rushCount), `PAPER RUSH · CADENA ×${state.perspectiveZone.styleChain}`, 0, {
+        priority: 96,
+        announcement: `Paper Rush activado. Cadena de estilo ${state.perspectiveZone.styleChain}.`,
+        sound: () => {
+          playTone(784, .09, "square", .026);
+          playTone(988, .1, "triangle", .022, .07);
+          playTone(1319, .13, "triangle", .018, .15);
+        },
+      });
+    } else if (event.type === "spring") {
+      const tick = Math.floor((globalThis.performance?.now?.() ?? Date.now()) / 160);
+      presentBifazFeedback("spring", `${event.springId || event.platformId || "spring"}|${tick}`, "", 120, {
+        priority: 32,
+        sound: () => {
+          playTone(523, .055, "sine", .018);
+          playTone(784, .075, "square", .014, .045);
+        },
+      });
+    } else if (event.type === "land") {
+      const impact = finiteBifazNumber(event.impact, 0, 0, 1, false);
+      const speed = Math.abs(Number(event.speed) || 0);
+      const strongLand = event.strong === true || ["firm", "perfect"].includes(event.strength)
+        || impact >= .62 || speed >= 620;
+      if (strongLand) {
+        const tick = Math.floor((globalThis.performance?.now?.() ?? Date.now()) / 220);
+        presentBifazFeedback("land", `${event.platformId || "ground"}|${event.strength || "strong"}|${tick}`, "", 180, {
+          priority: event.strength === "perfect" ? 48 : 28,
+          sound: () => {
+            playTone(196, .06, "triangle", .02);
+            playTone(294, .045, "square", .012, .025);
+          },
+        });
+      }
+    } else if (event.type === "collect") {
+      syncPerspectiveProgress({ persist: true });
+      presentBifazFeedback("collect", String(event.collectibleId || event.count), `SELLO DEL PLIEGUE · ${event.count} / 3`, 300, {
+        priority: 70,
+        sound: () => playJingle("capture"),
+      });
+    } else if (event.type === "checkpoint") {
+      syncPerspectiveProgress({ persist: true });
+      presentBifazFeedback("checkpoint", String(event.checkpointId || "checkpoint"), "CHECKPOINT BIFAZ ACTIVADO", 500, {
+        priority: 75,
+        sound: () => playJingle("success"),
+      });
+    } else if (event.type === "fall") {
+      playTone(155, .2, "sawtooth", .025);
+    } else if (event.type === "respawn") {
+      syncPerspectiveProgress({ persist: true });
+    } else if (event.type === "mission" || event.type === "mission-step") {
+      syncPerspectiveProgress({ persist: true });
+      const missionStage = finiteBifazNumber(event.stage, state.perspectiveZone.missionStage, 0, state.perspectiveZone.missionCount);
+      const missionTitle = cleanBifazText(event.title, state.perspectiveZone.missionTitle, 80);
+      presentBifazFeedback("mission", `${missionStage}|${missionTitle}`, `MISIÓN ${missionStage} / ${state.perspectiveZone.missionCount} · ${missionTitle}`, 1200, {
+        priority: 50,
+        sound: () => {
+          playTone(587, .1, "triangle", .024);
+          playTone(784, .12, "triangle", .02, .08);
+        },
+      });
+    } else if (event.type === "wildlife-discovered") {
+      syncPerspectiveProgress({ persist: true });
+      const wildlifeId = cleanBifazIds([event.wildlifeId], [], 1)[0] || String(event.count || "fauna");
+      const discoveries = finiteBifazNumber(event.count, state.perspectiveZone.discoveries.length, 0, 64);
+      const wildlifeTotal = finiteBifazNumber(event.total, state.perspectiveZone.wildlifeTotal, 0, 64);
+      const species = cleanBifazText(event.species, "FAUNA NUEVA", 48).toUpperCase();
+      presentBifazFeedback("wildlife", wildlifeId, `${species} DESCUBIERTO · ${discoveries} / ${wildlifeTotal}`, 520, {
+        priority: 60,
+        sound: () => playJingle("capture"),
+      });
+    } else if (event.type === "challenge-complete") {
+      syncPerspectiveProgress({ persist: true });
+      const challengeId = cleanBifazIds([event.challengeId], [], 1)[0] || "reto";
+      const challengeTitle = cleanBifazText(event.title, challengeId, 48).toUpperCase();
+      const challengeReward = awardBifazRewards();
+      if (challengeReward.changed) syncPerspectiveProgress({ persist: true });
+      // Los eventos del core se entregan después del frame y todos observan su
+      // snapshot final. El propio evento es el flanco fiable de finalización; el
+      // canal+firma de feedback ya evita una segunda presentación accidental.
+      presentBifazFeedback("challenge", challengeId, `INSIGNIA ${challengeTitle} COMPLETADA`, 900, {
+        priority: 90,
+        sound: () => playJingle("level"),
+      });
+    } else if (event.type === "combo") {
+      const previousBest = state.perspectiveZone.bestFlipCombo;
+      syncPerspectiveProgress();
+      const combo = finiteBifazNumber(event.combo, state.perspectiveZone.flipCombo, 0, 999);
+      const best = finiteBifazNumber(event.best ?? event.bestCombo, state.perspectiveZone.bestFlipCombo, 0, 999);
+      if (combo >= 2 && best > previousBest) {
+        presentBifazFeedback("combo", String(best), `PLIEGUE EN CADENA · COMBO ×${combo}`, 1100, {
+          priority: 35,
+          sound: () => playTone(659 + Math.min(combo, 6) * 32, .1, "square", .022),
+        });
+      }
+    } else if (event.type === "perfect-land") {
+      const previousLandings = state.perspectiveZone.perfectLandings;
+      syncPerspectiveProgress({ persist: true });
+      const landings = finiteBifazNumber(event.count, state.perspectiveZone.perfectLandings, 0, 999);
+      if (landings > previousLandings) {
+        presentBifazFeedback("perfect-land", String(landings), `ATERRIZAJE PERFECTO · ${landings}`, 1150, {
+          priority: 80,
+          sound: () => {
+            playTone(880, .09, "triangle", .025);
+            playTone(1175, .12, "triangle", .018, .07);
+          },
+        });
+      }
+    } else if (event.type === "flip-end") {
+      syncPerspectiveProgress();
+    } else if (event.type === "complete") {
+      const wasComplete = state.perspectiveZone.complete;
+      syncPerspectiveProgress();
+      const completionReward = awardBifazRewards();
+      syncPerspectiveProgress({ persist: true });
+      renderHud();
+      const challengeCount = Math.min(BIFAZ_CHALLENGE_IDS.length, new Set(state.perspectiveZone.completedChallenges).size);
+      const challengeBonus = challengeCount * 100;
+      const totalReward = 450 + challengeCount * 100;
+      if (!wasComplete || completionReward.changed) {
+        presentBifazFeedback("complete", "main", "PRADERA BIFAZ COMPLETADA", 0, {
+          priority: 100,
+          sound: () => playJingle("level"),
+        });
+        showDialog([
+          `Has unido los tres Sellos del Pliegue en ${formatPerspectiveTime(event.time)}.`,
+          "La arquitectura vuelve a desplegarse y abre la Puerta Bifaz.",
+          `Completaste ${challengeCount} de ${BIFAZ_CHALLENGE_IDS.length} retos: 450 ₱ de base + ${challengeBonus} ₱ por insignias.`,
+          `Recompensa acumulada: ${totalReward} ₱ y un Caramelo Raro. Puedes seguir explorando; SALIR te devuelve a San Pablo cuando quieras.`,
+        ], "✦");
+      }
+    }
+    updatePerspectiveHud(true);
+  }
+
+  function ensurePerspectiveZoneRuntime() {
+    if (!PERSPECTIVE_ZONE_ACTIVE) return null;
+    if (perspectiveZoneRuntime) return perspectiveZoneRuntime;
+    const level = perspectiveLevel();
+    if (!level) throw new Error("Pradera Bifaz no tiene una definición de nivel disponible.");
+    perspectiveZoneRuntime = PERSPECTIVE_ZONE_CORE.createRuntime({
+      level,
+      progress: state.perspectiveZone,
+      reducedMotion: prefersReducedMotion(),
+      assist: state.perspectiveZone.assist,
+      onEvent: handlePerspectiveZoneEvent,
+    });
+    if (LOCAL_DEBUG_PERSPECTIVE) perspectiveZoneRuntime.moveToDebug(LOCAL_DEBUG_PERSPECTIVE);
+    perspectiveZoneRuntime.start();
+    state.worldX = perspectiveZoneRuntime.state.player.x;
+    state.worldY = perspectiveZoneRuntime.state.player.y;
+    document.documentElement.dataset.perspectiveRuntime = "ready";
+    updatePerspectiveHud(true);
+    return perspectiveZoneRuntime;
+  }
+
+  function formatPerspectiveTime(seconds) {
+    const safe = Math.max(0, Number(seconds) || 0);
+    const minutes = Math.floor(safe / 60);
+    const remaining = safe - minutes * 60;
+    return `${String(minutes).padStart(2, "0")}:${remaining.toFixed(1).padStart(4, "0")}`;
+  }
+
+  function updatePerspectiveHud(force = false) {
+    if (!PERSPECTIVE_ZONE_ACTIVE || !elements.perspectiveHud) return;
+    const runtime = ensurePerspectiveZoneRuntime();
+    if (!runtime) return;
+    const hud = runtime.hud?.() || {};
+    const mission = hud.mission && typeof hud.mission === "object" && !Array.isArray(hud.mission) ? hud.mission : {};
+    const missionTitle = cleanBifazText(hud.missionTitle ?? mission.title, state.perspectiveZone.missionTitle, 80);
+    const missionObjective = cleanBifazText(
+      hud.missionObjective ?? hud.objective ?? mission.objective,
+      state.perspectiveZone.missionObjective,
+      160,
+    );
+    const missionCount = finiteBifazNumber(
+      hud.missionCount ?? hud.count ?? mission.count,
+      state.perspectiveZone.missionCount,
+      1,
+      20,
+    );
+    const missionStage = finiteBifazNumber(
+      hud.missionStage ?? hud.stage ?? mission.stage,
+      state.perspectiveZone.missionStage,
+      0,
+      missionCount,
+    );
+    const missionProgress = bifazMissionProgress(
+      hud.missionProgress,
+      hud.progress ?? mission.progress,
+      mission.target,
+      state.perspectiveZone.missionProgress,
+    );
+    const discoveries = Array.isArray(hud.discoveries)
+      ? cleanBifazIds(hud.discoveries, [], 64).length
+      : finiteBifazNumber(hud.discoveries, state.perspectiveZone.discoveries.length, 0, 64);
+    const wildlifeTotal = finiteBifazNumber(hud.wildlifeTotal, state.perspectiveZone.wildlifeTotal, 0, 64);
+    const completedChallenges = new Set(cleanBifazIds(
+      hud.completedChallenges,
+      state.perspectiveZone.completedChallenges,
+      BIFAZ_CHALLENGE_IDS.length,
+    ));
+    const challengesCompleted = Math.max(
+      completedChallenges.size,
+      finiteBifazNumber(hud.challengesCompleted, state.perspectiveZone.challengesCompleted, 0, BIFAZ_CHALLENGE_IDS.length),
+    );
+    const flipCombo = finiteBifazNumber(hud.flipCombo, state.perspectiveZone.flipCombo, 0, 999);
+    const bestFlipCombo = Math.max(flipCombo, finiteBifazNumber(hud.bestFlipCombo, state.perspectiveZone.bestFlipCombo, 0, 999));
+    const perfectLandings = finiteBifazNumber(hud.perfectLandings, state.perspectiveZone.perfectLandings, 0, 999);
+    const paperFlow = finiteBifazNumber(hud.paperFlow ?? runtime.state?.paperFlow, state.perspectiveZone.paperFlow, 0, 100, false);
+    const requestedFlowTier = cleanBifazIds(
+      (hud.flowTier ?? runtime.state?.flowTier) === undefined ? undefined : [hud.flowTier ?? runtime.state?.flowTier],
+      [state.perspectiveZone.flowTier],
+      1,
+    )[0] || "calm";
+    const flowTier = BIFAZ_FLOW_TIERS.includes(requestedFlowTier) ? requestedFlowTier : "calm";
+    const flowLabel = cleanBifazText(hud.flowLabel ?? runtime.state?.flowLabel, BIFAZ_FLOW_LABELS[flowTier] || state.perspectiveZone.flowLabel || "CALMA", 32);
+    const styleChain = finiteBifazNumber(hud.styleChain ?? runtime.state?.styleChain, state.perspectiveZone.styleChain, 0, 999);
+    const bestStyleChain = Math.max(styleChain, finiteBifazNumber(hud.bestStyleChain ?? runtime.state?.bestStyleChain, state.perspectiveZone.bestStyleChain, 0, 999));
+    const rushTimer = finiteBifazNumber(hud.rushTimer ?? runtime.state?.rushTimer, state.perspectiveZone.rushTimer, 0, 60, false);
+    const paperRushes = finiteBifazNumber(hud.paperRushes ?? runtime.state?.paperRushes, state.perspectiveZone.paperRushes, 0, 999);
+    const flipStage = BIFAZ_FLIP_STAGES.includes(hud.flipStage) ? hud.flipStage : "idle";
+    const pulses = finiteBifazNumber(hud.pulses, 3, 0, 3);
+    const collected = Array.isArray(hud.collected)
+      ? hud.collected.length
+      : finiteBifazNumber(hud.collected, state.perspectiveZone.collected.length, 0, 99);
+    const required = finiteBifazNumber(hud.required, 3, 0, 99);
+    const mode = typeof hud.mode === "string" ? hud.mode : "diorama";
+    const phase = perspectivePaused ? "paused" : (typeof hud.phase === "string" ? hud.phase : "run");
+    const assist = Boolean(runtime.state?.assist ?? state.perspectiveZone.assist);
+    const modeLabel = cleanBifazText(hud.modeLabel, mode === PERSPECTIVE_ZONE_CORE.PROFILE_MODE ? "PERFIL 2D" : "DIORAMA", 32);
+    const signature = [hud.signature || "", mode, phase, missionTitle, missionObjective, missionProgress.toFixed(3),
+      missionStage, missionCount, discoveries, wildlifeTotal, [...completedChallenges].join(","), challengesCompleted,
+      flipCombo, bestFlipCombo, perfectLandings, paperFlow.toFixed(1), flowTier, flowLabel,
+      styleChain, bestStyleChain, rushTimer.toFixed(2), paperRushes, flipStage, pulses, collected, required,
+      assist, hud.anchor || "", hud.tutorial || ""].join("|");
+    if (perspectiveFlowTierAnnounced == null) perspectiveFlowTierAnnounced = flowTier;
+    else if (flowTier !== perspectiveFlowTierAnnounced) {
+      perspectiveFlowTierAnnounced = flowTier;
+      presentBifazFeedback("flow-tier", flowTier, `FLUJO · ${flowLabel}`, 0, {
+        priority: flowTier === "rush" ? 92 : 45,
+        announcement: `Flujo ${flowLabel}.`,
+        sound: () => playTone(flowTier === "rush" ? 880 : flowTier === "fold" ? 698 : flowTier === "rhythm" ? 554 : 392, .08, "triangle", .016),
+      });
+    }
+    if (!force && signature === perspectiveHudSignature) return;
+    perspectiveHudSignature = signature;
+    elements.perspectiveHud.dataset.mode = mode;
+    elements.perspectiveHud.dataset.phase = phase;
+    elements.perspectiveHud.dataset.flipStage = flipStage;
+    elements.perspectiveHud.dataset.anchor = String(Boolean(hud.anchor));
+    elements.perspectiveHud.dataset.assist = String(assist);
+    elements.perspectiveHud.dataset.flowTier = flowTier;
+    elements.perspectiveHud.dataset.paperRush = String(rushTimer > 0 || flowTier === "rush");
+    elements.perspectiveHud.dataset.challengesCompleted = String(challengesCompleted);
+    elements.perspectiveModeLabel.textContent = modeLabel;
+    if (elements.perspectiveAssistButton) {
+      elements.perspectiveAssistButton.setAttribute("aria-pressed", String(assist));
+      elements.perspectiveAssistButton.setAttribute("aria-label", `${assist ? "Desactivar" : "Activar"} ayuda de accesibilidad`);
+      elements.perspectiveAssistButton.textContent = assist ? "AYUDA ✓" : "AYUDA";
+    }
+    elements.perspectivePulses.textContent = `${"◆ ".repeat(pulses)}${"◇ ".repeat(3 - pulses)}`.trim();
+    elements.perspectivePulses.setAttribute("aria-label", `${pulses} de 3 pulsos disponibles`);
+    elements.perspectiveSeals.textContent = `${collected} / ${required}`;
+    elements.perspectiveTimer.textContent = formatPerspectiveTime(hud.time);
+    if (elements.perspectiveMissionTitle) elements.perspectiveMissionTitle.textContent = missionTitle;
+    if (elements.perspectiveMissionObjective) elements.perspectiveMissionObjective.textContent = missionObjective;
+    if (elements.perspectiveMissionStage) elements.perspectiveMissionStage.textContent = `ETAPA ${Math.max(1, missionStage)} / ${missionCount}`;
+    if (elements.perspectiveMissionCount) elements.perspectiveMissionCount.textContent = `${Math.round(missionProgress * 100)}%`;
+    if (elements.perspectiveMissionProgress) elements.perspectiveMissionProgress.style.width = `${(missionProgress * 100).toFixed(1)}%`;
+    if (elements.perspectiveMissionProgressTrack) {
+      elements.perspectiveMissionProgressTrack.setAttribute("aria-valuenow", String(Math.round(missionProgress * 100)));
+      elements.perspectiveMissionProgressTrack.setAttribute("aria-valuetext", `Etapa ${Math.max(1, missionStage)} de ${missionCount}: ${Math.round(missionProgress * 100)} por ciento`);
+    }
+    if (elements.perspectiveFlow) {
+      elements.perspectiveFlow.dataset.tier = flowTier;
+      elements.perspectiveFlow.dataset.rush = String(rushTimer > 0 || flowTier === "rush");
+    }
+    if (elements.perspectiveFlowTier) elements.perspectiveFlowTier.textContent = flowLabel;
+    if (elements.perspectiveFlowValue) elements.perspectiveFlowValue.textContent = String(Math.round(paperFlow));
+    if (elements.perspectiveFlowBar) elements.perspectiveFlowBar.style.width = `${paperFlow.toFixed(1)}%`;
+    if (elements.perspectiveFlowTrack) {
+      elements.perspectiveFlowTrack.setAttribute("aria-valuenow", String(Math.round(paperFlow)));
+      elements.perspectiveFlowTrack.setAttribute("aria-valuetext", `${Math.round(paperFlow)} de 100 · ${flowLabel} · cadena ${styleChain}`);
+    }
+    if (elements.perspectiveStyleChain) elements.perspectiveStyleChain.textContent = String(styleChain);
+    if (elements.perspectiveBestStyleChain) elements.perspectiveBestStyleChain.textContent = String(bestStyleChain);
+    if (elements.perspectiveDiscoveries) elements.perspectiveDiscoveries.textContent = String(discoveries);
+    if (elements.perspectiveWildlifeTotal) elements.perspectiveWildlifeTotal.textContent = String(wildlifeTotal);
+    if (elements.perspectiveFlipCombo) elements.perspectiveFlipCombo.textContent = String(flipCombo);
+    if (elements.perspectiveBestFlipCombo) elements.perspectiveBestFlipCombo.textContent = String(bestFlipCombo);
+    if (elements.perspectivePerfectLandings) elements.perspectivePerfectLandings.textContent = String(perfectLandings);
+    const challengeRecords = Array.isArray(hud.challenges) ? hud.challenges : [];
+    elements.perspectiveChallenges?.querySelectorAll("[data-challenge-id]").forEach((badge) => {
+      const challengeId = badge.dataset.challengeId;
+      const record = challengeRecords.find((entry) => entry?.id === challengeId) || {};
+      const complete = completedChallenges.has(challengeId) || Boolean(record.complete);
+      const progress = finiteBifazNumber(record.progress, 0, 0, 999);
+      const target = finiteBifazNumber(record.target, 0, 0, 999);
+      const title = cleanBifazText(record.title, badge.querySelector("strong")?.textContent || challengeId, 48);
+      const objective = {
+        naturalista: "descubre seis criaturas",
+        acrobata: "consigue tres aterrizajes de precisión únicos",
+        origamista: "pliega en tres bisagras distintas",
+        virtuoso: "activa un Paper Rush",
+      }[challengeId] || cleanBifazText(record.objective, "completa el reto", 96);
+      const progressLabel = {
+        naturalista: `FAUNA ${Math.min(progress, target)} / ${target}`,
+        acrobata: `PRECISIÓN ${Math.min(progress, target)} / ${target}`,
+        origamista: `BISAGRAS ${Math.min(progress, target)} / ${target}`,
+        virtuoso: `RUSH ${Math.min(progress, target)} / ${target}`,
+      }[challengeId] || `${Math.min(progress, target)} / ${target}`;
+      badge.dataset.complete = String(complete);
+      badge.classList.toggle("complete", complete);
+      badge.setAttribute("aria-label", `${title}: ${complete ? "completado" : (target ? `${Math.min(progress, target)} de ${target}; ${objective}` : "pendiente")}`);
+      const detail = badge.querySelector("small");
+      if (detail && target) detail.textContent = complete ? "COMPLETADO" : progressLabel;
+    });
+    if (elements.perspectiveChallenges) {
+      elements.perspectiveChallenges.setAttribute("aria-label", `${challengesCompleted} de ${BIFAZ_CHALLENGE_IDS.length} retos completados`);
+    }
+    elements.perspectiveTutorial.textContent = perspectivePaused
+      ? "PAUSA · Pulsa Escape para volver al pliegue."
+      : (cleanBifazText(hud.tutorial, missionObjective, 160));
+    elements.perspectiveAnchorLabel.textContent = hud.anchor || "BUSCA UNA BISAGRA";
+    const a11ySignature = [perspectivePaused, hud.complete, missionStage, missionTitle,
+      collected, discoveries, challengesCompleted].join("|");
+    if (elements.perspectiveAnnouncer && a11ySignature !== perspectiveA11ySignature) {
+      perspectiveA11ySignature = a11ySignature;
+      const announcement = perspectivePaused
+        ? ["Pradera Bifaz en pausa.", "Pulsa Escape para continuar."]
+        : [
+          hud.complete ? "Pradera Bifaz completada." : "",
+          `Misión ${missionTitle}, etapa ${Math.max(1, missionStage)} de ${missionCount}. ${missionObjective}`,
+          `${collected} de ${required} sellos.`,
+          `${discoveries} de ${wildlifeTotal} especies descubiertas y ${challengesCompleted} de ${BIFAZ_CHALLENGE_IDS.length} retos completados.`,
+        ];
+      elements.perspectiveAnnouncer.textContent = announcement.filter(Boolean).join(" ");
+    }
+    const player = runtime.state?.player || {};
+    document.documentElement.dataset.perspectiveMode = mode;
+    document.documentElement.dataset.perspectivePhase = phase;
+    document.documentElement.dataset.perspectiveFlipStage = flipStage;
+    document.documentElement.dataset.perspectiveMissionStage = String(missionStage);
+    document.documentElement.dataset.perspectiveFlowTier = flowTier;
+    document.documentElement.dataset.perspectivePaperRush = String(rushTimer > 0 || flowTier === "rush");
+    document.documentElement.dataset.perspectiveProgress = finiteBifazNumber(runtime.state?.blend, 0, 0, 1, false).toFixed(3);
+    document.documentElement.dataset.platformPlayer = `${finiteBifazNumber(player.x, 0, -100000, 100000, false).toFixed(1)},${finiteBifazNumber(player.y, 0, -100000, 100000, false).toFixed(1)}`;
+    document.documentElement.dataset.platformVelocity = `${finiteBifazNumber(player.vx, 0, -100000, 100000, false).toFixed(1)},${finiteBifazNumber(player.vy, 0, -100000, 100000, false).toFixed(1)}`;
+    document.documentElement.dataset.platformGrounded = String(Boolean(player.grounded));
+    document.documentElement.dataset.platformCheckpoint = hud.checkpointId || state.perspectiveZone.checkpointId;
+    document.documentElement.dataset.platformVisiblePokemon = String(finiteBifazNumber(hud.visiblePokemon, 0, 0, 999));
+    document.documentElement.dataset.platformComplete = String(hud.complete);
+  }
+
+  function togglePerspectiveAssist() {
+    if (!PERSPECTIVE_ZONE_ACTIVE) return;
+    const enabled = !Boolean(state.perspectiveZone.assist);
+    state.perspectiveZone.assist = enabled;
+    if (perspectiveZoneRuntime?.state) perspectiveZoneRuntime.state.assist = enabled;
+    syncPerspectiveProgress({ persist: true });
+    perspectiveHudSignature = "";
+    updatePerspectiveHud(true);
+    if (elements.perspectiveAnnouncer) {
+      elements.perspectiveAnnouncer.textContent = `Ayuda de accesibilidad ${enabled ? "activada" : "desactivada"}.`;
+    }
+  }
+
+  async function leavePerspectiveZone() {
+    if (!PERSPECTIVE_ZONE_ACTIVE || perspectiveExitPending) return false;
+    perspectiveExitPending = true;
+    inputLocked = true;
+    clearDirectionalInput();
+    syncPerspectiveProgress({ persist: true });
+    perspectiveZoneRuntime?.stop();
+    const destination = CITY_MAP.perspective || {};
+    const completed = await executeMapTransfer({
+      id: "pradera-bifaz-return",
+      type: "transition",
+      targetMap: destination.returnMap || "san-pablo",
+      targetX: Number(destination.returnX) || 2128,
+      targetY: Number(destination.returnY) || 2288,
+      targetDirection: destination.returnDirection || "down",
+      effect: prefersReducedMotion() ? "none" : "fade",
+    });
+    if (!completed) {
+      perspectiveExitPending = false;
+      inputLocked = false;
+      perspectiveZoneRuntime?.start();
+    }
+    return completed;
+  }
+
+  function updatePerspectiveZone(deltaSeconds, paused = false) {
+    const runtime = ensurePerspectiveZoneRuntime();
+    if (!runtime) return;
+    const dialogOpen = !elements.dialogBox.classList.contains("hidden");
+    if (!paused && !perspectivePaused && !inputLocked && !dialogOpen && !perspectiveExitPending) {
+      runtime.start();
+      runtime.step(deltaSeconds, input);
+    } else runtime.stop();
+    input.jumpPressed = false;
+    input.flipPressed = false;
+    input.restartPressed = false;
+    state.worldX = runtime.state.player.x;
+    state.worldY = runtime.state.player.y;
+    state.direction = runtime.state.player.facing < 0 ? "left" : "right";
+    updatePerspectiveHud();
+  }
+
   function updateMovement(deltaSeconds) {
     const drawerOpen = elements.teamDrawer.classList.contains("open")
       || elements.inventoryDrawer.classList.contains("open")
       || (elements.shopModal && !elements.shopModal.classList.contains("hidden"));
+    if (PERSPECTIVE_ZONE_ACTIVE) {
+      updatePerspectiveZone(deltaSeconds, drawerOpen || Boolean(battle));
+      return;
+    }
     if (state.dimension === "prism") {
       updateMazeMovement(deltaSeconds, drawerOpen);
       return;
@@ -5705,7 +7295,7 @@
       state.distance += moved;
       animationTime += moved;
       animationPhase = PLAYER_MOVEMENT_CORE.advanceAnimationPhase(animationPhase, moved, running);
-      animationFrame = Math.floor(animationPhase) % 4;
+      animationFrame = Math.floor(animationPhase) % PLAYER_WALK_FRAME_COUNT;
       elements.runBadge.classList.toggle("hidden", !running);
       if (triggerStepMapEvent()) {
         updateAreaLabel(); updateInteractPrompt();
@@ -5834,6 +7424,7 @@
         else context.fillRect(x + 2, y + 2, tile - 4, 2);
       }
     }
+    drawInteriorGroundOverrides(context);
     context.fillStyle = "rgba(38,28,24,.18)";
     context.fillRect(r.x + r.wall, r.y + r.wall, r.w - r.wall * 2, 12);
     context.fillStyle = palette.wall;
@@ -5845,22 +7436,42 @@
     context.strokeRect(r.x + 9.5, r.y + 9.5, r.w - 19, r.h - 19);
     const sceneAssets = activeInteriorAssets().filter((asset) => !editorHiddenEntities.has(`asset:${asset.id}`));
     sceneAssets.filter((asset) => asset.layer === "floor").forEach((asset) => drawWorldAsset(context, asset));
-    drawInteriorFurniture(context, palette);
-    const ex = INDOOR_EXIT;
-    context.fillStyle = "rgba(244,220,119,.32)"; context.beginPath(); context.ellipse(ex.x, ex.y, 44, 16, 0, 0, Math.PI * 2); context.fill();
-    context.fillStyle = "rgba(244,220,119,.5)"; context.beginPath(); context.ellipse(ex.x, ex.y, 22, 8, 0, 0, Math.PI * 2); context.fill();
-    drawMapLabel(context, ex.x, ex.y + 30, "SALIDA");
+    if (!hasCustomInteriorEntrance()) {
+      const ex = INDOOR_EXIT;
+      context.fillStyle = "rgba(244,220,119,.32)"; context.beginPath(); context.ellipse(ex.x, ex.y, 44, 16, 0, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "rgba(244,220,119,.5)"; context.beginPath(); context.ellipse(ex.x, ex.y, 22, 8, 0, 0, Math.PI * 2); context.fill();
+      drawMapLabel(context, ex.x, ex.y + 30, "SALIDA DE SEGURIDAD");
+    }
     drawMapLabel(context, r.x + r.w / 2, r.y + 48, palette.label);
     const entities = sceneAssets.filter((asset) => asset.layer !== "floor").map((asset) => ({
       y: Number(asset.depthY ?? asset.y), priority: 0, draw: () => drawWorldAsset(context, asset),
     }));
-    entities.push(
-      { y: INDOOR_NPC.y, priority: 1, draw: () => drawInteriorNpc(context, palette) },
-      { y: state.worldY, priority: 2, draw: () => drawPlayer(context) },
-    );
+    activeSceneNpcs().filter((npc) => !editorHiddenEntities.has(`npc:${npc.id}`)).forEach((npc) => entities.push({
+      y: mapNpcPosition(npc).y, priority: 1, draw: () => drawWorldNpc(context, npc),
+    }));
+    entities.push({ y: state.worldY, priority: 2, draw: () => drawPlayer(context) });
     entities.sort((first, second) => first.y - second.y || first.priority - second.priority).forEach((entity) => entity.draw());
+    drawTileGrid(context);
     drawWorldAssetColliders(context, sceneAssets);
-    if (elements.buildingEditor.classList.contains("open")) drawEditorPresence(context);
+  }
+
+  function drawInteriorGroundOverrides(context) {
+    const overrides = activeInteriorGroundOverrides();
+    if (!overrides.size) return;
+    const r = INDOOR_ROOM;
+    const size = CITY_MAP.tileSize;
+    context.save();
+    context.beginPath();
+    context.rect(r.x + r.wall, r.y + r.wall, r.w - r.wall * 2, r.h - r.wall * 2);
+    context.clip();
+    context.imageSmoothingEnabled = false;
+    overrides.forEach((type, key) => {
+      const [col, row] = key.split(",").map(Number);
+      const image = interiorFloorImages.get(type);
+      if (!image?.complete || !image.naturalWidth) return;
+      context.drawImage(image, col * size, row * size, size, size);
+    });
+    context.restore();
   }
 
   function drawPixelFurniture(context, kind, x, y, color = "#8a6440") {
@@ -6031,6 +7642,61 @@
     context.restore();
   }
 
+  function drawPerspectiveGateWayfinder(context, x, y, now = performance.now()) {
+    const animated = !prefersReducedMotion();
+    const pulse = animated ? (Math.sin(now / 260) + 1) / 2 : .45;
+    const bob = animated ? Math.sin(now / 330) * 3 : 0;
+    const badgeY = y - 48 + bob;
+
+    context.save();
+    context.globalAlpha = .94;
+    context.fillStyle = `rgba(114, 224, 225, ${.12 + pulse * .12})`;
+    context.strokeStyle = "rgba(255, 221, 111, .96)";
+    context.lineWidth = 2;
+    context.setLineDash([6, 4]);
+    context.beginPath();
+    context.ellipse(x, y + 7, 23 + pulse * 7, 8 + pulse * 2, 0, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.setLineDash([]);
+
+    context.strokeStyle = "rgba(255, 247, 202, .9)";
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(x, y - 8);
+    context.lineTo(x, badgeY + 19);
+    context.stroke();
+    context.fillStyle = "#ffdf6e";
+    context.beginPath();
+    context.moveTo(x, y - 3);
+    context.lineTo(x - 7, y - 14);
+    context.lineTo(x + 7, y - 14);
+    context.closePath();
+    context.fill();
+
+    context.translate(x, badgeY);
+    context.rotate(Math.PI / 4);
+    context.beginPath();
+    context.rect(-15, -15, 30, 30);
+    context.clip();
+    context.fillStyle = "#70dfe1";
+    context.fillRect(-15, -15, 15, 30);
+    context.fillStyle = "#ffda68";
+    context.fillRect(0, -15, 15, 30);
+    context.strokeStyle = "#fff9d5";
+    context.lineWidth = 3;
+    context.strokeRect(-14, -14, 28, 28);
+    context.strokeStyle = "rgba(39, 74, 63, .76)";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(0, -14);
+    context.lineTo(0, 14);
+    context.stroke();
+    context.restore();
+
+    drawMapLabel(context, x, y - 82 + bob, "MINIJUEGO · PABELLÓN BIFAZ");
+  }
+
   function directionFromNpcToPlayer(position, fallback = "down") {
     const dx = state.worldX - position.x;
     const dy = state.worldY - position.y;
@@ -6043,15 +7709,16 @@
     const position = mapNpcPosition(npc);
     const patrol = npcPatrolState(npc);
     const direction = patrol?.direction || directionFromNpcToPlayer(position, npc.direction || "down");
-    const rows = { down: 0, left: 1, right: 2, up: 3 };
-    const frame = (patrol?.moving || npc.walking) ? Math.floor(performance.now() / 170) % 4 : 0;
+    const frame = (patrol?.moving || npc.walking)
+      ? Math.floor(performance.now() / 170) % NPC_WALK_FRAME_COUNT
+      : 0;
     context.save();
     context.fillStyle = "rgba(22,43,34,.23)";
     context.beginPath(); context.ellipse(Math.round(position.x), Math.round(position.y + 1), 16, 5, 0, 0, Math.PI * 2); context.fill();
     const rosterRecord = npcRosterSheets.get(npc.sprite);
     const spriteSheet = npc.sprite === "guide" && guideNpcSheetReady ? guideNpcSheet : (rosterRecord?.ready ? rosterRecord.image : null);
     if (spriteSheet) {
-      context.drawImage(spriteSheet, frame * SPRITE_CELL_SIZE, (rows[direction] || 0) * SPRITE_CELL_SIZE,
+      context.drawImage(spriteSheet, frame * SPRITE_CELL_SIZE, (NPC_DIRECTION_ROWS[direction] || 0) * SPRITE_CELL_SIZE,
         SPRITE_CELL_SIZE, SPRITE_CELL_SIZE, Math.round(position.x) - 32, Math.round(position.y) - 60, 64, 64);
     } else {
       context.fillStyle = "#416448"; context.fillRect(position.x - 13, position.y - 30, 26, 30);
@@ -6069,11 +7736,10 @@
     const scene = doctorPotatoScene;
     const doctorPotatoSprite = npcRosterSheets.get("doctor-potato");
     const doctorPotatoSheet = doctorPotatoSprite?.ready ? doctorPotatoSprite.image : null;
-    const rows = { down: 0, left: 1, right: 2, up: 3 };
     const moving = scene.phase === "entering" || scene.phase === "exiting";
     const frameDuration = scene.phase === "exiting" ? 520 : 155;
-    const frame = moving ? Math.floor(scene.animationElapsed / frameDuration) % 4 : 0;
-    const row = rows[scene.direction] || 0;
+    const frame = moving ? Math.floor(scene.animationElapsed / frameDuration) % NPC_WALK_FRAME_COUNT : 0;
+    const row = NPC_DIRECTION_ROWS[scene.direction] || 0;
     const drawSprite = (x, alpha = 1) => {
       context.save();
       context.globalAlpha = alpha;
@@ -6107,8 +7773,7 @@
     if (!state.started || state.dimension !== "san_pablo" || state.interior || doctorPotatoScene || !voiceNpc.positionReady) return;
     const record = npcRosterSheets.get("doctor-potato");
     const sheet = record?.ready ? record.image : null;
-    const rows = { down: 0, left: 1, right: 2, up: 3 };
-    const frame = voiceNpc.moving ? Math.floor(voiceNpc.animationElapsed / 150) % 4 : 0;
+    const frame = voiceNpc.moving ? Math.floor(voiceNpc.animationElapsed / 150) % NPC_WALK_FRAME_COUNT : 0;
     context.save();
     context.fillStyle = voiceNpc.active ? "rgba(142,31,45,.34)" : "rgba(22,43,34,.25)";
     context.beginPath(); context.ellipse(Math.round(voiceNpc.x), Math.round(voiceNpc.y + 1), 19, 6, 0, 0, Math.PI * 2); context.fill();
@@ -6118,7 +7783,7 @@
       context.beginPath(); context.arc(voiceNpc.x, voiceNpc.y - 28, 29 + Math.sin(performance.now() / 110) * 2, 0, Math.PI * 2); context.stroke();
     }
     if (sheet) {
-      context.drawImage(sheet, frame * SPRITE_CELL_SIZE, (rows[voiceNpc.direction] || 0) * SPRITE_CELL_SIZE,
+      context.drawImage(sheet, frame * SPRITE_CELL_SIZE, (NPC_DIRECTION_ROWS[voiceNpc.direction] || 0) * SPRITE_CELL_SIZE,
         SPRITE_CELL_SIZE, SPRITE_CELL_SIZE, Math.round(voiceNpc.x) - 34, Math.round(voiceNpc.y) - 64, 68, 68);
     } else {
       context.fillStyle = "#f1f4ed"; context.fillRect(voiceNpc.x - 18, voiceNpc.y - 36, 36, 34);
@@ -6341,7 +8006,11 @@
         draw: () => drawPortal(context, portalPosition.x, portalPosition.y, state.inventory.prismShards >= 3),
       });
     }
-    cityNpcs.filter((npc) => !editorHiddenEntities.has(`npc:${npc.id}`)).forEach((npc) => entities.push({
+    const perspectiveGatePosition = currentPerspectiveGatePosition();
+    const perspectiveGateVisible = Boolean(perspectiveGatePosition
+      && entityInView(perspectiveGatePosition, bounds, 150));
+    setPerspectiveGateDiagnostic("wayfinder", perspectiveGateVisible ? "visible" : "culled");
+    activeSceneNpcs().filter((npc) => !editorHiddenEntities.has(`npc:${npc.id}`)).forEach((npc) => entities.push({
       y: mapNpcPosition(npc).y,
       priority: 1,
       draw: () => drawWorldNpc(context, npc),
@@ -6362,6 +8031,7 @@
     }
     worldObjects
       .filter((object) => object.dimension === state.dimension
+        && (object.kind !== "prismShards" || state.inventory.prismShards < 3)
         && !state.collectedObjects.includes(object.id)
         && entityInView(object, bounds, 45))
       .forEach((object) => entities.push({
@@ -6377,7 +8047,7 @@
     const visibleCollaboratorPlayers = collaboratorCursors
       .filter((collaborator) => collaborator.player
         && collaborator.player.dimension === state.dimension
-        && (collaborator.player.interior || null) === (state.interior || null)
+        && (collaborator.player.interior || null) === currentPresenceSceneId()
         && entityInView(collaborator.player, bounds, 70));
     document.documentElement.dataset.collaboratorPlayerVisibleCount = String(visibleCollaboratorPlayers.length);
     visibleCollaboratorPlayers.forEach((collaborator) => entities.push({
@@ -6387,6 +8057,9 @@
     }));
     entities.push({ y: state.worldY, priority: 2, draw: () => drawPlayer(context) });
     entities.sort((a, b) => (a.y - b.y) || (a.priority - b.priority)).forEach((entity) => entity.draw());
+    if (perspectiveGateVisible) {
+      drawPerspectiveGateWayfinder(context, perspectiveGatePosition.x, perspectiveGatePosition.y, encounterGrass.now);
+    }
     return visibleAssets;
   }
 
@@ -6435,7 +8108,10 @@
     if (!player) return;
     const targetX = Number(player.x); const targetY = Number(player.y);
     const distance = Math.hypot(targetX - player.displayX, targetY - player.displayY);
-    const smoothing = distance > 220 ? 1 : .32;
+    const now = performance.now();
+    const elapsed = Math.max(0, Math.min(50, now - Number(player.displayUpdatedAt || now)));
+    player.displayUpdatedAt = now;
+    const smoothing = distance > 220 || distance < .1 ? 1 : 1 - Math.exp(-elapsed / 45);
     player.displayX += (targetX - player.displayX) * smoothing;
     player.displayY += (targetY - player.displayY) * smoothing;
     const x = player.displayX; const y = player.displayY;
@@ -6502,10 +8178,88 @@
     context.restore();
   }
 
+  function drawPortalFragments(context, {
+    radiusX = 72,
+    radiusY = 26,
+    lift = 118,
+    tint = "#b38cff",
+    active = true,
+    phase = 0,
+    filter = "none",
+  } = {}) {
+    const time = prefersReducedMotion() ? 0 : performance.now() / 1000;
+    const strength = active ? 1 : .42;
+    context.save();
+    context.globalAlpha *= strength;
+    context.imageSmoothingEnabled = false;
+
+    /* PixelLab aporta la corona de restos sobre el suelo. Se comprime en Y
+       para que respete la perspectiva de cada portal. */
+    if (prismPortalFragmentsImage.complete && prismPortalFragmentsImage.naturalWidth) {
+      context.save();
+      context.translate(0, radiusY * .42);
+      context.rotate(Math.sin(time * .42 + phase) * .035);
+      context.filter = active ? filter : "grayscale(1) brightness(.7)";
+      context.globalAlpha *= .72 + Math.sin(time * 1.8 + phase) * .1;
+      context.drawImage(prismPortalFragmentsImage, -radiusX, -radiusY, radiusX * 2, radiusY * 2);
+      context.restore();
+    } else {
+      context.fillStyle = tint;
+      for (let shard = 0; shard < 8; shard += 1) {
+        const angle = shard / 8 * Math.PI * 2 + phase;
+        const x = Math.cos(angle) * radiusX * .83;
+        const y = Math.sin(angle) * radiusY + radiusY * .42;
+        const size = Math.max(2, radiusX * (.045 + seededRandom(shard + phase * 31) * .035));
+        context.save(); context.translate(x, y); context.rotate(angle);
+        context.beginPath(); context.moveTo(0, -size); context.lineTo(size * .55, 0);
+        context.lineTo(0, size * .72); context.lineTo(-size * .38, 0); context.closePath(); context.fill();
+        context.restore();
+      }
+    }
+
+    /* Esquirlas desprendidas: ascienden, orbitan a velocidades distintas y
+       parecen ser absorbidas de nuevo por el umbral. */
+    context.shadowColor = tint;
+    context.shadowBlur = Math.max(4, radiusX * .09);
+    for (let shard = 0; shard < 10; shard += 1) {
+      const seed = seededRandom(shard * 43 + phase * 97);
+      const orbit = phase + shard * 2.399 + time * (.24 + seed * .24) * (shard % 2 ? 1 : -1);
+      const tier = .12 + (shard % 5) * .185;
+      const x = Math.cos(orbit) * radiusX * (.62 + seed * .2);
+      const y = -lift * tier + Math.sin(orbit * 1.7) * radiusY * .62;
+      const size = Math.max(2, radiusX * (.035 + seed * .032) * (1.08 - tier * .42));
+      const blink = .48 + (Math.sin(time * (2.2 + seed) + shard) + 1) * .22;
+      context.save();
+      context.translate(x, y);
+      context.rotate(orbit + time * (shard % 2 ? .7 : -.55));
+      context.globalAlpha *= blink;
+      context.fillStyle = tint;
+      context.beginPath();
+      context.moveTo(0, -size * 1.5);
+      context.lineTo(size * .62, -.12 * size);
+      context.lineTo(size * .18, size);
+      context.lineTo(-size * .5, size * .32);
+      context.closePath();
+      context.fill();
+      context.fillStyle = "rgba(247,239,255,.72)";
+      context.fillRect(-Math.max(1, size * .12), -size, Math.max(1, size * .16), size * .72);
+      context.restore();
+    }
+    context.restore();
+  }
+
   function drawPortal(context, x, y, active, mirror = false) {
     const time = performance.now();
     const pulse = 1 + Math.sin(time / 350) * .06;
     context.save(); context.translate(x, y); context.scale(pulse, pulse);
+    if (state.dimension === "prism") {
+      drawPortalFragments(context, {
+        radiusX: 76, radiusY: 28, lift: 124, active,
+        tint: active ? (mirror ? "#f0a8ff" : "#79e4ee") : "#777b82",
+        phase: mirror ? 2.2 : .35,
+        filter: mirror ? "hue-rotate(-28deg) saturate(1.18)" : "none",
+      });
+    }
     context.fillStyle = "rgba(25,30,54,.25)";
     context.beginPath(); context.ellipse(0, 36, 58, 18, 0, 0, Math.PI * 2); context.fill();
     context.strokeStyle = active ? (mirror ? "#f0a8ff" : "#79e4ee") : "#8c8d88";
@@ -6527,12 +8281,15 @@
   function checkObjectPickup() {
     if (state.interior) return false;
     const object = worldObjects.find((item) => item.dimension === state.dimension
+      && (item.kind !== "prismShards" || state.inventory.prismShards < 3)
       && !state.collectedObjects.includes(item.id)
       && Math.hypot(state.worldX - item.x, state.worldY - item.y) < 38);
     if (!object) return false;
     state.collectedObjects.push(object.id);
     if (object.kind === "balls") state.balls += object.amount;
-    else state.inventory[object.kind] = (state.inventory[object.kind] || 0) + object.amount;
+    else if (object.kind === "prismShards") {
+      state.inventory.prismShards = Math.min(3, (state.inventory.prismShards || 0) + object.amount);
+    } else state.inventory[object.kind] = (state.inventory[object.kind] || 0) + object.amount;
     playJingle(object.crystal ? "capture" : "success");
     if (object.crystal) {
       const shards = state.inventory.prismShards;
@@ -6564,10 +8321,10 @@
     const maze = ensureMazeState();
     const width = VIEW_WIDTH; const height = VIEW_HEIGHT; const horizon = height * .47; const fov = Math.PI / 3;
     const ceiling = context.createLinearGradient(0, 0, 0, horizon);
-    ceiling.addColorStop(0, "#090712"); ceiling.addColorStop(1, "#28213c");
+    ceiling.addColorStop(0, "#020207"); ceiling.addColorStop(.72, "#0d0918"); ceiling.addColorStop(1, "#251735");
     context.fillStyle = ceiling; context.fillRect(0, 0, width, horizon);
     const floor = context.createLinearGradient(0, horizon, 0, height);
-    floor.addColorStop(0, "#332b4c"); floor.addColorStop(1, "#080710");
+    floor.addColorStop(0, "#241a35"); floor.addColorStop(.48, "#0c0914"); floor.addColorStop(1, "#020205");
     context.fillStyle = floor; context.fillRect(0, horizon, width, height - horizon);
 
     /* Rejilla de perspectiva, neblina y pulsos ambientales para que la sala no
@@ -6585,6 +8342,17 @@
     const haze = context.createRadialGradient(width / 2, horizon, 20, width / 2, horizon, width * .72);
     haze.addColorStop(0, `rgba(174,115,218,${pulse})`); haze.addColorStop(1, "rgba(3,2,9,.28)");
     context.fillStyle = haze; context.fillRect(0, 0, width, height);
+    context.strokeStyle = `rgba(181,94,221,${.08 + maze.dread * .12})`;
+    context.lineWidth = 1.2;
+    for (let crack = 0; crack < 7; crack += 1) {
+      const originX = seededRandom(crack * 43 + 9) * width;
+      context.beginPath(); context.moveTo(originX, 0);
+      for (let segment = 1; segment <= 5; segment += 1) {
+        const jitter = (seededRandom(crack * 97 + segment * 19) - .5) * 74;
+        context.lineTo(originX + jitter, horizon * segment / 7);
+      }
+      context.stroke();
+    }
     context.restore();
 
     const rayCount = 240;
@@ -6605,18 +8373,144 @@
       context.fillRect(index * width / rayCount, horizon - wallHeight / 2, sliceWidth, wallHeight);
       context.fillStyle = `rgba(178,128,210,${brightness * .08})`;
       context.fillRect(index * width / rayCount, horizon - wallHeight / 2, 1, wallHeight);
+      if (index % 19 === 0) {
+        context.fillStyle = `rgba(4,2,9,${.13 + (1 - brightness) * .22})`;
+        context.fillRect(index * width / rayCount, horizon - wallHeight / 2, Math.max(1, sliceWidth * .45), wallHeight);
+      }
+      if ((index + Math.floor(maze.playerX * 5) + Math.floor(maze.playerY * 7)) % 47 === 0 && correctedDistance < 7) {
+        context.fillStyle = `rgba(218,176,225,${brightness * .22})`;
+        const scratchY = horizon - wallHeight * .18;
+        context.fillRect(index * width / rayCount, scratchY, Math.max(1, sliceWidth), Math.max(2, wallHeight * .11));
+      }
     }
 
+    drawMazeEnvironmentalAnomalies(context, horizon);
     drawMazeBlackMarket(context, fov, wallDepths);
+    drawMazeExits(context, fov, wallDepths);
     drawMazeSecretPokemon(context, fov, wallDepths);
     drawMazeShadow(context, fov, wallDepths);
     drawSprintShadow(context);
+    drawPrismApparition(context);
     drawFlashlightCone(context);
     drawThirdPersonTrainer(context);
 
     context.strokeStyle = flashlightBurst > 0 ? "rgba(255,247,199,.95)" : "rgba(221,209,171,.52)";
     context.lineWidth = 2;
     context.beginPath(); context.moveTo(width / 2 - 10, horizon); context.lineTo(width / 2 + 10, horizon); context.moveTo(width / 2, horizon - 10); context.lineTo(width / 2, horizon + 10); context.stroke();
+  }
+
+  function drawMazeEnvironmentalAnomalies(context, horizon) {
+    const maze = ensureMazeState();
+    const time = performance.now() / 1000;
+    context.save();
+    for (let band = 0; band < 5; band += 1) {
+      const y = horizon + 22 + band * (VIEW_HEIGHT - horizon) / 5 + Math.sin(time * .38 + band) * 7;
+      const fog = context.createLinearGradient(0, y - 18, 0, y + 24);
+      fog.addColorStop(0, "rgba(118,91,143,0)");
+      fog.addColorStop(.5, `rgba(118,91,143,${.025 + maze.dread * .024})`);
+      fog.addColorStop(1, "rgba(10,6,17,0)");
+      context.fillStyle = fog; context.fillRect(0, y - 18, VIEW_WIDTH, 42);
+    }
+
+    const drift = prefersReducedMotion() ? 0 : time;
+    for (let mote = 0; mote < 34; mote += 1) {
+      const seedX = seededRandom(mote * 31 + 7);
+      const seedY = seededRandom(mote * 53 + 11);
+      const x = (seedX * VIEW_WIDTH + drift * (4 + mote % 5)) % VIEW_WIDTH;
+      const y = (seedY * VIEW_HEIGHT + Math.sin(drift * .5 + mote) * 8 + VIEW_HEIGHT) % VIEW_HEIGHT;
+      const size = .7 + seededRandom(mote * 83) * 1.8;
+      context.globalAlpha = .1 + seededRandom(mote * 17) * .22;
+      context.fillStyle = mote % 4 === 0 ? "#d7a5e9" : "#9685aa";
+      context.fillRect(x, y, size, size);
+    }
+
+    if (maze.dread > .52) {
+      context.globalAlpha = clamp((maze.dread - .52) * .9, 0, .38);
+      context.fillStyle = "#e8d9ed";
+      const blink = Math.sin(time * 1.4) > -.92 ? 1 : .1;
+      context.globalAlpha *= blink;
+      [[.045,.34],[.94,.42],[.075,.68],[.91,.72]].forEach(([x, y], index) => {
+        const size = 3 + index % 2 * 2;
+        context.beginPath(); context.ellipse(VIEW_WIDTH * x, VIEW_HEIGHT * y, size * 2.2, size, index % 2 ? -.2 : .2, 0, Math.PI * 2); context.fill();
+      });
+    }
+    context.restore();
+  }
+
+  function drawMazeExits(context, fov, wallDepths) {
+    (mazeDefinition.exits || []).forEach((exit) => drawMazeExit(context, exit, fov, wallDepths));
+  }
+
+  function drawMazeExit(context, exit, fov, wallDepths) {
+    const projection = projectedEntityData(exit.x + .5, exit.y + .5, fov);
+    if (!projection || projection.distance < .2) return;
+    const height = clamp(590 / Math.max(.52, projection.distance), 62, 510);
+    const width = height * .52;
+    const colors = exit.id === "moldyBerry"
+      ? { dark: "#07150e", mid: "#426d3a", glow: "#a6e36f", symbol: "☣" }
+      : exit.id === "weakPokemon"
+        ? { dark: "#100b18", mid: "#705477", glow: "#f0d9f5", symbol: "!" }
+        : { dark: "#0d1116", mid: "#44616d", glow: "#8ed8dd", symbol: "×" };
+    const baseY = VIEW_HEIGHT * .5 + height * .5;
+    const pulse = .72 + Math.sin(performance.now() / 180 + exit.x) * .22;
+    context.save();
+    clipEntityByWallDepth(context, projection, width * 1.25, wallDepths);
+    context.translate(projection.screenX, baseY);
+    context.globalAlpha = clamp(1.18 - projection.distance / 24, .48, 1);
+    drawPortalFragments(context, {
+      radiusX: width * .88,
+      radiusY: height * .065,
+      lift: height * .93,
+      tint: colors.glow,
+      phase: exit.x * .47 + exit.y * .19,
+      filter: exit.id === "moldyBerry"
+        ? "hue-rotate(68deg) saturate(1.25)"
+        : exit.id === "weakPokemon" ? "hue-rotate(-24deg) saturate(1.1)" : "none",
+    });
+    context.shadowColor = colors.glow; context.shadowBlur = height * .11 * pulse;
+    context.fillStyle = colors.dark;
+    context.beginPath();
+    context.moveTo(-width * .55, 0); context.lineTo(-width * .48, -height * .72);
+    context.quadraticCurveTo(0, -height * 1.04, width * .48, -height * .72);
+    context.lineTo(width * .55, 0); context.closePath(); context.fill();
+    context.strokeStyle = colors.mid; context.lineWidth = Math.max(2, height * .027); context.stroke();
+    context.fillStyle = `rgba(2,2,5,${.7 + pulse * .12})`;
+    context.beginPath();
+    context.moveTo(-width * .34, 0); context.lineTo(-width * .3, -height * .66);
+    context.quadraticCurveTo(0, -height * .86, width * .3, -height * .66);
+    context.lineTo(width * .34, 0); context.closePath(); context.fill();
+    context.fillStyle = colors.glow;
+    context.font = `900 ${Math.max(11, height * .15)}px monospace`;
+    context.textAlign = "center"; context.textBaseline = "middle";
+    context.fillText(colors.symbol, 0, -height * .43);
+    if (exit.kind === "battle") {
+      context.globalAlpha *= .7 + Math.sin(performance.now() / 120) * .18;
+      context.fillStyle = "#050308";
+      context.beginPath(); context.arc(0, -height * .25, height * .075, 0, Math.PI * 2); context.fill();
+      context.fillRect(-height * .07, -height * .19, height * .14, height * .2);
+    }
+    context.restore();
+  }
+
+  function drawPrismApparition(context) {
+    if (!prismApparition || prefersReducedMotion()) return;
+    const progress = clamp(prismApparition.elapsed / prismApparition.duration, 0, 1);
+    const alpha = Math.sin(progress * Math.PI) * .38;
+    const side = prismApparition.side || 1;
+    const x = side < 0 ? VIEW_WIDTH * .08 : VIEW_WIDTH * .92;
+    const y = VIEW_HEIGHT * .54;
+    context.save();
+    context.globalAlpha = alpha;
+    context.translate(x, y);
+    context.scale(side, 1);
+    context.filter = "blur(1px) drop-shadow(0 0 14px #a357c5)";
+    context.fillStyle = "#010103";
+    context.beginPath(); context.ellipse(0, -96, 24, 42, -.12, 0, Math.PI * 2); context.fill();
+    context.fillRect(-16, -65, 32, 100);
+    context.beginPath(); context.moveTo(7, -54); context.lineTo(75, -4); context.lineTo(11, -24); context.fill();
+    context.fillStyle = "#dfe7e8";
+    context.fillRect(-11, -101, 7, 3); context.fillRect(5, -102, 7, 3);
+    context.restore();
   }
 
   function projectedEntityData(x, y, fov) {
@@ -6789,9 +8683,14 @@
   }
 
   function drawFlashlightCone(context) {
-    const gradient = context.createRadialGradient(VIEW_WIDTH / 2, VIEW_HEIGHT * .58, 20, VIEW_WIDTH / 2, VIEW_HEIGHT * .58, VIEW_WIDTH * .5);
-    gradient.addColorStop(0, flashlightBurst > 0 ? "rgba(255,250,211,.5)" : "rgba(244,235,189,.18)");
-    gradient.addColorStop(.48, flashlightBurst > 0 ? "rgba(243,226,168,.22)" : "rgba(222,208,159,.07)");
+    const maze = ensureMazeState();
+    const flickerLoss = clamp(maze.flicker * .8 + (maze.lightCharges <= 0 ? .36 : 0), 0, .88);
+    const time = performance.now() / 1000;
+    const jitter = prefersReducedMotion() ? 0 : Math.sin(time * 16.2) * (1.2 + maze.dread * 2.4);
+    const centerX = VIEW_WIDTH / 2 + jitter;
+    const gradient = context.createRadialGradient(centerX, VIEW_HEIGHT * .58, 20, centerX, VIEW_HEIGHT * .58, VIEW_WIDTH * .5);
+    gradient.addColorStop(0, flashlightBurst > 0 ? `rgba(255,250,211,${.5 * (1 - flickerLoss)})` : `rgba(244,235,189,${.18 * (1 - flickerLoss)})`);
+    gradient.addColorStop(.48, flashlightBurst > 0 ? `rgba(243,226,168,${.22 * (1 - flickerLoss)})` : `rgba(222,208,159,${.07 * (1 - flickerLoss)})`);
     gradient.addColorStop(1, "rgba(0,0,0,0)");
     context.save();
     context.beginPath(); context.moveTo(VIEW_WIDTH * .43, VIEW_HEIGHT); context.lineTo(VIEW_WIDTH * .19, VIEW_HEIGHT * .1); context.lineTo(VIEW_WIDTH * .81, VIEW_HEIGHT * .1); context.lineTo(VIEW_WIDTH * .57, VIEW_HEIGHT); context.closePath(); context.clip();
@@ -6819,11 +8718,11 @@
   function editorEntityWorldPosition(selection) {
     if (!selection) return null;
     if (selection.kind === "npc") {
-      const npc = cityNpcs.find((entry) => entry.id === selection.id);
+      const npc = activeSceneNpcs().find((entry) => entry.id === selection.id);
       return npc ? mapNpcPosition(npc) : null;
     }
     if (selection.kind === "entrance") {
-      const entrance = cityEntrances.find((entry) => entry.id === selection.id);
+      const entrance = activeSceneEntrances().find((entry) => entry.id === selection.id);
       return entrance ? { x: (entrance.col + .5) * CITY_MAP.tileSize, y: (entrance.row + .5) * CITY_MAP.tileSize } : null;
     }
     if (selection.kind === "event") {
@@ -6857,7 +8756,11 @@
       } else { context.beginPath(); context.arc(selection.x, selection.y, 23, 0, Math.PI * 2); context.fill(); context.stroke(); }
       context.restore();
     });
-    collaboratorCursors.forEach((collaborator) => {
+    collaboratorCursors
+      .filter((collaborator) => !collaborator.player
+        || (collaborator.player.dimension === state.dimension
+          && (collaborator.player.interior || null) === currentPresenceSceneId()))
+      .forEach((collaborator) => {
       const lockedPosition = editorEntityWorldPosition(collaborator.selection);
       if (lockedPosition) {
         context.save(); context.strokeStyle = collaborator.color; context.lineWidth = 4; context.setLineDash([6, 5]);
@@ -6882,9 +8785,9 @@
   }
 
   function drawEditorOverlayCell(context, col, row) {
-    const size = CITY_MAP.tileSize; const x = col * size; const y = row * size; const key = tileKey(col, row);
+    const size = CITY_MAP.tileSize; const x = col * size; const y = row * size; const key = sceneTileKey(currentRuntimeSceneId(), col, row);
     const colors = { blocked: "rgba(214,59,52,.34)", door: "rgba(255,191,46,.48)", encounter: "rgba(52,183,91,.34)", event: "rgba(126,81,201,.42)" };
-    const type = mapTileType(col, row);
+    const type = state.interior === "building" ? "walkable" : mapTileType(col, row);
     if ((editorMode === "terrain" || editorOverlays.collisions) && colors[type]) { context.fillStyle = colors[type]; context.fillRect(x, y, size, size); }
     if (editorOverlays.npcs && npcTileIndex.has(key)) { context.fillStyle = "rgba(48,174,214,.55)"; context.fillRect(x, y, size, size); }
     if (editorOverlays.entrances && entranceTileIndex.has(key)) {
@@ -6893,8 +8796,9 @@
       context.moveTo(x + 8, y + size / 2); context.lineTo(x + size - 8, y + size / 2);
       context.lineTo(x + size - 14, y + size / 2 - 6); context.moveTo(x + size - 8, y + size / 2); context.lineTo(x + size - 14, y + size / 2 + 6); context.stroke();
     }
-    if (editorOverlays.events && eventTileIndex.has(key)) {
-      const events = eventTileIndex.get(key); const step = events.some((event) => event.trigger === "step");
+    const visibleEvents = editorOverlays.events ? mapEventsAt(col, row) : [];
+    if (visibleEvents.length) {
+      const step = visibleEvents.some((event) => event.trigger === "step");
       context.fillStyle = "rgba(126,81,201,.56)"; context.fillRect(x, y, size, size);
       context.strokeStyle = "rgba(255,255,255,.9)"; context.lineWidth = 2; context.setLineDash(step ? [4, 3] : []);
       context.beginPath(); context.arc(x + size / 2, y + size / 2, step ? 11 : 7, 0, Math.PI * 2); context.stroke(); context.setLineDash([]);
@@ -6907,12 +8811,15 @@
 
   function rebuildEditorOverlayCache() {
     const startedAt = performance.now(); const context = editorOverlayCanvas.getContext("2d");
-    context.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    const cols = Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize); const rows = Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize);
+    const overlayWidth = currentWorldWidth(); const overlayHeight = currentWorldHeight();
+    if (editorOverlayCanvas.width !== overlayWidth) editorOverlayCanvas.width = overlayWidth;
+    if (editorOverlayCanvas.height !== overlayHeight) editorOverlayCanvas.height = overlayHeight;
+    context.clearRect(0, 0, overlayWidth, overlayHeight);
+    const cols = Math.ceil(overlayWidth / CITY_MAP.tileSize); const rows = Math.ceil(overlayHeight / CITY_MAP.tileSize);
     for (let row = 0; row < rows; row += 1) for (let col = 0; col < cols; col += 1) drawEditorOverlayCell(context, col, row);
     if (editorOverlays.routes) {
       context.save(); context.strokeStyle = "rgba(47,149,201,.78)"; context.lineWidth = 3; context.setLineDash([8, 5]);
-      cityNpcs.filter((npc) => npc.patrol?.to).forEach((npc) => {
+      activeSceneNpcs().filter((npc) => npc.patrol?.to).forEach((npc) => {
         context.beginPath(); context.moveTo((npc.col + .5) * CITY_MAP.tileSize, (npc.row + .5) * CITY_MAP.tileSize);
         context.lineTo((npc.patrol.to[0] + .5) * CITY_MAP.tileSize, (npc.patrol.to[1] + .5) * CITY_MAP.tileSize); context.stroke();
       });
@@ -6920,7 +8827,7 @@
     }
     if (editorOverlays.entrances) {
       context.save(); context.strokeStyle = "rgba(255,191,46,.75)"; context.fillStyle = "rgba(255,191,46,.9)"; context.lineWidth = 3; context.setLineDash([7, 6]);
-      cityEntrances.filter((entrance) => ["san-pablo", "city", "current"].includes(String(entrance.targetMap || "").toLowerCase()) && Number.isFinite(entrance.targetX) && Number.isFinite(entrance.targetY)).forEach((entrance) => {
+      activeSceneEntrances().filter((entrance) => ["san-pablo", "city", "current"].includes(String(entrance.targetMap || "").toLowerCase()) && Number.isFinite(entrance.targetX) && Number.isFinite(entrance.targetY)).forEach((entrance) => {
         const fromX = (entrance.col + .5) * CITY_MAP.tileSize; const fromY = (entrance.row + .5) * CITY_MAP.tileSize;
         context.beginPath(); context.moveTo(fromX, fromY); context.lineTo(entrance.targetX, entrance.targetY); context.stroke();
         const angle = Math.atan2(entrance.targetY - fromY, entrance.targetX - fromX);
@@ -6996,6 +8903,10 @@
     context.setTransform(renderScale.scaleX, 0, 0, renderScale.scaleY, 0, 0);
     context.imageSmoothingEnabled = false;
     context.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    if (PERSPECTIVE_ZONE_ACTIVE) {
+      ensurePerspectiveZoneRuntime()?.render(context, VIEW_WIDTH, VIEW_HEIGHT);
+      return;
+    }
     updateMapTileStreaming(renderScale);
     if (state.dimension === "prism") {
       drawMaze3D(context);
@@ -7036,6 +8947,8 @@
   }
 
   function drawMiniMap() {
+    updatePerspectiveGateGuide();
+    if (PERSPECTIVE_ZONE_ACTIVE) return;
     if (!elements.miniMap || !elements.miniMapCanvas) return;
     const hidden = !state.started || state.dimension !== "san_pablo" || Boolean(state.interior)
       || elements.worldScreen.classList.contains("hidden");
@@ -7089,14 +9002,36 @@
       context.fillRect(rect[0] * size * scaleX, rect[1] * size * scaleY,
         (rect[2] - rect[0] + 1) * size * scaleX, (rect[3] - rect[1] + 1) * size * scaleY);
     });
-    cityEntrances.forEach((door) => {
+    entitiesInScene(cityEntrances, "world").forEach((door) => {
       context.fillStyle = door.action === "closed" ? "rgba(150,150,150,.8)" : "rgba(255,191,46,.95)";
       context.beginPath();
       context.arc(door.col * size * scaleX + size * scaleX / 2, door.row * size * scaleY + size * scaleY / 2, 2.4, 0, Math.PI * 2);
       context.fill();
     });
+    const perspectiveGatePosition = currentPerspectiveGatePosition();
+    if (perspectiveGatePosition) {
+      const gateX = perspectiveGatePosition.x * scaleX;
+      const gateY = perspectiveGatePosition.y * scaleY;
+      const pulse = prefersReducedMotion() ? 0 : (Math.sin(performance.now() / 300) + 1) * .7;
+      context.save();
+      context.translate(gateX, gateY);
+      context.strokeStyle = "rgba(255, 235, 139, .95)";
+      context.lineWidth = 1.6;
+      context.beginPath();
+      context.arc(0, 0, 6 + pulse, 0, Math.PI * 2);
+      context.stroke();
+      context.rotate(Math.PI / 4);
+      context.fillStyle = "#6de0e1";
+      context.fillRect(-3.6, -3.6, 3.6, 7.2);
+      context.fillStyle = "#f4d468";
+      context.fillRect(0, -3.6, 3.6, 7.2);
+      context.strokeStyle = "#fff5b8";
+      context.strokeRect(-3.6, -3.6, 7.2, 7.2);
+      context.restore();
+      setPerspectiveGateDiagnostic("minimap", "visible");
+    } else setPerspectiveGateDiagnostic("minimap", "missing");
     context.fillStyle = "rgba(48,174,214,.98)";
-    cityNpcs.forEach((npc) => {
+    entitiesInScene(cityNpcs, "world").forEach((npc) => {
       const position = mapNpcPosition(npc);
       context.beginPath(); context.arc(position.x * scaleX, position.y * scaleY, 2.7, 0, Math.PI * 2); context.fill();
     });
@@ -7129,6 +9064,7 @@
   }
 
   function updateCamera(deltaSeconds) {
+    if (PERSPECTIVE_ZONE_ACTIVE) return;
     if (state.dimension === "prism" || state.interior) return;
     if (elements.buildingEditor.classList.contains("open") && editorCameraActive) {
       camera.x = clamp(camera.x, 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
@@ -7223,6 +9159,58 @@
       setBattleMessage(`${speciesOf(enemy).name} invertido está atrapado por la dimensión. ¡Debilítalo para liberarlo!`);
       saveGame();
     }, 760);
+  }
+
+  function startPrismExitBattle(exit) {
+    if (battle || inputLocked || state.dimension !== "prism") return;
+    inputLocked = true;
+    clearDirectionalInput();
+    stopHorrorAudio();
+    stopBackgroundMusic();
+    elements.flashOverlay.classList.remove("encounter");
+    void elements.flashOverlay.offsetWidth;
+    elements.flashOverlay.classList.add("encounter");
+    playJingle("encounter");
+    window.setTimeout(() => {
+      const active = activePokemon();
+      const speciesId = PRISM_WEAK_EXIT_IDS[Math.floor(Math.random() * PRISM_WEAK_EXIT_IDS.length)];
+      const enemy = createPokemon(speciesId, clamp(active.level - 4 + Math.floor(Math.random() * 2), 2, 6));
+      if (!state.seen.includes(enemy.id)) state.seen.push(enemy.id);
+      battle = { enemy, busy: false, turns: 0, prismExitBattle: true, prismExitId: exit?.id || "weakPokemon" };
+      elements.worldScreen.classList.add("hidden");
+      elements.titleScreen.classList.add("hidden");
+      elements.battleScreen.classList.remove("hidden");
+      elements.battleScreen.classList.add("prism-battle", "prism-exit-battle");
+      elements.battleLabel.textContent = "SALIDA FALSA · PRESENCIA DÉBIL";
+      elements.flashOverlay.classList.remove("encounter");
+      inputLocked = false;
+      renderBattle();
+      startBackgroundMusic();
+      setBattleMessage(`${speciesOf(enemy).name} bloquea el umbral. El combate terminará fuera del laberinto.`);
+      saveGame();
+    }, 760);
+  }
+
+  async function completePrismWeakExit(enemy, outcome = "derrotado") {
+    if (!battle?.prismExitBattle) return;
+    setBattleBusy(true);
+    const firstDiscovery = registerPrismEnding("weakPokemon");
+    setBattleMessage(outcome === "capturado"
+      ? `La puerta reconoce a ${speciesOf(enemy).name}. El laberinto pierde su forma.`
+      : outcome === "huida"
+        ? "El umbral se abre al verte retroceder. Algo te empuja desde dentro."
+        : `Al caer ${speciesOf(enemy).name}, la salida se abre debajo de tus pies.`);
+    await wait(850);
+    leavePrismDimension();
+    finishBattle();
+    showDialog([
+      firstDiscovery
+        ? "Has encontrado la salida del guardián débil. Cuenta como uno de los cuatro desenlaces Prisma."
+        : "La salida del guardián débil vuelve a expulsarte. El laberinto recuerda el combate.",
+      outcome === "capturado"
+        ? `${speciesOf(enemy).name} ha cruzado contigo.`
+        : "El Pokémon débil se queda al otro lado, esperando al siguiente visitante.",
+    ], "!", () => showAreaToast("DESENLACE PRISMA · GUARDIÁN DÉBIL"));
   }
 
   function renderBattle() {
@@ -7736,12 +9724,17 @@
       await rescueSecretPokemon();
       return;
     }
+    const prismExitBattle = Boolean(battle?.prismExitBattle);
     const defeated = battle.enemy; const reward = 10 + defeated.level * 4;
     const moneyReward = 12 + defeated.level * 4;
     state.battlesWon += 1; state.money += moneyReward;
     setBattleMessage(`¡${speciesOf(defeated).name} salvaje fue derrotado!`); playJingle("success"); await wait(750);
     setBattleMessage(`${speciesOf(activePokemon()).name} ganó ${reward} puntos de experiencia (+${moneyReward} ₽).`); await wait(700);
     await awardExperience(activePokemon(), reward);
+    if (prismExitBattle) {
+      await completePrismWeakExit(defeated, "derrotado");
+      return;
+    }
     if (Math.random() < .22) { state.balls += 1; setBattleMessage("Encontraste una Poké Ball junto a la acera."); await wait(800); }
     finishBattle();
   }
@@ -7760,6 +9753,7 @@
 
     state.secretPokemonSaved = true;
     state.caughtDimension = true;
+    registerPrismEnding("rarePokemon");
     if (!state.caught.includes(rescued.id)) state.caught.push(rescued.id);
     if (!state.seen.includes(rescued.id)) state.seen.push(rescued.id);
     const joinedTeam = state.team.length < MAX_TEAM;
@@ -7771,6 +9765,7 @@
     await wait(1250);
 
     stopMicrophone();
+    resetPrismVisualState();
     const destination = state.returnPosition || currentPortalReturn();
     state.dimension = "san_pablo";
     state.worldX = destination.x;
@@ -7782,6 +9777,7 @@
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
     lastArea = "";
     elements.buildingEditorButton.disabled = false;
+    updateAreaLabel(); updateInteractPrompt();
     finishBattle();
     showDialog([
       "El laberinto se deshace y el portal te devuelve a San Pablo.",
@@ -7790,8 +9786,11 @@
   }
 
   async function loseBattle() {
+    const lostAtPrismExit = Boolean(battle?.prismExitBattle);
+    if (lostAtPrismExit) registerPrismEnding("weakPokemon");
     setBattleMessage("Tu equipo está agotado… Os llevan al Centro de Salud San Pablo."); playJingle("lose"); await wait(1300);
     stopMicrophone();
+    resetPrismVisualState();
     state.team.forEach((member) => { member.hp = member.maxHp; });
     state.dimension = "san_pablo"; state.returnPosition = null; state.interior = null; state.interiorData = null; state.maintenanceReturn = null;
     const healthReturn = currentHealthReturn();
@@ -7799,7 +9798,10 @@
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
     elements.buildingEditorButton.disabled = false;
-    finishBattle(); showDialog(["Enfermera: Ya estáis recuperados. Vigila los PS antes de cruzar las zonas verdes."], "+");
+    updateAreaLabel(); updateInteractPrompt();
+    finishBattle(); showDialog([lostAtPrismExit
+      ? "Enfermera: Os encontramos junto al portal. Ese Pokémon débil también era una salida, aunque no una amable."
+      : "Enfermera: Ya estáis recuperados. Vigila los PS antes de cruzar las zonas verdes."], "+");
   }
 
   async function throwBall(ballType = "poke") {
@@ -7831,7 +9833,9 @@
       else message = "Tu equipo está completo; la captura queda registrada en la Pokédex.";
       if (state.questStage <= 1) state.questStage = 2;
       if (state.team.length >= MAX_TEAM) state.questStage = 3;
-      await wait(900); setBattleMessage(message); await wait(950); finishBattle(); return;
+      await wait(900); setBattleMessage(message); await wait(950);
+      if (battle?.prismExitBattle) { await completePrismWeakExit(enemy, "capturado"); return; }
+      finishBattle(); return;
     }
     setBattleMessage(`¡Oh, no! ${species.name} se ha escapado.`); playTone(130, .18, "sawtooth", .03); await wait(800); await enemyTurn();
   }
@@ -7847,6 +9851,13 @@
       setBattleMessage(`El laberinto ha cerrado la salida. Debes liberar a ${speciesOf(battle.enemy).name}.`);
       return;
     }
+    if (battle.prismExitBattle) {
+      setBattleBusy(true);
+      setBattleMessage("Retrocedes hacia el umbral. Esta vez, la salida te deja huir.");
+      await wait(650);
+      await completePrismWeakExit(battle.enemy, "huida");
+      return;
+    }
     setBattleBusy(true);
     if (Math.random() < clamp(.68 + (activePokemon().level - battle.enemy.level) * .06, .35, .96)) {
       setBattleMessage("¡Escapaste sin problemas!"); playTone(430, .1, "square", .025); await wait(700); finishBattle(); return;
@@ -7857,6 +9868,7 @@
   function finishBattle() {
     if (battle) setBattleBusy(false);
     battle = null; inputLocked = false;
+    elements.battleScreen.classList.remove("prism-exit-battle");
     [elements.fightButton, elements.bagButton, elements.teamBattleButton, elements.runButton]
       .forEach((button) => { button.disabled = false; });
     elements.enemySprite.classList.remove("caught", "hit", "attacking", "anatomy-attacking", "attack-pose-active", "inverted-secret", "fainting"); elements.activeSprite.classList.remove("caught", "hit", "attacking", "anatomy-attacking", "attack-pose-active", "fainting");
@@ -8179,7 +10191,11 @@
     const entryNumber = SANPLEDEX_IDS.indexOf(selectedSanpledexId) + 1;
     const evolutionHtml = family.ids.map((id, index) => {
       const stage = POKEMON[id];
-      const previous = index > 0 ? POKEMON[family.ids[index - 1]] : null;
+      const previous = index > 0
+        ? family.ids.slice(0, index).map((candidateId) => POKEMON[candidateId]).find((candidate) => (
+          candidate?.evolvesTo === id || candidate?.evolutionBranches?.includes(id)
+        ))
+        : null;
       return `<button type="button" class="sanpledex-evolution ${id === selectedSanpledexId ? "selected" : ""}" data-sanpledex-id="${id}" aria-label="Ver ficha de ${stage.name}">
         <img src="${iconUrl(id)}" alt="" draggable="false" />
         <span><strong>${stage.name}</strong><small>${previous?.evolveLevel ? `Nv. ${previous.evolveLevel}` : "Origen"}</small></span>
@@ -8480,6 +10496,11 @@
 
   function keyToControl(key) {
     const normalized = key.toLowerCase();
+    if (PERSPECTIVE_ZONE_ACTIVE) {
+      return {
+        arrowleft: "left", a: "left", arrowright: "right", d: "right", shift: "run",
+      }[normalized];
+    }
     if (state.dimension === "prism") {
       return {
         arrowup: "up", w: "up", arrowdown: "down", s: "down",
@@ -8493,6 +10514,15 @@
     }[normalized];
   }
 
+  function isInteractiveKeyboardOrigin(event) {
+    const target = event?.target instanceof Element ? event.target : document.activeElement;
+    return Boolean(target?.closest?.([
+      "button", "input", "select", "textarea", "a[href]", "summary",
+      "[contenteditable]:not([contenteditable='false'])", "[role='button']", "[role='link']",
+      "[role='menuitem']", "[role='option']", "[tabindex]:not([tabindex='-1']):not(canvas)",
+    ].join(",")));
+  }
+
   function setDirectionalInput(control, active) {
     if (!control) return;
     if (active && PLAYER_MOVEMENT_CORE.CARDINAL_DIRECTIONS.includes(control) && !input[control]) {
@@ -8501,7 +10531,53 @@
     input[control] = active;
   }
 
+  function handlePerspectiveKeyDown(event) {
+    if (!PERSPECTIVE_ZONE_ACTIVE || isInteractiveKeyboardOrigin(event)
+      || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return false;
+    const key = event.key.toLowerCase();
+    if (["arrowleft", "a"].includes(key)) setDirectionalInput("left", true);
+    else if (["arrowright", "d"].includes(key)) setDirectionalInput("right", true);
+    else if (key === "shift") setDirectionalInput("run", true);
+    else if (key === " ") {
+      if (!input.jumpHeld && !event.repeat) input.jumpPressed = true;
+      input.jumpHeld = true;
+    } else if (["arrowup", "w"].includes(key)) {
+      input.up = true;
+      if (perspectiveZoneRuntime?.state.mode === PERSPECTIVE_ZONE_CORE.PROFILE_MODE) {
+        if (!input.jumpHeld && !event.repeat) input.jumpPressed = true;
+        input.jumpHeld = true;
+      }
+    } else if (["arrowdown", "s"].includes(key)) input.down = true;
+    else if (["q", "f", "e", "enter"].includes(key) && !event.repeat) input.flipPressed = true;
+    else if (key === "r" && !event.repeat) input.restartPressed = true;
+    else if (key === "escape" && !event.repeat) {
+      perspectivePaused = !perspectivePaused;
+      clearDirectionalInput();
+      perspectiveZoneRuntime?.[perspectivePaused ? "stop" : "start"]();
+      updatePerspectiveHud(true);
+    } else return false;
+    event.preventDefault();
+    return true;
+  }
+
+  function handlePerspectiveKeyUp(event) {
+    if (!PERSPECTIVE_ZONE_ACTIVE || isInteractiveKeyboardOrigin(event)) return false;
+    const key = event.key.toLowerCase();
+    if (["arrowleft", "a"].includes(key)) setDirectionalInput("left", false);
+    else if (["arrowright", "d"].includes(key)) setDirectionalInput("right", false);
+    else if (key === "shift") setDirectionalInput("run", false);
+    else if (key === " ") input.jumpHeld = false;
+    else if (["arrowup", "w"].includes(key)) {
+      input.up = false;
+      input.jumpHeld = false;
+    } else if (["arrowdown", "s"].includes(key)) input.down = false;
+    else return false;
+    event.preventDefault();
+    return true;
+  }
+
   function handleKeyDown(event) {
+    if (isInteractiveKeyboardOrigin(event)) return;
     if (starterIntroActive) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -8609,6 +10685,7 @@
       if (!gameplayModifier && ["Enter", " ", "e", "E"].includes(event.key) && !event.repeat) advanceDialog();
       return;
     }
+    if (PERSPECTIVE_ZONE_ACTIVE && handlePerspectiveKeyDown(event)) return;
     if (state.dimension === "prism" && ["f", "F", " "].includes(event.key) && !event.repeat) {
       event.preventDefault();
       useFlashlight();
@@ -8621,13 +10698,66 @@
     if (event.key === "Escape") { closeMusicLibrary(); closeAttackDex(); closeSanpledex(); closeTeam(); closeBuildingEditorPanel(); closeInventoryPanel(); closeShop(); }
   }
 
-  function handleKeyUp(event) { const control = keyToControl(event.key); if (control) setDirectionalInput(control, false); }
+  function handleKeyUp(event) {
+    if (isInteractiveKeyboardOrigin(event)) return;
+    if (handlePerspectiveKeyUp(event)) return;
+    const control = keyToControl(event.key);
+    if (control) setDirectionalInput(control, false);
+  }
 
   function bindTouchControl(button) {
     const control = button.dataset.control;
     const press = (event) => { event.preventDefault(); setDirectionalInput(control, true); };
     const release = (event) => { event.preventDefault(); setDirectionalInput(control, false); };
     button.addEventListener("pointerdown", press); button.addEventListener("pointerup", release); button.addEventListener("pointercancel", release); button.addEventListener("pointerleave", release);
+  }
+
+  function bindPerspectiveTouchControl(button) {
+    const action = button.dataset.perspectiveAction;
+    const heldAction = ["left", "right", "up", "down", "jump"].includes(action);
+    let suppressPointerClick = false;
+    let pointerClickTimer = null;
+    const activate = () => {
+      if (["left", "right", "up", "down"].includes(action)) setDirectionalInput(action, true);
+      else if (action === "jump") { if (!input.jumpHeld) input.jumpPressed = true; input.jumpHeld = true; }
+      else if (action === "flip") input.flipPressed = true;
+      else if (action === "restart") input.restartPressed = true;
+    };
+    const deactivate = () => {
+      if (["left", "right", "up", "down"].includes(action)) setDirectionalInput(action, false);
+      else if (action === "jump") input.jumpHeld = false;
+    };
+    const press = (event) => {
+      event.preventDefault();
+      button.dataset.pressed = "true";
+      if (heldAction) activate();
+      else {
+        activate();
+        suppressPointerClick = true;
+        window.clearTimeout(pointerClickTimer);
+        pointerClickTimer = window.setTimeout(() => { suppressPointerClick = false; }, 500);
+      }
+    };
+    const release = (event) => {
+      event.preventDefault();
+      delete button.dataset.pressed;
+      if (heldAction) deactivate();
+    };
+    const click = (event) => {
+      event.preventDefault();
+      if (event.detail !== 0 && (heldAction || suppressPointerClick)) {
+        suppressPointerClick = false;
+        window.clearTimeout(pointerClickTimer);
+        return;
+      }
+      activate();
+      if (heldAction) window.setTimeout(deactivate, 120);
+    };
+    button.addEventListener("pointerdown", press);
+    button.addEventListener("pointerup", release);
+    button.addEventListener("pointercancel", release);
+    button.addEventListener("pointerleave", release);
+    button.addEventListener("click", click);
   }
 
   function bindEvents() {
@@ -8737,23 +10867,48 @@
     elements.movesBack.addEventListener("click", () => { elements.movesMenu.classList.add("hidden"); elements.battleMenu.classList.remove("hidden"); });
     elements.bagButton.addEventListener("click", () => openInventory(true)); elements.runButton.addEventListener("click", attemptRun); elements.teamBattleButton.addEventListener("click", openTeam);
     if (elements.closeShop) elements.closeShop.addEventListener("click", closeShop);
+    elements.perspectiveAssistButton?.addEventListener("click", togglePerspectiveAssist);
+    elements.perspectiveExitButton?.addEventListener("click", () => { void leavePerspectiveZone(); });
     document.addEventListener("keydown", handleKeyDown); document.addEventListener("keyup", handleKeyUp); window.addEventListener("blur", clearDirectionalInput);
     if (REDUCED_MOTION_QUERY?.addEventListener) REDUCED_MOTION_QUERY.addEventListener("change", refreshVisiblePokemonFrameAssets);
     else REDUCED_MOTION_QUERY?.addListener?.(refreshVisiblePokemonFrameAssets);
+    const syncPerspectiveMotionPreference = () => {
+      if (!perspectiveZoneRuntime) return;
+      perspectiveZoneRuntime.state.reducedMotion = prefersReducedMotion();
+      updatePerspectiveHud(true);
+    };
+    if (REDUCED_MOTION_QUERY?.addEventListener) REDUCED_MOTION_QUERY.addEventListener("change", syncPerspectiveMotionPreference);
+    else REDUCED_MOTION_QUERY?.addListener?.(syncPerspectiveMotionPreference);
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) { scheduleVoiceRecognitionRestart(100); return; }
+      if (!document.hidden) {
+        if (!PERSPECTIVE_ZONE_ACTIVE) scheduleVoiceRecognitionRestart(100);
+        if (PERSPECTIVE_ZONE_ACTIVE && !perspectivePaused) perspectiveZoneRuntime?.start();
+        return;
+      }
       clearDirectionalInput();
+      if (PERSPECTIVE_ZONE_ACTIVE) {
+        perspectiveZoneRuntime?.stop();
+        syncPerspectiveProgress({ persist: true });
+      }
       releaseAllMapTiles();
       if (state.started) saveGame();
     });
-    window.addEventListener("pagehide", () => {
+    window.addEventListener("pagehide", (event) => {
+      if (PERSPECTIVE_ZONE_ACTIVE) {
+        syncPerspectiveProgress();
+        perspectiveZoneRuntime?.stop();
+        if (!event.persisted) perspectiveZoneRuntime?.destroy();
+      }
       if (state.started) saveGame();
       voiceNpc.shouldListen = false;
       window.clearTimeout(voiceNpc.restartTimer);
       try { voiceNpc.recognition?.stop(); } catch (error) { /* Recognition may already be stopped. */ }
       stopMicrophone(true);
     });
-    $$('[data-control]').forEach(bindTouchControl); $$('[data-action]').forEach((button) => button.addEventListener("click", primaryAction));
+    $$('[data-control]').forEach(bindTouchControl);
+    $$('[data-action]').forEach((button) => button.addEventListener("click", primaryAction));
+    elements.prismFlashButton?.addEventListener("click", useFlashlight);
+    $$('[data-perspective-action]').forEach(bindPerspectiveTouchControl);
   }
 
   function startFragmentCinematicDebugSession() {
@@ -8781,13 +10936,21 @@
     const marketViewPath = target === "market_view"
       ? findMazePath(mazeDefinition.start.x + .5, mazeDefinition.start.y + .5, mazeDefinition.market.x + .5, mazeDefinition.market.y + .5)
       : [];
+    const debugExit = (mazeDefinition.exits || []).find((entry) => entry.id === target);
+    const exitViewPath = debugExit
+      ? findMazePath(mazeDefinition.start.x + .5, mazeDefinition.start.y + .5, debugExit.x + .5, debugExit.y + .5)
+      : [];
     const point = target === "market_view"
       ? marketViewPath[Math.max(0, marketViewPath.length - 3)] || mazeDefinition.start
-      : mazeDefinition[target] || mazeDefinition.start;
+      : debugExit
+        ? exitViewPath[Math.max(0, exitViewPath.length - 3)] || mazeDefinition.start
+        : mazeDefinition[target] || mazeDefinition.start;
     maze.playerX = point.x + .5; maze.playerY = point.y + .5;
     maze.angle = target === "market_view"
       ? Math.atan2(mazeDefinition.market.y + .5 - maze.playerY, mazeDefinition.market.x + .5 - maze.playerX)
-      : firstOpenDirection(mazeDefinition.grid, point);
+      : debugExit
+        ? Math.atan2(debugExit.y + .5 - maze.playerY, debugExit.x + .5 - maze.playerX)
+        : firstOpenDirection(mazeDefinition.grid, point);
     microphoneFallbackMode = true;
     state.worldX = 1050; state.worldY = 1830; state.direction = "up";
     if (elements.noiseLabel) elements.noiseLabel.textContent = "MOVIMIENTO";
@@ -8810,13 +10973,13 @@
 
   function runtimeEntities(kind) {
     const normalized = normalizedEditorEntityKind(kind);
-    if (state.interior === "building" && normalized !== "asset") return [];
     const source = normalized === "npc" ? cityNpcs
       : normalized === "entrance" ? cityEntrances
         : normalized === "event" ? cityEvents
           : normalized === "asset" ? activeEditorAssets()
             : [];
-    return source.map(cloneRuntimeRecord);
+    const scene = currentRuntimeSceneId();
+    return source.filter((record) => normalized === "asset" || String(record.scene || "world") === scene).map(cloneRuntimeRecord);
   }
 
   function runtimeAssetPrototype(sprite) {
@@ -9017,6 +11180,8 @@
       const index = cityEntrances.findIndex((entrance) => entrance.id === normalizedId);
       if (index >= 0) cityEntrances[index] = record;
       else cityEntrances.push(record);
+      perspectiveGateCache = undefined;
+      perspectiveGatePositionSignature = "";
       [...linkedEntrancePositions.keys()].filter((key) => key.endsWith(`:${normalizedId}`))
         .forEach((key) => linkedEntrancePositions.delete(key));
       rebuildDefaultMapTiles();
@@ -9060,6 +11225,10 @@
     const index = collection.findIndex((entry) => entry.id === normalizedId);
     if (index < 0) return false;
     collection.splice(index, 1);
+    if (normalizedKind === "entrance") {
+      perspectiveGateCache = undefined;
+      perspectiveGatePositionSignature = "";
+    }
     if (normalizedKind === "npc") {
       npcPatrolStates.delete(normalizedId);
       updateNpcDeploymentDataset();
@@ -9093,12 +11262,14 @@
     const nextEvents = buildRuntimeEvents(value);
     cityNpcs.splice(0, cityNpcs.length, ...nextNpcs);
     cityEntrances.splice(0, cityEntrances.length, ...nextEntrances);
+    perspectiveGateCache = undefined;
+    perspectiveGatePositionSignature = "";
     cityEvents.splice(0, cityEvents.length, ...nextEvents);
     const assetCount = applyRuntimeAssetSnapshot(value);
     npcPatrolStates.clear();
     linkedEntrancePositions.clear();
     applyRuntimeTileOverrides(value.tileOverrides || {});
-    applyRuntimeGroundOverrides(value.groundOverrides || {});
+    applyRuntimeGroundOverrides(value.groundOverrides || {}, value.interiorGroundOverrides || {});
     rebuildDefaultMapTiles();
     syncLinkedEntrancesFromAssets({ force: true, entrancesAreBaseline: true });
     updateNpcDeploymentDataset();
@@ -9116,6 +11287,7 @@
   }
 
   function setRuntimeCollaborators(users) {
+    const sampleTime = performance.now();
     const previousById = new Map(collaboratorCursors.map((collaborator) => [collaborator.id, collaborator]));
     collaboratorCursors = (Array.isArray(users) ? users : [])
       .map((user, index) => {
@@ -9129,6 +11301,9 @@
         const playerX = Number(playerSource.x);
         const playerY = Number(playerSource.y);
         const hasPlayer = Number.isFinite(playerX) && Number.isFinite(playerY);
+        const samePlayerScene = previous?.player
+          && previous.player.dimension === String(playerSource.dimension || "san_pablo")
+          && (previous.player.interior || null) === (playerSource.interior || null);
         if (!hasCursor && !hasPlayer) return null;
         return {
           id,
@@ -9140,14 +11315,15 @@
           player: hasPlayer ? {
             x: clamp(playerX, 0, WORLD_WIDTH),
             y: clamp(playerY, 0, WORLD_HEIGHT),
-            displayX: Number(previous?.player?.displayX ?? playerX),
-            displayY: Number(previous?.player?.displayY ?? playerY),
+            displayX: Number(samePlayerScene ? previous.player.displayX ?? playerX : playerX),
+            displayY: Number(samePlayerScene ? previous.player.displayY ?? playerY : playerY),
+            displayUpdatedAt: Number(samePlayerScene ? previous.player.displayUpdatedAt ?? sampleTime : sampleTime),
             direction: ["up", "down", "left", "right"].includes(playerSource.direction) ? playerSource.direction : "down",
             dimension: String(playerSource.dimension || "san_pablo"),
             interior: playerSource.interior || null,
             moving: Boolean(playerSource.moving),
             running: Boolean(playerSource.running),
-            frame: Math.max(0, Math.min(3, Math.floor(Number(playerSource.frame) || 0))),
+            frame: Math.max(0, Math.min(PLAYER_WALK_FRAME_COUNT - 1, Math.floor(Number(playerSource.frame) || 0))),
           } : null,
         };
       })
@@ -9179,6 +11355,7 @@
     isOpen: () => elements.buildingEditor.classList.contains("open"),
     assets: () => activeEditorAssets(),
     entities: runtimeEntities,
+    isBaseEntity: (kind, id) => normalizedEditorEntityKind(kind) === "entrance" && baseCityEntranceIds.has(String(id || "")),
     sceneInfo: () => currentInteriorSceneId()
       ? { id: currentInteriorSceneId(), kind: "interior", label: state.interiorData?.label || "Casa", width: INDOOR_WORLD_WIDTH, height: INDOOR_WORLD_HEIGHT }
       : { id: "world", kind: "world", label: CITY_MAP.name || "San Pablo", width: WORLD_WIDTH, height: WORLD_HEIGHT },
@@ -9187,7 +11364,7 @@
       y: Math.round(state.worldY * 100) / 100,
       direction: state.direction,
       dimension: state.dimension,
-      interior: currentInteriorSceneId() || state.interior || null,
+      interior: currentPresenceSceneId(),
       moving: animationTime > 0,
       running: playerRunning,
       frame: animationFrame,
@@ -9219,9 +11396,10 @@
       y: clamp(camera.y + VIEW_HEIGHT / 2, 0, currentWorldHeight()),
     }),
     grid: () => ({ tileSize: CITY_MAP.tileSize, cols: Math.ceil(currentWorldWidth() / CITY_MAP.tileSize), rows: Math.ceil(currentWorldHeight() / CITY_MAP.tileSize) }),
-    tileType: (col, row) => mapTileType(Number(col), Number(row)),
+    tileType: (col, row) => state.interior === "building" ? "walkable" : mapTileType(Number(col), Number(row)),
     tileOverrides: () => Object.fromEntries(tileOverrides),
     setTile(col, row, type) {
+      if (state.interior === "building") return false;
       const normalizedCol = Math.floor(Number(col)); const normalizedRow = Math.floor(Number(row));
       if (!Number.isInteger(normalizedCol) || !Number.isInteger(normalizedRow)) return false;
       if (normalizedCol < 0 || normalizedRow < 0 || normalizedCol >= Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize) || normalizedRow >= Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize)) return false;
@@ -9241,19 +11419,31 @@
       editorOverlayDirty = true;
       updateTileEditorInfo();
     },
-    groundType: (col, row) => groundOverrides.get(tileKey(Number(col), Number(row))) || "inherit",
-    groundOverrides: () => Object.fromEntries(groundOverrides),
-    setGround(col, row, type) {
+    groundType: (col, row) => {
+      const collection = state.interior === "building" ? activeInteriorGroundOverrides() : groundOverrides;
+      return collection.get(tileKey(Number(col), Number(row))) || "inherit";
+    },
+    groundOverrides: () => Object.fromEntries(state.interior === "building" ? activeInteriorGroundOverrides() : groundOverrides),
+    setGround(col, row, type, scene = state.interior === "building" ? currentInteriorSceneId() : "world") {
       const normalizedCol = Math.floor(Number(col)); const normalizedRow = Math.floor(Number(row));
       if (!Number.isInteger(normalizedCol) || !Number.isInteger(normalizedRow)) return false;
-      if (normalizedCol < 0 || normalizedRow < 0 || normalizedCol >= CITY_GRID_COLS || normalizedRow >= CITY_GRID_ROWS) return false;
+      const interiorScene = scene && scene !== "world";
+      const maxCols = interiorScene ? Math.ceil(INDOOR_WORLD_WIDTH / CITY_MAP.tileSize) : CITY_GRID_COLS;
+      const maxRows = interiorScene ? Math.ceil(INDOOR_WORLD_HEIGHT / CITY_MAP.tileSize) : CITY_GRID_ROWS;
+      if (normalizedCol < 0 || normalizedRow < 0 || normalizedCol >= maxCols || normalizedRow >= maxRows) return false;
       const key = tileKey(normalizedCol, normalizedRow);
-      if (type === "inherit") groundOverrides.delete(key);
-      else if (isGroundPaintType(type)) groundOverrides.set(key, type);
+      const collection = interiorScene ? interiorGroundOverridesForScene(scene, { create: type !== "inherit" }) : groundOverrides;
+      if (!collection && type === "inherit") return true;
+      if (type === "inherit") collection.delete(key);
+      else if (isGroundPaintType(type) && (!interiorScene || INTERIOR_FLOOR_SOURCES[type])) collection.set(key, type);
       else return false;
+      if (interiorScene && !collection.size) interiorGroundOverridesByScene.delete(scene);
       return true;
     },
-    clearGround() { groundOverrides.clear(); },
+    clearGround() {
+      if (state.interior === "building") interiorGroundOverridesByScene.delete(currentInteriorSceneId());
+      else groundOverrides.clear();
+    },
     resizeMap(cols, rows) {
       const result = resizeRuntimeWorld(cols, rows);
       rebuildDefaultMapTiles();
@@ -9344,11 +11534,26 @@
 
   function initialize() {
     let resumeMapId = "";
+    let resumeDestination = null;
     let beginNewGame = false;
     try {
       resumeMapId = window.sessionStorage.getItem("pokemon-map-transfer-resume") || "";
+      const rawDestination = window.sessionStorage.getItem("pokemon-map-transfer-destination");
+      if (rawDestination) {
+        try {
+          const parsed = JSON.parse(rawDestination);
+          if (parsed?.mapId === resumeMapId && Number.isFinite(Number(parsed.x)) && Number.isFinite(Number(parsed.y))) {
+            resumeDestination = {
+              x: Number(parsed.x),
+              y: Number(parsed.y),
+              direction: ["up", "down", "left", "right"].includes(parsed.direction) ? parsed.direction : "down",
+            };
+          }
+        } catch { /* Un destino corrupto se descarta sin afectar a la partida. */ }
+      }
       beginNewGame = window.sessionStorage.getItem("pokemon-new-game") === "1";
       window.sessionStorage.removeItem("pokemon-map-transfer-resume");
+      window.sessionStorage.removeItem("pokemon-map-transfer-destination");
       window.sessionStorage.removeItem("pokemon-new-game");
     } catch { /* sessionStorage es opcional. */ }
     mazeDefinition = generateMaze();
@@ -9356,7 +11561,24 @@
     document.documentElement.dataset.doctorPotatoScene = "idle";
     document.documentElement.dataset.fragmentCinematic = "idle";
     document.documentElement.dataset.cityMapReady = "loading";
-    const hasSave = loadGame(); elements.continueButton.classList.toggle("hidden", !hasSave);
+    const hasSave = loadGame();
+    if (resumeMapId === ACTIVE_MAP_ID && resumeDestination && hasSave) {
+      const destination = PERSPECTIVE_ZONE_ACTIVE
+        ? {
+          x: clamp(resumeDestination.x, 16, WORLD_WIDTH - 16),
+          y: clamp(resumeDestination.y, 16, WORLD_HEIGHT - 16),
+        }
+        : nearestOpenCityTarget(resumeDestination.x, resumeDestination.y);
+      if (destination) {
+        state.worldX = destination.x;
+        state.worldY = destination.y;
+        state.direction = resumeDestination.direction;
+        state.mapId = ACTIVE_MAP_ID;
+        state.mapRevision = MAP_REVISION;
+        saveGame();
+      }
+    }
+    elements.continueButton.classList.toggle("hidden", !hasSave);
     updateFullscreenButton(); renderHud(); updateAreaLabel(); updateInteractPrompt(); updateVoiceNpcUi(); window.requestAnimationFrame(gameLoop);
     if (VOICE_NPC_ENABLED) window.setTimeout(() => requestVoiceNpcAccess(), 0);
     if (beginNewGame) {
@@ -9364,6 +11586,18 @@
     } else if (resumeMapId === ACTIVE_MAP_ID && hasSave) {
       showWorld();
       showAreaToast((CITY_MAP.name || ACTIVE_MAP_ID).toUpperCase());
+    } else if (PERSPECTIVE_ZONE_ACTIVE && LOCAL_DEBUG_PERSPECTIVE) {
+      if (!hasSave) {
+        state = defaultState();
+        state.started = true;
+        state.starterChosen = true;
+        state.team = [createPokemon(PETRILLO_ID, 5)];
+        state.caught = [PETRILLO_ID];
+        state.seen = [PETRILLO_ID];
+      }
+      state.mapId = ACTIVE_MAP_ID;
+      showWorld();
+      showAreaToast("PRADERA BIFAZ · PRUEBA LOCAL");
     } else if (VOICE_NPC_ENABLED && LOCAL_DEBUG_VOICE) {
       if (!hasSave) {
         state = defaultState();
@@ -9431,6 +11665,44 @@
         maze: state.maze ? { ...state.maze } : null,
         shop: activeShopType,
       }),
+      perspectiveZone: () => {
+        if (!PERSPECTIVE_ZONE_ACTIVE) return { active: false };
+        const runtime = ensurePerspectiveZoneRuntime();
+        return {
+          active: true,
+          running: runtime.running,
+          destroyed: runtime.destroyed,
+          snapshot: runtime.snapshot(),
+          hud: runtime.hud(),
+          player: {
+            x: runtime.state.player.x,
+            y: runtime.state.player.y,
+            vx: runtime.state.player.vx,
+            vy: runtime.state.player.vy,
+            grounded: runtime.state.player.grounded,
+          },
+          mode: runtime.state.mode,
+          blend: runtime.state.blend,
+          depth: runtime.state.depth,
+          drawCalls: Number(document.documentElement.dataset.perspectiveDrawCalls || 0),
+        };
+      },
+      movePerspectiveDebug: (target = "start") => {
+        if (!PERSPECTIVE_ZONE_ACTIVE || !new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return false;
+        const runtime = ensurePerspectiveZoneRuntime();
+        runtime.moveToDebug(["start", "flip", "checkpoint", "goal"].includes(target) ? target : "start");
+        updatePerspectiveHud(true);
+        return true;
+      },
+      stepPerspectiveDebug: (milliseconds = 16, overrides = {}) => {
+        if (!PERSPECTIVE_ZONE_ACTIVE || !new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return false;
+        const runtime = ensurePerspectiveZoneRuntime();
+        runtime.start();
+        runtime.step(clamp(Number(milliseconds) || 16, 0, 50) / 1000, { ...input, ...overrides });
+        runtime.stop();
+        updatePerspectiveHud(true);
+        return runtime.hud();
+      },
       monsterRoster: () => ({
         ids: Object.keys(POKEMON).map(Number),
         starters: STARTERS.map((monster) => monster.id),
@@ -9478,11 +11750,12 @@
       simulateVoiceManolin: (text, isFinal = true) => handleVoiceNpcTranscript(String(text), Boolean(isFinal)),
       voiceManolinTrigger: (text) => voiceNpcTriggerDetected(String(text)),
       prismLayout: () => {
-        const { start, goal, monster, market } = mazeDefinition;
+        const { start, goal, monster, market, exits = [] } = mazeDefinition;
         const marketPath = findMazePath(start.x + .5, start.y + .5, market.x + .5, market.y + .5);
         const goalPath = findMazePath(start.x + .5, start.y + .5, goal.x + .5, goal.y + .5);
         return {
           start: { ...start }, goal: { ...goal }, monster: { ...monster }, market: { ...market },
+          exits: exits.map((exit) => ({ ...exit })),
           marketReachable: marketPath.length > 0,
           marketDistance: Math.max(0, marketPath.length - 1),
           goalDistance: Math.max(0, goalPath.length - 1),
@@ -9493,7 +11766,7 @@
       },
       movePrismDebug: (target = "market") => {
         if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname) || state.dimension !== "prism") return false;
-        const point = mazeDefinition[target];
+        const point = mazeDefinition[target] || (mazeDefinition.exits || []).find((entry) => entry.id === target);
         if (!point || mazeDefinition.grid[point.y]?.[point.x] !== 0) return false;
         const maze = ensureMazeState();
         maze.playerX = point.x + .5; maze.playerY = point.y + .5;
@@ -9515,6 +11788,18 @@
       }),
       grid: { cols: Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize), rows: Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize), tileSize: CITY_MAP.tileSize },
     });
+    if (PERSPECTIVE_ZONE_ACTIVE) {
+      const levelValidation = PERSPECTIVE_ZONE_CORE.validateLevel(perspectiveLevel());
+      document.documentElement.dataset.cityMapReady = "true";
+      document.documentElement.dataset.cityGrid = `${Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize)}x${Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize)}@${CITY_MAP.tileSize}`;
+      document.documentElement.dataset.perspectiveMapRegistered = "true";
+      document.documentElement.dataset.perspectiveLevelValid = String(levelValidation.valid);
+      document.documentElement.dataset.perspectivePlatformCount = String(levelValidation.stats.platforms || 0);
+      document.documentElement.dataset.perspectiveBuildingCount = String(levelValidation.stats.buildings || 0);
+      document.documentElement.dataset.perspectivePokemonCount = String(levelValidation.stats.wildlife || 0);
+      document.documentElement.dataset.perspectiveGoalReachable = String(levelValidation.stats.goalReachable);
+      return;
+    }
     document.documentElement.dataset.cityGrid = `${Math.ceil(WORLD_WIDTH / CITY_MAP.tileSize)}x${Math.ceil(WORLD_HEIGHT / CITY_MAP.tileSize)}@${CITY_MAP.tileSize}`;
     document.documentElement.dataset.encounterAreaCount = String((CITY_MAP.encounterAreas || []).length);
     document.documentElement.dataset.encounterTileCount = String((CITY_MAP.encounterTiles || []).length);
@@ -9522,9 +11807,9 @@
     document.documentElement.dataset.boundaryOpen = String(cityMapCanOccupy(16, 16));
     document.documentElement.dataset.backgroundCollisionProbesSolid = String((CITY_MAP.blockedProbes || [])
       .every(([x, y]) => !cityMapCanOccupy(Number(x), Number(y))));
-    const firstDoor = cityEntrances[0];
+    const firstDoor = entitiesInScene(cityEntrances, "world")[0];
     document.documentElement.dataset.centerDoor = firstDoor ? mapTileType(firstDoor.col, firstDoor.row) : "missing";
-    const prismDoor = cityEntrances.find((door) => door.action === "prism");
+    const prismDoor = entitiesInScene(cityEntrances, "world").find((door) => door.action === "prism");
     document.documentElement.dataset.prismDoor = prismDoor ? mapTileType(prismDoor.col, prismDoor.row) : "missing";
     const prismMarketPath = findMazePath(
       mazeDefinition.start.x + .5, mazeDefinition.start.y + .5,
@@ -9535,6 +11820,12 @@
       ![mazeDefinition.start, mazeDefinition.goal, mazeDefinition.monster]
         .some((point) => point.x === mazeDefinition.market.x && point.y === mazeDefinition.market.y),
     );
+    document.documentElement.dataset.prismExitCount = String(mazeDefinition.exits?.length || 0);
+    document.documentElement.dataset.prismExitsReachable = String((mazeDefinition.exits || []).every((exit) =>
+      findMazePath(
+        mazeDefinition.start.x + .5, mazeDefinition.start.y + .5,
+        exit.x + .5, exit.y + .5,
+      ).length > 0));
     const configuredAssetColliders = cityWorldAssets.flatMap((asset) => worldAssetColliderRects(asset));
     document.documentElement.dataset.worldAssetCollidersSolid = String(configuredAssetColliders.every((rect) => (
       worldAssetBlocksPosition(rect.x + rect.w / 2, rect.y + rect.h / 2, 0)
@@ -9548,7 +11839,7 @@
     document.documentElement.dataset.worldAssetApproachesOpen = String(cityWorldAssets
       .filter((asset) => Array.isArray(asset.approach))
       .every((asset) => cityMapCanOccupy(Number(asset.approach[0]), Number(asset.approach[1]))));
-    const configuredNpcs = cityNpcs;
+    const configuredNpcs = entitiesInScene(cityNpcs, "world");
     document.documentElement.dataset.mapNpcCount = String(configuredNpcs.length);
     document.documentElement.dataset.mapNpcIdsUnique = String(new Set(configuredNpcs.map((npc) => npc.id)).size === configuredNpcs.length);
     document.documentElement.dataset.mapNpcPositionsOpen = String(configuredNpcs.every((npc) => {

@@ -1,0 +1,6 @@
+Vaporan
+
+Concepto, nombre y ficha original: material proporcionado por el usuario.
+Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
+
+Archivos: vaporan-front.png, vaporan-back.png.

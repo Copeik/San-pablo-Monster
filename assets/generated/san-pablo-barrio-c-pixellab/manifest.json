@@ -1,0 +1,328 @@
+{
+  "version": 1,
+  "package": "san-pablo-barrio-c-pixellab",
+  "logicalTileSize": 32,
+  "generation": {
+    "provider": "PixelLab MCP",
+    "maximumCalls": 17,
+    "calls": [
+      {
+        "id": "75bed0c2-e9a9-4945-8c08-147b129eb23e",
+        "tool": "pixellab.create_topdown_tileset",
+        "kind": "topdown_tileset",
+        "seed": null,
+        "status": "completed",
+        "perspective": "high top-down orthographic",
+        "dimensions": { "width": 128, "height": 128, "tileSize": 32, "tileCount": 16 },
+        "promptSummary": "Asfalto gris azulado #4b5356 conectado con acera de losas gris cálida #b8b3a8 y bordillo urbano bajo.",
+        "baseTileIds": { "lower": "0d2db7de-76b1-498f-adf9-0a49dfcad1ad", "upper": "e6e17b3a-f261-42b0-86e0-5efd0a25f1c8" }
+      },
+      {
+        "id": "3fa15803-32df-4e96-afd1-2f1f51f36fcc",
+        "tool": "pixellab.create_topdown_tileset",
+        "kind": "topdown_tileset",
+        "seed": null,
+        "status": "completed",
+        "perspective": "high top-down orthographic",
+        "dimensions": { "width": 128, "height": 128, "tileSize": 32, "tileCount": 16 },
+        "promptSummary": "Acera de losas compartida conectada con césped mediterráneo algo seco y borde a ras.",
+        "baseTileIds": { "lower": "e6e17b3a-f261-42b0-86e0-5efd0a25f1c8", "upper": "51ff5803-b06f-4400-b5df-927aa0517f85" }
+      },
+      {
+        "id": "4b6a4b40-fe71-48ff-9074-8edd52f0123a",
+        "tool": "pixellab.create_topdown_tileset",
+        "kind": "topdown_tileset",
+        "seed": null,
+        "status": "waiting",
+        "perspective": "high top-down orthographic",
+        "dimensions": { "width": 128, "height": 128, "tileSize": 32, "tileCount": 16 },
+        "promptSummary": "Adoquín de plaza beige #c9bea7 conectado con la misma base de césped mediterráneo mediante borde pétreo a ras.",
+        "baseTileIds": { "lower": "ff2b89e0-5223-421b-8e0f-d605bfb11bcf", "upper": "51ff5803-b06f-4400-b5df-927aa0517f85" }
+      },
+      {
+        "id": "73a0b933-20ca-48b1-b7b7-777842806e69",
+        "tool": "pixellab.create_topdown_tileset",
+        "kind": "topdown_tileset",
+        "seed": null,
+        "status": "waiting",
+        "perspective": "high top-down orthographic",
+        "dimensions": { "width": 128, "height": 128, "tileSize": 32, "tileCount": 16 },
+        "promptSummary": "Tierra seca compactada de parque conectada con la misma base de césped mediterráneo mediante borde pisado irregular.",
+        "baseTileIds": { "lower": "a533c813-f69a-4015-9a2d-a04a307c859f", "upper": "51ff5803-b06f-4400-b5df-927aa0517f85" }
+      },
+      {
+        "id": "b93a56d1-2c23-4409-8c2a-78169ef67be3",
+        "tool": "pixellab.create_tiles_pro",
+        "kind": "tiles_pro",
+        "seed": 348127,
+        "status": "completed",
+        "perspective": "top-down orthographic",
+        "dimensions": { "width": 32, "height": 32, "tileCount": 16 },
+        "promptSummary": "Detalles urbanos: variantes de asfalto, señalización vial, aparcamiento, paso de cebra, bordillos, rampa, losa, adoquín y alcorque."
+      },
+      {
+        "id": "da9d5d6f-3252-42f8-bb21-55a6305297ea",
+        "tool": "pixellab.create_8_direction_object",
+        "kind": "eight_direction_object",
+        "seed": null,
+        "status": "failed",
+        "error": "Generation timed out",
+        "perspective": "low top-down orthographic",
+        "dimensions": { "width": 168, "height": 168, "directions": 8 },
+        "promptSummary": "Primer intento del bloque residencial mixto de cuatro plantas de Barrio C; PixelLab agotó el tiempo de generación."
+      },
+      {
+        "id": "3c259b6e-8ce5-499a-b9bb-f814cb6439c8",
+        "tool": "pixellab.create_1_direction_object",
+        "kind": "one_direction_object_review",
+        "seed": null,
+        "status": "review_selected",
+        "perspective": "high top-down orthographic",
+        "dimensions": { "width": 85, "height": 85, "candidateCount": 16 },
+        "promptSummary": "Lote coherente de naranjo, caducifolio, banco, farola curva, bolardo, jardinera/alcorque y mesa con sillas."
+      },
+      {
+        "id": "0dc73709-6f3e-4308-9ea8-3c816b24e552",
+        "tool": "pixellab.create_8_direction_object",
+        "kind": "eight_direction_object",
+        "seed": null,
+        "status": "completed",
+        "perspective": "low top-down orthographic",
+        "dimensions": { "width": 170, "height": 170, "directions": 8 },
+        "promptSummary": "Bloque residencial mixto compacto de cuatro plantas, ladrillo ocre y revoco crema, balcones metálicos, toldos verdes/azules y dos bajos neutros."
+      },
+      {
+        "id": "39a2f43e-241e-43e1-a7bb-9df35d664916",
+        "tool": "pixellab.create_8_direction_object",
+        "kind": "eight_direction_object",
+        "seed": null,
+        "status": "completed",
+        "perspective": "low top-down front-superior orthographic",
+        "dimensions": { "width": 170, "height": 170, "directions": 8 },
+        "promptSummary": "Edificio residencial de tres plantas con farmacia en el bajo, tejado plano visible y fachada frontal alineada a la cuadrícula."
+      },
+      {
+        "id": "bd4f6b10-53b4-4e73-ad10-2fe19a34a5ca",
+        "tool": "pixellab.create_8_direction_object",
+        "kind": "eight_direction_object",
+        "seed": null,
+        "status": "completed",
+        "perspective": "low top-down front-superior orthographic",
+        "dimensions": { "width": 170, "height": 170, "directions": 8 },
+        "promptSummary": "Edificio residencial de tres plantas con sucursal bancaria y cajero en el bajo, tejado plano visible y fachada ortogonal."
+      },
+      {
+        "id": "d85b0675-e73f-4586-96d6-fa5d1c466e9e",
+        "tool": "pixellab.create_8_direction_object",
+        "kind": "eight_direction_object",
+        "seed": null,
+        "status": "rejected",
+        "error": "Semantic mismatch: PixelLab generated a human character instead of an architectural cafe-bar building.",
+        "perspective": "low top-down",
+        "dimensions": { "width": 170, "height": 170, "directions": 8 },
+        "promptSummary": "Primer intento del café-bar; completado por PixelLab pero rechazado en la revisión visual por producir un personaje."
+      },
+      {
+        "id": "9247e736-8388-4bf5-a7ee-34a1e53918a1",
+        "tool": "pixellab.create_8_direction_object",
+        "kind": "eight_direction_object",
+        "seed": null,
+        "status": "completed",
+        "perspective": "low top-down front-superior orthographic",
+        "dimensions": { "width": 170, "height": 170, "directions": 8 },
+        "promptSummary": "Edificio residencial de tres plantas con tienda de barrio en el bajo, tejado plano visible y fachada ortogonal."
+      },
+      {
+        "id": "f531bd95-b1e3-4caa-9fdc-69a0fb1f1168",
+        "tool": "pixellab.create_8_direction_object",
+        "kind": "eight_direction_object",
+        "seed": null,
+        "status": "completed",
+        "perspective": "low top-down front-superior orthographic",
+        "dimensions": { "width": 170, "height": 170, "directions": 8 },
+        "promptSummary": "Fila ortogonal de tres bares bajos derivada de una referencia PixelLab, conservada como variante adicional."
+      },
+      {
+        "id": "6512f355-ffb2-479f-8d20-2818d2b79994",
+        "tool": "pixellab.create_map_object",
+        "kind": "map_object",
+        "seed": null,
+        "status": "rejected",
+        "error": "Visual mismatch: isometric diagonal projection instead of Pokémon-style front-superior orthographic architecture.",
+        "perspective": "rejected isometric",
+        "dimensions": { "width": 168, "height": 168, "directions": 1 },
+        "promptSummary": "Prueba frontal del bar descartada por perspectiva isométrica."
+      },
+      {
+        "id": "ef58be6e-bca0-4b44-9b33-0c14bda02b8a",
+        "tool": "pixellab.create_map_object",
+        "kind": "map_object",
+        "seed": null,
+        "status": "rejected",
+        "error": "Visual mismatch: isometric diagonal projection instead of Pokémon-style west orthographic architecture.",
+        "perspective": "rejected isometric",
+        "dimensions": { "width": 168, "height": 168, "directions": 1 },
+        "promptSummary": "Prueba lateral oeste del bar descartada por perspectiva isométrica."
+      },
+      {
+        "id": "38dadfd6-78c2-4283-bc0b-f5f0c479e1e4",
+        "tool": "pixellab.create_map_object",
+        "kind": "map_object",
+        "seed": null,
+        "status": "rejected",
+        "error": "Visual mismatch: isometric diagonal projection instead of Pokémon-style east orthographic architecture.",
+        "perspective": "rejected isometric",
+        "dimensions": { "width": 168, "height": 168, "directions": 1 },
+        "promptSummary": "Prueba lateral este del bar descartada por perspectiva isométrica."
+      },
+      {
+        "id": "e4a6fe06-0aeb-48de-b3e8-1c8c7af3821c",
+        "tool": "pixellab.create_8_direction_object",
+        "kind": "eight_direction_object",
+        "seed": null,
+        "status": "completed",
+        "perspective": "low top-down front-superior orthographic",
+        "dimensions": { "width": 170, "height": 170, "directions": 8 },
+        "promptSummary": "Café-bar final de tres plantas: plano superior del tejado y fachada visibles juntos, líneas rectas tipo Pokémon DS."
+      }
+    ],
+    "balance": { "generationsBefore": 897, "generationsAfter": 561, "generationsConsumed": 336 }
+  },
+  "terrains": [
+    {
+      "id": "asphaltSidewalk",
+      "pixelLabId": "75bed0c2-e9a9-4945-8c08-147b129eb23e",
+      "original": "assets/generated/san-pablo-barrio-c-pixellab/sources/terrain/asphalt-sidewalk.png",
+      "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/terrain/asphalt-sidewalk.png",
+      "tileSize": 32,
+      "tileCount": 16,
+      "dimensions": { "width": 128, "height": 128 },
+      "perspective": "high top-down orthographic",
+      "status": "completed"
+    },
+    {
+      "id": "sidewalkGrass",
+      "pixelLabId": "3fa15803-32df-4e96-afd1-2f1f51f36fcc",
+      "original": "assets/generated/san-pablo-barrio-c-pixellab/sources/terrain/sidewalk-grass.png",
+      "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/terrain/sidewalk-grass.png",
+      "tileSize": 32,
+      "tileCount": 16,
+      "dimensions": { "width": 128, "height": 128 },
+      "perspective": "high top-down orthographic",
+      "status": "completed"
+    },
+    {
+      "id": "plazaGrass",
+      "pixelLabId": "4b6a4b40-fe71-48ff-9074-8edd52f0123a",
+      "original": null,
+      "runtime": null,
+      "tileSize": 32,
+      "tileCount": 16,
+      "dimensions": { "width": 128, "height": 128 },
+      "perspective": "high top-down orthographic",
+      "status": "waiting"
+    },
+    {
+      "id": "parkDirtGrass",
+      "pixelLabId": "73a0b933-20ca-48b1-b7b7-777842806e69",
+      "original": null,
+      "runtime": null,
+      "tileSize": 32,
+      "tileCount": 16,
+      "dimensions": { "width": 128, "height": 128 },
+      "perspective": "high top-down orthographic",
+      "status": "waiting"
+    }
+  ],
+  "details": {
+    "id": "urbanDetails",
+    "pixelLabId": "b93a56d1-2c23-4409-8c2a-78169ef67be3",
+    "seed": 348127,
+    "sources": [
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_0.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_1.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_2.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_3.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_4.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_5.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_6.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_7.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_8.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_9.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_10.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_11.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_12.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_13.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_14.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/urban-details/tile_15.png"
+    ],
+    "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/details/urban-details.png",
+    "tileSize": 32,
+    "tileCount": 16,
+    "requestedTileIndices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "additionalVariationIndices": [10, 11, 12, 13, 14, 15],
+    "dimensions": { "width": 128, "height": 128 },
+    "perspective": "top-down orthographic",
+    "status": "completed"
+  },
+  "assets": [
+    { "id": "barrioCMixedBlockFront", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/mixed-block-front.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/mixed-block-south.png", "kind": "building", "label": "Bloque mixto Barrio C frontal", "pixelLabId": "0dc73709-6f3e-4308-9ea8-3c816b24e552", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 105, "height": 137 }, "perspective": "low top-down orthographic", "orientation": "horizontal", "storeys": 4, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCMixedBlockVerticalA", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/mixed-block-vertical-a.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/mixed-block-west.png", "kind": "building", "label": "Bloque mixto Barrio C lateral oeste", "pixelLabId": "0dc73709-6f3e-4308-9ea8-3c816b24e552", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 99, "height": 135 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 4, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCMixedBlockVerticalB", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/mixed-block-vertical-b.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/mixed-block-east.png", "kind": "building", "label": "Bloque mixto Barrio C lateral este", "pixelLabId": "0dc73709-6f3e-4308-9ea8-3c816b24e552", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 99, "height": 135 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 4, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCBankFront", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/bank-front.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/bank-south.png", "kind": "building", "label": "Banco Barrio C frontal", "pixelLabId": "bd4f6b10-53b4-4e73-ad10-2fe19a34a5ca", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 105, "height": 137 }, "perspective": "low top-down orthographic", "orientation": "horizontal", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCBankVerticalA", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/bank-vertical-a.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/bank-west.png", "kind": "building", "label": "Banco Barrio C lateral oeste", "pixelLabId": "bd4f6b10-53b4-4e73-ad10-2fe19a34a5ca", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 70, "height": 138 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCBankVerticalB", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/bank-vertical-b.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/bank-east.png", "kind": "building", "label": "Banco Barrio C lateral este", "pixelLabId": "bd4f6b10-53b4-4e73-ad10-2fe19a34a5ca", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 70, "height": 138 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCPharmacyFront", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/pharmacy-front.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/pharmacy-south.png", "kind": "building", "label": "Farmacia Barrio C frontal", "pixelLabId": "39a2f43e-241e-43e1-a7bb-9df35d664916", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 105, "height": 137 }, "perspective": "low top-down orthographic", "orientation": "horizontal", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCPharmacyVerticalA", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/pharmacy-vertical-a.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/pharmacy-west.png", "kind": "building", "label": "Farmacia Barrio C lateral oeste", "pixelLabId": "39a2f43e-241e-43e1-a7bb-9df35d664916", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 69, "height": 138 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCPharmacyVerticalB", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/pharmacy-vertical-b.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/pharmacy-east.png", "kind": "building", "label": "Farmacia Barrio C lateral este", "pixelLabId": "39a2f43e-241e-43e1-a7bb-9df35d664916", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 68, "height": 138 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCShopFront", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/shop-front.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/shop-south.png", "kind": "building", "label": "Tienda Barrio C frontal", "pixelLabId": "9247e736-8388-4bf5-a7ee-34a1e53918a1", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 105, "height": 139 }, "perspective": "low top-down orthographic", "orientation": "horizontal", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCShopVerticalA", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/shop-vertical-a.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/shop-west.png", "kind": "building", "label": "Tienda Barrio C lateral oeste", "pixelLabId": "9247e736-8388-4bf5-a7ee-34a1e53918a1", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 77, "height": 138 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCShopVerticalB", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/shop-vertical-b.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/shop-east.png", "kind": "building", "label": "Tienda Barrio C lateral este", "pixelLabId": "9247e736-8388-4bf5-a7ee-34a1e53918a1", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 76, "height": 138 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCCafeBarFront", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/cafe-bar-front.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/cafe-bar-south.png", "kind": "building", "label": "Cafe-bar Barrio C frontal-superior", "pixelLabId": "e4a6fe06-0aeb-48de-b3e8-1c8c7af3821c", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 132, "height": 164 }, "perspective": "low top-down orthographic", "orientation": "horizontal", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCCafeBarVerticalA", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/cafe-bar-vertical-a.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/cafe-bar-west.png", "kind": "building", "label": "Cafe-bar Barrio C lateral oeste", "pixelLabId": "e4a6fe06-0aeb-48de-b3e8-1c8c7af3821c", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 126, "height": 161 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCCafeBarVerticalB", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/cafe-bar-vertical-b.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/cafe-bar-east.png", "kind": "building", "label": "Cafe-bar Barrio C lateral este", "pixelLabId": "e4a6fe06-0aeb-48de-b3e8-1c8c7af3821c", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 123, "height": 161 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 3, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCBarStripFront", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/bar-strip-front.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/bar-strip-south.png", "kind": "building", "label": "Fila de bares Barrio C frontal", "pixelLabId": "f531bd95-b1e3-4caa-9fdc-69a0fb1f1168", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 161, "height": 48 }, "perspective": "low top-down orthographic", "orientation": "horizontal", "storeys": 1, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCBarStripVerticalA", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/bar-strip-vertical-a.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/bar-strip-west.png", "kind": "building", "label": "Fila de bares Barrio C lateral oeste", "pixelLabId": "f531bd95-b1e3-4caa-9fdc-69a0fb1f1168", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 48, "height": 125 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 1, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCBarStripVerticalB", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/buildings/bar-strip-vertical-b.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/originals/buildings/bar-strip-east.png", "kind": "building", "label": "Fila de bares Barrio C lateral este", "pixelLabId": "f531bd95-b1e3-4caa-9fdc-69a0fb1f1168", "sourceDimensions": { "width": 170, "height": 170 }, "dimensions": { "width": 47, "height": 120 }, "perspective": "low top-down orthographic", "orientation": "vertical", "storeys": 1, "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCOrangeTree", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/props/orange-tree.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/sources/props/orange-tree-source.png", "kind": "tree", "label": "Naranjo compacto Barrio C", "pixelLabId": "2553a6a3-8ab7-43f6-afea-d96571849f81", "dimensions": { "width": 52, "height": 69 }, "perspective": "high top-down orthographic", "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCDeciduousTree", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/props/deciduous-tree.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/sources/props/deciduous-bench-sheet-source.png", "kind": "tree", "label": "Caducifolio mediterráneo Barrio C", "pixelLabId": "f0b77d41-c940-4c76-9975-50e01fafa99e", "dimensions": { "width": 51, "height": 69 }, "perspective": "high top-down orthographic", "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCBench", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/props/bench.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/sources/props/bench-streetlamp-sheet-source.png", "kind": "prop", "label": "Banco de hierro y madera Barrio C", "pixelLabId": "fc15d50e-aac2-4b53-9422-8cd74c85823b", "dimensions": { "width": 33, "height": 31 }, "perspective": "high top-down orthographic", "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCCurvedStreetlamp", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/props/curved-streetlamp.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/sources/props/bench-streetlamp-sheet-source.png", "kind": "prop", "label": "Farola curva Barrio C", "pixelLabId": "fc15d50e-aac2-4b53-9422-8cd74c85823b", "dimensions": { "width": 24, "height": 70 }, "perspective": "high top-down orthographic", "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCBollard", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/props/bollard.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/sources/props/bollard-source.png", "kind": "prop", "label": "Bolardo Barrio C", "pixelLabId": "73b9d96b-f0c8-4644-8e20-4b627e18b842", "dimensions": { "width": 11, "height": 31 }, "perspective": "high top-down orthographic", "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCTreePlanter", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/props/tree-planter.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/sources/props/planter-source.png", "kind": "prop", "label": "Alcorque jardinera Barrio C", "pixelLabId": "d78d35cb-41a7-4042-af30-94ae037e7138", "dimensions": { "width": 49, "height": 48 }, "perspective": "high top-down orthographic", "anchor": "bottom-center", "status": "completed" },
+    { "id": "barrioCCafeTableChairs", "runtime": "assets/generated/san-pablo-barrio-c-pixellab/runtime/props/cafe-table-chairs.png", "source": "assets/generated/san-pablo-barrio-c-pixellab/sources/props/cafe-set-streetlamp-sheet-source.png", "kind": "prop", "label": "Mesa y sillas Barrio C", "pixelLabId": "cfab06b4-0be5-4e15-8d3c-41bc9d1e9ff4", "dimensions": { "width": 60, "height": 33 }, "perspective": "high top-down orthographic", "anchor": "bottom-center", "status": "completed" }
+  ],
+  "provenance": {
+    "artwork": "PixelLab MCP only",
+    "downloads": "pixellab-downloads.json",
+    "mechanicalPostprocessing": ["alpha trim", "split selected multi-object frames", "compose 4x4 detail sheet", "compose contact sheet"],
+    "styleReferences": [
+      "assets/generated/san-pablo-neighborhood/contact-sheet.png",
+      "assets/generated/san-pablo-rebuilt/asset-contact-sheet.png",
+      "maps/plaza-farmacia/reference-preview.png",
+      "assets/maps/san-pablo-source/pnoa.jpg",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/style/mixed-block-style-168.png",
+      "assets/generated/san-pablo-barrio-c-pixellab/sources/style/bar-strip-reference-160.png"
+    ],
+    "rejectedOutputs": [
+      {
+        "pixelLabIds": ["d85b0675-e73f-4586-96d6-fa5d1c466e9e"],
+        "files": "assets/generated/san-pablo-barrio-c-pixellab/originals/rejected/character-misgeneration-*.png",
+        "reason": "Personaje humano en lugar de arquitectura."
+      },
+      {
+        "pixelLabIds": [
+          "6512f355-ffb2-479f-8d20-2818d2b79994",
+          "ef58be6e-bca0-4b44-9b33-0c14bda02b8a",
+          "38dadfd6-78c2-4283-bc0b-f5f0c479e1e4"
+        ],
+        "files": "assets/generated/san-pablo-barrio-c-pixellab/originals/rejected/isometric-cafe-map-*.png",
+        "reason": "Perspectiva isométrica diagonal, incompatible con el frontal-superior ortogonal del juego."
+      }
+    ]
+  },
+  "pending": [
+    "PixelLab waiting: 4b6a4b40-fe71-48ff-9074-8edd52f0123a (plaza beige ↔ césped)",
+    "PixelLab waiting: 73a0b933-20ca-48b1-b7b7-777842806e69 (tierra seca ↔ césped)"
+  ]
+}

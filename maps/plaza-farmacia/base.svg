@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="960" viewBox="0 0 1280 960">
+  <defs>
+    <pattern id="plaza-pavers" width="32" height="32" patternUnits="userSpaceOnUse">
+      <rect width="32" height="32" fill="#c9bea7"/>
+      <path d="M0 0H32V32H0Z" fill="none" stroke="#aa9d86" stroke-width="2"/>
+      <path d="M4 8H28M4 24H28" stroke="#d9cfbb" stroke-width="1" opacity=".65"/>
+    </pattern>
+    <pattern id="sidewalk" width="32" height="32" patternUnits="userSpaceOnUse">
+      <rect width="32" height="32" fill="#b8b3a8"/>
+      <path d="M0 16H32M16 0V32" stroke="#99958c" stroke-width="2"/>
+      <path d="M2 2H14V14H2Z" fill="#c7c2b7" opacity=".7"/>
+    </pattern>
+    <pattern id="asphalt" width="32" height="32" patternUnits="userSpaceOnUse">
+      <rect width="32" height="32" fill="#4b5356"/>
+      <path d="M6 8h2m12 13h3M27 6h1M12 28h2" stroke="#687174" stroke-width="2"/>
+      <path d="M2 18h2m12-7h2M25 27h2" stroke="#343c3f" stroke-width="2"/>
+    </pattern>
+    <pattern id="roof-zone" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect width="24" height="24" fill="#8e9b82"/>
+      <path d="M0 12H24M12 0V24" stroke="#78866d" stroke-width="2"/>
+    </pattern>
+  </defs>
+
+  <!-- Borde cerrado y trasera residencial. -->
+  <rect width="1280" height="960" fill="#283e35"/>
+  <rect x="32" y="32" width="1216" height="896" fill="#5d7c63" stroke="#172d25" stroke-width="8"/>
+  <rect x="32" y="32" width="1216" height="256" fill="url(#roof-zone)"/>
+  <path d="M32 288H1248" stroke="#665f54" stroke-width="10"/>
+
+  <!-- Explanada peatonal que se abre frente al jugador. -->
+  <rect x="32" y="288" width="1216" height="480" fill="url(#plaza-pavers)"/>
+  <path d="M64 352H1216M64 736H1216" stroke="#8f846f" stroke-width="4" opacity=".55"/>
+  <path d="M640 320V752" stroke="#e5dcc7" stroke-width="96" opacity=".26"/>
+
+  <!-- Alcorques sobrios, como en la explanada real. -->
+  <g fill="#6d6758" stroke="#e0d4ba" stroke-width="5">
+    <rect x="374" y="412" width="128" height="104" rx="8"/>
+    <rect x="1002" y="446" width="112" height="96" rx="8"/>
+  </g>
+  <g fill="#7b925b" opacity=".95">
+    <rect x="386" y="424" width="104" height="80" rx="4"/>
+    <rect x="1014" y="458" width="88" height="72" rx="4"/>
+  </g>
+
+  <!-- Bordillo y Calle Jerusalén en primer plano. -->
+  <rect x="32" y="752" width="1216" height="24" fill="#e4ddd0"/>
+  <rect x="32" y="776" width="1216" height="152" fill="url(#asphalt)"/>
+  <path d="M48 850H1232" stroke="#d8d1b5" stroke-width="4" stroke-dasharray="48 38" opacity=".75"/>
+
+  <!-- Paso de peatones: eje visual de entrada a la plaza. -->
+  <g fill="#eee9dc">
+    <rect x="564" y="784" width="152" height="14"/>
+    <rect x="564" y="810" width="152" height="14"/>
+    <rect x="564" y="836" width="152" height="14"/>
+    <rect x="564" y="862" width="152" height="14"/>
+    <rect x="564" y="888" width="152" height="14"/>
+  </g>
+  <rect x="544" y="752" width="192" height="24" fill="url(#sidewalk)"/>
+
+  <!-- Bolardos que delimitan la zona peatonal sin cerrar el acceso central. -->
+  <g fill="#3d4748" stroke="#222c2d" stroke-width="2">
+    <rect x="92" y="735" width="10" height="33" rx="3"/>
+    <rect x="174" y="735" width="10" height="33" rx="3"/>
+    <rect x="256" y="735" width="10" height="33" rx="3"/>
+    <rect x="338" y="735" width="10" height="33" rx="3"/>
+    <rect x="420" y="735" width="10" height="33" rx="3"/>
+    <rect x="850" y="735" width="10" height="33" rx="3"/>
+    <rect x="932" y="735" width="10" height="33" rx="3"/>
+    <rect x="1014" y="735" width="10" height="33" rx="3"/>
+    <rect x="1096" y="735" width="10" height="33" rx="3"/>
+    <rect x="1178" y="735" width="10" height="33" rx="3"/>
+  </g>
+
+  <!-- Marco exterior, deliberadamente oscuro para dejar clara la zona jugable. -->
+  <path d="M32 32H1248V928H32Z" fill="none" stroke="#172d25" stroke-width="8"/>
+</svg>

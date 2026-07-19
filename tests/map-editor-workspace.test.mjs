@@ -293,28 +293,34 @@ test("las tabs preceden actividad, outliner y capas sin perder tablist ni tabpan
   assert.equal(visiblePanels, 1, "debe haber exactamente un panel de herramienta visible");
 });
 
-test("en escritorio el inspector puede plegarse y ampliarse con estado accesible", () => {
+test("en escritorio el menú lateral puede ocultarse casi por completo y ampliarse", () => {
   const sheetToggle = byId("mapEditorSheetToggle");
   const expandToggle = byId("mapEditorExpandSheetButton");
   assert.equal(sheetToggle.tag, "button");
   assert.equal(sheetToggle.attrs["aria-expanded"], "true");
+  assert.equal(sheetToggle.attrs["aria-controls"], "mapEditorWorkspace");
+  assert.equal(sheetToggle.attrs["aria-label"], "Ocultar menú lateral");
   assert.equal(expandToggle.tag, "button");
   assert.equal(expandToggle.attrs["aria-pressed"], "false");
 
   const desktopCss = extractMediaBodies(css, /@media\s*\(\s*min-width\s*:\s*681px\s*\)\s*$/i).join("\n");
   assert.ok(desktopCss, "debe existir un breakpoint exclusivo de escritorio");
   assertDeclaration(desktopCss, ".building-editor.fullscreen-inspector", "width", /^min\(720px,\s*72vw\)$/);
-  assertDeclaration(desktopCss, ".building-editor.collapsed", "width", /^144px$/);
-  assertDeclaration(desktopCss, ".building-editor.collapsed", "height", /^58px$/);
+  assertDeclaration(desktopCss, ".building-editor.collapsed", "width", /^48px$/);
+  assertDeclaration(desktopCss, ".building-editor.collapsed", "height", /^48px$/);
   for (const selector of [
+    ".building-editor.collapsed .map-editor-topbar > div:first-child",
     ".building-editor.collapsed .map-editor-commandbar",
     ".building-editor.collapsed .map-editor-modebar",
     ".building-editor.collapsed .map-editor-tool-stage",
     ".building-editor.collapsed .map-editor-secondary",
+    ".building-editor.collapsed #mapEditorExpandSheetButton",
+    ".building-editor.collapsed #closeBuildingEditor",
   ]) {
-    assertDeclaration(desktopCss, selector, "display", /^none$/);
+    assertDeclaration(css, selector, "display", /^none$/);
   }
-  assertDeclaration(desktopCss, ".building-editor.collapsed .map-editor-topbar", "min-height", /^58px$/);
+  assertDeclaration(desktopCss, ".building-editor.collapsed .map-editor-topbar", "min-height", /^48px$/);
+  assertDeclaration(css, "#gameCard:has(.building-editor.collapsed) .editor-scrim", "opacity", /^0$/);
 });
 
 test("en movil los modos son sticky, la herramienta activa precede al secundario y los controles son tactiles", () => {
@@ -328,15 +334,15 @@ test("en movil los modos son sticky, la herramienta activa precede al secundario
   assertDeclaration(mobileCss, ".map-editor-modebar", "order", /^2$/);
   assertDeclaration(mobileCss, ".map-editor-tool-stage", "order", /^3$/);
   assertDeclaration(mobileCss, ".map-editor-secondary", "order", /^4$/);
-  assertDeclaration(mobileCss, ".building-editor.collapsed .map-editor-secondary", "display", /^none$/);
+  assertDeclaration(mobileCss, ".building-editor.collapsed", "width", /^48px$/);
+  assertDeclaration(mobileCss, ".building-editor.collapsed", "height", /^48px$/);
   for (const selector of [
+    ".building-editor.collapsed .map-editor-commandbar",
+    ".building-editor.collapsed .map-editor-modebar",
     ".building-editor.collapsed .map-editor-tool-stage",
-    ".building-editor.collapsed .map-editor-panel",
+    ".building-editor.collapsed .map-editor-secondary",
   ]) {
-    assert.ok(
-      !propertyValues(mobileCss, selector, "display").includes("none"),
-      `${selector} no debe ocultar la herramienta activa`,
-    );
+    assertDeclaration(css, selector, "display", /^none$/);
   }
 
   assertMinHeight(mobileCss, ".map-editor-tabs button", 40);

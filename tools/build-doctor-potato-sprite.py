@@ -175,10 +175,10 @@ def build_preview(sheet: Image.Image, destination: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", type=Path, default=Path("assets/sprites/doctor-potato-source.png"))
-    parser.add_argument("--output", type=Path, default=Path("assets/sprites/npcs/doctor-potato-walk.png"))
-    parser.add_argument("--report", type=Path, default=Path("assets/sprites/npcs/doctor-potato-report.json"))
-    parser.add_argument("--preview", type=Path, default=Path("assets/sprites/npcs/doctor-potato-preview.png"))
+    parser.add_argument("--source", type=Path, default=Path("assets/sprites/npcs/source/doctor-potato-source.png"))
+    parser.add_argument("--output", type=Path, default=Path("assets/sprites/npcs/legacy-4x4/doctor-potato-walk.png"))
+    parser.add_argument("--report", type=Path, default=Path("assets/sprites/npcs/metadata/doctor-potato-report.json"))
+    parser.add_argument("--preview", type=Path, default=Path("assets/sprites/npcs/previews/doctor-potato-preview.png"))
     args = parser.parse_args()
 
     source = Image.open(args.source).convert("RGBA")

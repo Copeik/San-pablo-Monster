@@ -2,6 +2,7 @@
   "use strict";
 
   const CARDINAL_DIRECTIONS = Object.freeze(["up", "down", "left", "right"]);
+  const WALK_FRAME_COUNT = 6;
 
   function movementIntent(input = {}, preferredDirection = "down") {
     const rawX = (input.right ? 1 : 0) - (input.left ? 1 : 0);
@@ -53,14 +54,15 @@
   }
 
   function advanceAnimationPhase(currentPhase, distance, running = false) {
-    const safePhase = Math.max(0, Number(currentPhase) || 0) % 4;
+    const safePhase = Math.max(0, Number(currentPhase) || 0) % WALK_FRAME_COUNT;
     const safeDistance = Math.max(0, Number(distance) || 0);
     const pixelsPerFrame = running ? 16 : 12;
-    return (safePhase + safeDistance / pixelsPerFrame) % 4;
+    return (safePhase + safeDistance / pixelsPerFrame) % WALK_FRAME_COUNT;
   }
 
   root.PLAYER_MOVEMENT_CORE = Object.freeze({
     CARDINAL_DIRECTIONS,
+    WALK_FRAME_COUNT,
     advanceAnimationPhase,
     movementIntent,
     smoothVelocity,

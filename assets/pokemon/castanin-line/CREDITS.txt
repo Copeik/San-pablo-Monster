@@ -1,0 +1,6 @@
+Línea Castañín
+
+Concepto, nombres y ficha original: material proporcionado por el usuario.
+Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
+
+Archivos: castanin-front.png, castanin-back.png, castanon-front.png, castanon-back.png.

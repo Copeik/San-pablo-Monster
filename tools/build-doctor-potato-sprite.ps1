@@ -1,13 +1,17 @@
 param(
-  [string]$Source = (Join-Path $PSScriptRoot "..\assets\sprites\doctor-potato-source.png"),
-  [string]$Output = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\doctor-potato-walk.png"),
-  [string]$Preview = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\doctor-potato-preview.png"),
-  [string]$Report = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\doctor-potato-report.json")
+  [string]$Source = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\source\doctor-potato-source.png"),
+  [string]$Output = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\legacy-4x4\doctor-potato-walk.png"),
+  [string]$Preview = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\previews\doctor-potato-preview.png"),
+  [string]$Report = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\metadata\doctor-potato-report.json")
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
+
+@($Output, $Preview, $Report) | ForEach-Object {
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $_) | Out-Null
+}
 
 $cellSize = 64
 $sourceColumns = @(0, 1, 0, 3)

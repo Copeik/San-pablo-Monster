@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="5400" height="624" viewBox="0 0 5400 624" role="img" aria-labelledby="title description">
+  <title id="title">Vista previa de Pradera Bifaz</title>
+  <desc id="description">Paisaje vectorial panorámico con pradera, plataformas, árboles, construcciones plegadas y portales geométricos.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fd8db"/>
+      <stop offset="1" stop-color="#dff1c4"/>
+    </linearGradient>
+    <linearGradient id="farHill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6cae83"/>
+      <stop offset="1" stop-color="#4f8a6c"/>
+    </linearGradient>
+    <linearGradient id="nearHill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#78bd68"/>
+      <stop offset="1" stop-color="#4e8f54"/>
+    </linearGradient>
+    <linearGradient id="earth" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9b7048"/>
+      <stop offset="1" stop-color="#604532"/>
+    </linearGradient>
+    <pattern id="grassMarks" width="88" height="22" patternUnits="userSpaceOnUse">
+      <path d="M6 20l5-9 2 9m27 0l4-7 3 7m24 0l6-11 2 11" fill="none" stroke="#357e4a" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+    </pattern>
+    <symbol id="tree" viewBox="-42 -94 84 94">
+      <path d="M-8 0v-38h16V0" fill="#755039"/>
+      <path d="M0-92c27 0 39 19 34 36 14 9 9 31-9 34-9 14-39 13-47 0-20-2-23-26-8-35-4-19 9-35 30-35Z" fill="#438a57" stroke="#2d6848" stroke-width="5"/>
+      <circle cx="12" cy="-68" r="7" fill="#a8cc65"/><circle cx="-17" cy="-51" r="6" fill="#a8cc65"/>
+    </symbol>
+    <symbol id="foldHouse" viewBox="0 0 150 130">
+      <path d="M12 52 68 12l57 40v69H12Z" fill="#f4d27d" stroke="#315b55" stroke-width="6" stroke-linejoin="round"/>
+      <path d="m68 12 57 40 18-18-57-30Z" fill="#e57459" stroke="#315b55" stroke-width="6" stroke-linejoin="round"/>
+      <path d="m125 52 18-18v69l-18 18Z" fill="#c2554f" stroke="#315b55" stroke-width="6" stroke-linejoin="round"/>
+      <rect x="30" y="72" width="28" height="24" rx="3" fill="#79b9b1" stroke="#315b55" stroke-width="5"/>
+      <rect x="79" y="67" width="27" height="54" rx="3" fill="#9b684d" stroke="#315b55" stroke-width="5"/>
+    </symbol>
+    <symbol id="platform" viewBox="0 0 320 80">
+      <path d="M8 13h304l-22 59H29Z" fill="url(#earth)" stroke="#315b55" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M8 13h304" stroke="#71b85f" stroke-width="18" stroke-linecap="round"/>
+      <path d="m45 35 25 29m49-29 21 34m53-34 18 31m53-31 17 27" stroke="#b78b5a" stroke-width="5" opacity=".65"/>
+    </symbol>
+    <symbol id="gate" viewBox="0 0 90 140">
+      <path d="M15 130V43C15 8 75 8 75 43v87" fill="none" stroke="#315b55" stroke-width="12"/>
+      <path d="M29 130V47c0-19 32-19 32 0v83" fill="#f4e493" stroke="#e47e57" stroke-width="7"/>
+      <path d="M45 30v100" stroke="#fff7c3" stroke-width="4" opacity=".8"/>
+    </symbol>
+  </defs>
+
+  <rect width="5400" height="624" fill="url(#sky)"/>
+  <circle cx="470" cy="106" r="55" fill="#fff3ac" opacity=".92"/>
+  <path d="M0 360 240 214l170 83 265-156 235 173 250-96 274 145 210-121 260 128 242-178 254 174 251-91 265 115 272-184 248 171 265-103 269 111 235-142 290 177 243-145 254 139 280-193 266 188 234-109 252 111 230-153 276 150v185H0Z" fill="url(#farHill)" opacity=".58"/>
+  <path d="M0 433 300 294l245 105 278-134 270 166 250-120 301 131 274-174 289 173 287-101 282 98 247-154 285 145 276-169 311 174 267-113 284 126 297-170 283 168 294-137 292 151 276-116 298 126 275-168 256 164v168H0Z" fill="url(#nearHill)"/>
+
+  <path d="M0 474c470-42 770 35 1190 0s758 31 1160-5 785 30 1190-4 752 33 1120-2 540 20 740-3v164H0Z" fill="#5da759" stroke="#315b55" stroke-width="10"/>
+  <rect y="478" width="5400" height="146" fill="url(#grassMarks)"/>
+  <path d="M0 558h5400v66H0Z" fill="#6c4d35" opacity=".28"/>
+
+  <g opacity=".94">
+    <use href="#platform" x="520" y="330" width="320" height="80"/>
+    <use href="#platform" x="970" y="250" width="320" height="80"/>
+    <use href="#platform" x="1510" y="354" width="320" height="80"/>
+    <use href="#platform" x="2210" y="272" width="320" height="80"/>
+    <use href="#platform" x="2860" y="342" width="320" height="80"/>
+    <use href="#platform" x="3440" y="238" width="320" height="80"/>
+    <use href="#platform" x="4040" y="334" width="320" height="80"/>
+    <use href="#platform" x="4630" y="260" width="320" height="80"/>
+  </g>
+
+  <g>
+    <use href="#foldHouse" x="265" y="335" width="150" height="130"/>
+    <use href="#foldHouse" x="1310" y="337" width="150" height="130"/>
+    <use href="#foldHouse" x="2570" y="325" width="150" height="130"/>
+    <use href="#foldHouse" x="3780" y="334" width="150" height="130"/>
+    <use href="#foldHouse" x="5000" y="334" width="150" height="130"/>
+  </g>
+
+  <g>
+    <use href="#tree" x="80" y="382" width="84" height="94"/>
+    <use href="#tree" x="440" y="376" width="84" height="94"/>
+    <use href="#tree" x="870" y="386" width="84" height="94"/>
+    <use href="#tree" x="1850" y="377" width="84" height="94"/>
+    <use href="#tree" x="2050" y="382" width="84" height="94"/>
+    <use href="#tree" x="3190" y="376" width="84" height="94"/>
+    <use href="#tree" x="3300" y="390" width="84" height="94"/>
+    <use href="#tree" x="4380" y="378" width="84" height="94"/>
+    <use href="#tree" x="5200" y="386" width="84" height="94"/>
+  </g>
+
+  <use href="#gate" x="166" y="330" width="90" height="140"/>
+  <use href="#gate" x="5150" y="330" width="90" height="140"/>
+  <path d="M140 486h520m4080 0h520" fill="none" stroke="#f4e493" stroke-width="8" stroke-linecap="round" stroke-dasharray="8 18" opacity=".75"/>
+</svg>

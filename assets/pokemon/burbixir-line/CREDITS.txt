@@ -1,0 +1,6 @@
+Línea Burbixir
+
+Concepto, nombres y ficha original: material proporcionado por el usuario.
+Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
+
+Archivos: burbixir-front.png, burbixir-back.png, toxifizz-front.png, toxifizz-back.png.

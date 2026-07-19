@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Una aventura Pokémon web sobre un mapa de estilo HeartGold y SoulSilver." />
     <title>Pokémon · Ciudad Pokémon</title>
-  <link rel="stylesheet" href="styles.css?v=48" />
+  <link rel="stylesheet" href="styles.css?v=50" />
+    <link rel="stylesheet" href="perspective-zone.css?v=13" />
   </head>
   <body>
     <main class="app-shell">
@@ -99,12 +100,92 @@
             <div id="mapEditorCursorLayer" class="map-editor-cursor-layer" aria-hidden="true"></div>
             <div id="assetNotice" class="asset-notice">Cargando sprites del mapa…</div>
             <div id="runBadge" class="run-badge hidden">CORRIENDO</div>
-            <div id="mazeHud" class="maze-hud hidden">
-              <div><span>LUZ</span><div id="lightCharges" class="light-charges"><i></i><i></i><i></i></div></div>
+            <aside id="perspectiveGateGuide" class="perspective-gate-guide hidden" aria-label="Dirección al minijuego Pradera Bifaz">
+              <span class="perspective-gate-guide-mark" aria-hidden="true"><i></i></span>
+              <span class="perspective-gate-guide-copy">
+                <small>MINIJUEGO DE PERSPECTIVA</small>
+                <strong>PABELLÓN BIFAZ</strong>
+                <em id="perspectiveGateGuideDistance">LOCALIZANDO…</em>
+              </span>
+              <span id="perspectiveGateAnnouncer" class="perspective-announcer" role="status" aria-live="polite" aria-atomic="true"></span>
+            </aside>
+            <div id="prismAtmosphere" class="prism-atmosphere" aria-hidden="true">
+              <i class="prism-grain"></i><i class="prism-scanlines"></i><i class="prism-vignette"></i><i class="prism-danger-pulse"></i>
+            </div>
+            <div id="mazeHud" class="maze-hud hidden" aria-label="Estado de la Dimensión Prisma">
+              <header><small>DIMENSIÓN PRISMA</small><strong id="prismThreatLevel">ALTERACIÓN I</strong></header>
+              <div><span>LUZ</span><div id="lightCharges" class="light-charges" aria-label="Tres cargas de luz"><i></i><i></i><i></i></div></div>
               <div><span>LA SOMBRA</span><strong id="shadowStatus">LEJOS</strong></div>
-              <div><span>PULSO PRISMA</span><strong id="mazeObjective">MONSTRUO · DÉBIL</strong></div>
+              <div><span>PULSO PRISMA</span><strong id="mazeObjective">UMBRAL · DÉBIL</strong></div>
+              <div class="stress-row"><span>TENSIÓN</span><div class="stress-track"><i id="prismStressMeter"></i></div><b id="prismStressLabel">ESTABLE</b></div>
               <div class="noise-row"><span id="noiseLabel">MICRÓFONO</span><div class="noise-track"><i id="noiseMeter"></i></div></div>
-              <small>W/S avanzar · A/D desplazarse · ←/→ girar · F luz</small>
+              <div id="prismEndingTracker" class="prism-ending-tracker" aria-label="Desenlaces encontrados">
+                <i data-ending="rarePokemon" title="Pokémon raro">?</i><i data-ending="stalePotion" title="Poción Caducada">?</i><i data-ending="moldyBerry" title="Baya Mohosa">?</i><i data-ending="weakPokemon" title="Pokémon débil">?</i>
+              </div>
+              <p id="prismWhisper" class="prism-whisper" role="status" aria-live="polite">Hay más de una forma de despertar.</p>
+              <small id="prismControlHint">W/S avanzar · A/D desplazarse · ←/→ girar · F luz</small>
+            </div>
+            <div id="prismDangerAnnouncer" class="sr-only" role="status" aria-live="assertive" aria-atomic="true"></div>
+            <section id="perspectiveHud" class="perspective-hud hidden" aria-label="Estado de Pradera Bifaz">
+              <header>
+                <span class="perspective-mark" aria-hidden="true"><i></i></span>
+                <div><small>PRADERA BIFAZ</small><strong id="perspectiveModeLabel">DIORAMA</strong></div>
+                <span class="perspective-hud-actions">
+                  <button id="perspectiveAssistButton" type="button" aria-label="Activar ayuda de accesibilidad" aria-pressed="false">AYUDA</button>
+                  <button id="perspectiveExitButton" type="button" aria-label="Volver a San Pablo">SALIR</button>
+                </span>
+              </header>
+              <section class="perspective-mission" aria-labelledby="perspectiveMissionTitle">
+                <header>
+                  <small>MISIÓN PRINCIPAL</small>
+                  <span id="perspectiveMissionStage">ETAPA 1 / 5</span>
+                </header>
+                <strong id="perspectiveMissionTitle">EL PLIEGUE VIVO</strong>
+                <p id="perspectiveMissionObjective">Descubre los secretos de la Pradera Bifaz.</p>
+                <div id="perspectiveMissionProgressTrack" class="perspective-mission-track" role="progressbar" aria-label="Progreso de la misión principal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <i id="perspectiveMissionProgress"></i>
+                  <span id="perspectiveMissionCount">0 / 5</span>
+                </div>
+              </section>
+              <div id="perspectiveFlow" class="perspective-flow" data-tier="calm" data-rush="false">
+                <span class="perspective-flow-tier"><small>FLUJO</small><strong id="perspectiveFlowTier">CALMA</strong></span>
+                <div id="perspectiveFlowTrack" class="perspective-flow-track" role="progressbar" aria-label="Flujo de papel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0 de 100 · CALMA">
+                  <i id="perspectiveFlowBar"></i><b id="perspectiveFlowValue">0</b>
+                </div>
+                <span class="perspective-style-chain"><small>CADENA</small><b>×<span id="perspectiveStyleChain">0</span></b><em>MEJOR ×<span id="perspectiveBestStyleChain">0</span></em></span>
+              </div>
+              <div class="perspective-stats">
+                <span><small>COMPÁS</small><b id="perspectivePulses" aria-label="Tres pulsos disponibles">◆ ◆ ◆</b></span>
+                <span><small>SELLOS</small><b id="perspectiveSeals">0 / 3</b></span>
+                <span><small>TIEMPO</small><b id="perspectiveTimer">00:00.0</b></span>
+              </div>
+              <div class="perspective-field-stats">
+                <span><small>FAUNA</small><b><span id="perspectiveDiscoveries">0</span> / <span id="perspectiveWildlifeTotal">6</span></b></span>
+                <span><small>COMBO</small><b>×<span id="perspectiveFlipCombo">0</span></b><em>MEJOR ×<span id="perspectiveBestFlipCombo">0</span></em></span>
+                <span><small>ATERRIZAJES</small><b id="perspectivePerfectLandings">0</b></span>
+              </div>
+              <ul id="perspectiveChallenges" class="perspective-challenges" aria-label="Retos de Pradera Bifaz">
+                <li id="perspectiveChallengeNaturalista" data-challenge-id="naturalista" data-complete="false"><i aria-hidden="true">✿</i><span><strong>Naturalista</strong><small>Descubre 6</small></span></li>
+                <li id="perspectiveChallengeAcrobata" data-challenge-id="acrobata" data-complete="false"><i aria-hidden="true">⌁</i><span><strong>Acróbata</strong><small>3 precisos</small></span></li>
+                <li id="perspectiveChallengeOrigamista" data-challenge-id="origamista" data-complete="false"><i aria-hidden="true">◇</i><span><strong>Origamista</strong><small>3 bisagras</small></span></li>
+                <li id="perspectiveChallengeVirtuoso" data-challenge-id="virtuoso" data-complete="false"><i aria-hidden="true">✦</i><span><strong>Virtuoso</strong><small>Paper Rush 1</small></span></li>
+              </ul>
+              <p id="perspectiveTutorial">Sigue al Azahín por el diorama.</p>
+              <div class="perspective-anchor" aria-hidden="true"><i></i><span id="perspectiveAnchorLabel">BUSCA UNA BISAGRA</span></div>
+            </section>
+            <div id="perspectiveAnnouncer" class="perspective-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+            <div id="perspectiveTouchControls" class="perspective-touch-controls hidden" aria-label="Controles de Pradera Bifaz">
+              <div>
+                <button type="button" data-perspective-action="left" aria-label="Mover a la izquierda">◀</button>
+                <button type="button" data-perspective-action="right" aria-label="Mover a la derecha">▶</button>
+                <span class="perspective-touch-depth" aria-label="Moverse entre capas del diorama">
+                  <button type="button" data-perspective-action="up" aria-label="Ir a la capa del fondo">▲</button>
+                  <button type="button" data-perspective-action="down" aria-label="Ir a la capa del frente">▼</button>
+                </span>
+              </div>
+              <button class="perspective-touch-flip" type="button" data-perspective-action="flip" aria-label="Cambiar perspectiva"><span>Q</span><small>PLEGAR</small></button>
+              <button class="perspective-touch-jump" type="button" data-perspective-action="jump" aria-label="Saltar"><span>A</span><small>SALTAR</small></button>
+              <button class="perspective-touch-restart" type="button" data-perspective-action="restart" aria-label="Volver al último checkpoint">↺</button>
             </div>
             <div id="captureBadge" class="capture-badge hidden" aria-live="polite">
               <span aria-hidden="true">✦</span>
@@ -114,7 +195,7 @@
             <aside id="miniMap" class="mini-map" aria-label="Minimapa de San Pablo, Barrio C">
               <header><strong>MAPA</strong><span id="miniMapArea">SAN PABLO</span></header>
               <canvas id="miniMapCanvas" width="120" height="240" aria-label="Posición actual en el barrio"></canvas>
-              <div class="mini-map-legend"><span><i class="you"></i>Tú</span><span><i class="portal"></i>Puerta</span><span><i class="capture"></i>Hierba</span><span><i class="npc"></i>NPC</span></div>
+              <div class="mini-map-legend"><span><i class="you"></i>Tú</span><span><i class="bifaz"></i>Bifaz</span><span><i class="portal"></i>Puerta</span><span><i class="capture"></i>Hierba</span><span><i class="npc"></i>NPC</span></div>
             </aside>
             <div id="saveStatus" class="save-status hidden" aria-live="polite">✓ PARTIDA GUARDADA</div>
             <div id="coordinateHud" class="coordinate-hud" aria-label="Coordenadas actuales">
@@ -151,6 +232,7 @@
                 <button type="button" data-control="right" aria-label="Derecha">▶</button>
               </div>
               <button class="touch-b" type="button" data-control="run" aria-label="Correr">B<small>CORRER</small></button>
+              <button id="prismFlashButton" class="touch-flash" type="button" aria-label="Usar luz Prisma">F<small>LUZ</small></button>
               <button class="touch-a" type="button" data-action aria-label="Interactuar">A<small>ACCIÓN</small></button>
             </div>
           </div>
@@ -316,7 +398,7 @@
             <header class="map-editor-topbar">
               <div><small id="mapEditorEyebrow">MODO DIOS · SOLO DESARROLLO</small><h2 id="mapEditorTitle">Editor del mundo</h2></div>
               <div class="map-editor-header-actions">
-                <button id="mapEditorSheetToggle" type="button" aria-label="Plegar inspector" aria-expanded="true" title="Plegar o expandir inspector">⌄</button>
+                <button id="mapEditorSheetToggle" type="button" aria-label="Ocultar menú lateral" aria-controls="mapEditorWorkspace" aria-expanded="true" title="Ocultar menú lateral y editar detrás">›</button>
                 <button id="mapEditorExpandSheetButton" type="button" aria-label="Ampliar inspector" aria-pressed="false" title="Ampliar o reducir inspector">⛶</button>
                 <button id="closeBuildingEditor" type="button" aria-label="Cerrar editor">×</button>
               </div>
@@ -418,7 +500,7 @@
             <p class="editor-help">Pinta el aspecto del suelo sin cambiar por dónde puede caminar el jugador. “Sendero” se superpone al acabado existente y une rectas, curvas y cruces automáticamente.</p>
             <div class="terrain-toolbox ground-toolbox" role="toolbar" aria-label="Herramientas de suelo">
               <button type="button" class="selected" data-ground-tool="pencil" title="Lápiz (B)">✎ <span>Lápiz</span></button>
-              <button type="button" data-ground-tool="path" aria-pressed="false" title="Sendero (P)">╋ <span>Sendero</span></button>
+              <button type="button" data-ground-tool="path" data-ground-scope="world" aria-pressed="false" title="Sendero (P)">╋ <span>Sendero</span></button>
               <button type="button" data-ground-tool="eraser" title="Original (E) · también clic derecho">⌫ <span>Original</span></button>
               <button type="button" data-ground-tool="eyedropper" title="Cuentagotas (I)">◉ <span>Cuentagotas</span></button>
               <button type="button" data-ground-tool="rectangle" title="Rectángulo (R)">▭ <span>Rectángulo</span></button>
@@ -427,12 +509,28 @@
             <div class="sprite-options-title"><strong>Acabado</strong><small>Tierra, asfalto con acera, hierba y más</small></div>
             <div id="groundPalette" class="tile-palette ground-palette" role="group" aria-label="Tipo de suelo">
               <button type="button" data-ground-type="inherit"><i></i>Original</button>
-              <button type="button" data-ground-type="grass" class="selected"><i></i>Hierba</button>
-              <button type="button" data-ground-type="dirt"><i></i>Tierra</button>
-              <button type="button" data-ground-type="asphalt"><i></i>Asfalto</button>
-              <button type="button" data-ground-type="sidewalk"><i></i>Acera</button>
-              <button type="button" data-ground-type="plaza"><i></i>Plaza</button>
-              <button type="button" data-ground-type="sand"><i></i>Arena</button>
+              <button type="button" data-ground-type="grass" data-ground-scope="world" class="selected"><i></i>Hierba</button>
+              <button type="button" data-ground-type="dirt" data-ground-scope="world"><i></i>Tierra</button>
+              <button type="button" data-ground-type="asphalt" data-ground-scope="world"><i></i>Asfalto</button>
+              <button type="button" data-ground-type="sidewalk" data-ground-scope="world"><i></i>Acera</button>
+              <button type="button" data-ground-type="plaza" data-ground-scope="world"><i></i>Plaza</button>
+              <button type="button" data-ground-type="sand" data-ground-scope="world"><i></i>Arena</button>
+              <button type="button" class="hidden" data-ground-type="interior-oak-honey" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/oak-honey.png')"><i></i>Roble miel</button>
+              <button type="button" class="hidden" data-ground-type="interior-walnut-dark" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/walnut-dark.png')"><i></i>Nogal oscuro</button>
+              <button type="button" class="hidden" data-ground-type="interior-parquet-herringbone" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/parquet-herringbone.png')"><i></i>Parquet</button>
+              <button type="button" class="hidden" data-ground-type="interior-ceramic-cream" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/ceramic-cream.png')"><i></i>Cerámica crema</button>
+              <button type="button" class="hidden" data-ground-type="interior-ceramic-blue" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/ceramic-blue.png')"><i></i>Cerámica azul</button>
+              <button type="button" class="hidden" data-ground-type="interior-terracotta" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/terracotta.png')"><i></i>Terracota</button>
+              <button type="button" class="hidden" data-ground-type="interior-stone-light" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/stone-light.png')"><i></i>Piedra clara</button>
+              <button type="button" class="hidden" data-ground-type="interior-stone-dark" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/stone-dark.png')"><i></i>Piedra oscura</button>
+              <button type="button" class="hidden" data-ground-type="interior-laboratory-mint" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/laboratory-mint.png')"><i></i>Laboratorio</button>
+              <button type="button" class="hidden" data-ground-type="interior-clinic-white" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/clinic-white.png')"><i></i>Clínica</button>
+              <button type="button" class="hidden" data-ground-type="interior-carpet-beige" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/carpet-beige.png')"><i></i>Moqueta beige</button>
+              <button type="button" class="hidden" data-ground-type="interior-carpet-red" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/carpet-red.png')"><i></i>Moqueta roja</button>
+              <button type="button" class="hidden" data-ground-type="interior-wood-amber" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/wood-amber.png')"><i></i>Madera ámbar</button>
+              <button type="button" class="hidden" data-ground-type="interior-wood-farmhouse" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/wood-farmhouse.png')"><i></i>Madera rústica</button>
+              <button type="button" class="hidden" data-ground-type="interior-kitchen-checker" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/kitchen-checker.png')"><i></i>Cocina</button>
+              <button type="button" class="hidden" data-ground-type="interior-carpet-lavender" data-ground-scope="interior" style="--ground-swatch:url('assets/interiors/pixellab-house/floors/carpet-lavender.png')"><i></i>Moqueta lavanda</button>
             </div>
             <label class="editor-field editor-compact-field">Tamaño del pincel
               <select id="groundBrushSize"><option value="1">1 × 1</option><option value="3">3 × 3</option><option value="5">5 × 5</option><option value="7">7 × 7</option><option value="9">9 × 9</option></select>
@@ -521,8 +619,10 @@
             <div class="editor-template-list" aria-label="Plantillas de entrada">
               <button type="button" class="selected" data-entrance-template="interior"><strong>Interior</strong><span>Casa básica</span></button>
               <button type="button" data-entrance-template="new-map"><strong>Nuevo mapa</strong><span>Transición con fundido</span></button>
+              <button type="button" data-entrance-template="pradera-bifaz"><strong>Pradera Bifaz</strong><span>Minijuego de perspectiva</span></button>
             </div>
             <button id="addEntranceButton" class="editor-primary editor-wide-action" type="button">+ Colocar entrada en el centro</button>
+            <button id="focusPerspectiveEntranceButton" class="editor-perspective-action editor-wide-action" type="button">⌖ Localizar Pabellón Bifaz existente</button>
             <div id="entranceSelectionInfo" class="selected-building-info"><span>Selecciona una entrada</span><span>Haz clic en el mapa</span></div>
             <fieldset id="entranceInspector" class="asset-inspector" disabled>
               <legend>Entrada</legend>
@@ -533,7 +633,7 @@
               <label class="editor-field">Nombre <input id="entranceLabelInput" type="text" maxlength="80" /></label>
               <label class="editor-field">Acción
                 <select id="entranceActionInput">
-                  <option value="transition">Ir a otro mapa</option><option value="house">Casa</option><option value="heal">Centro de salud</option><option value="shop">Tienda</option><option value="lab">Laboratorio</option><option value="route">Ruta</option><option value="closed">Cerrada</option><option value="prism">Portal Prisma</option>
+                  <option value="transition">Ir a otro mapa</option><option value="exit">Salir del interior</option><option value="house">Casa</option><option value="heal">Centro de salud</option><option value="shop">Tienda</option><option value="lab">Laboratorio</option><option value="route">Ruta</option><option value="closed">Cerrada</option><option value="prism">Portal Prisma</option>
                 </select>
               </label>
               <label class="editor-field">Mapa de destino <input id="entranceTargetMapInput" type="text" list="mapEditorMapOptions" maxlength="80" placeholder="new-map" /></label>
@@ -560,6 +660,12 @@
             <div class="editor-template-list editor-template-list-events" aria-label="Plantillas de evento">
               <button type="button" class="selected" data-event-template="dialogue"><strong>Diálogo</strong><span>Texto al interactuar</span></button>
               <button type="button" data-event-template="thought"><strong>Pensamiento</strong><span>Reflexión del jugador</span></button>
+              <button type="button" data-event-template="computer"><strong>PC</strong><span>Leer terminal con E</span></button>
+              <button type="button" data-event-template="letter"><strong>Carta</strong><span>Abrir y leer con E</span></button>
+              <button type="button" data-event-template="pickup"><strong>Objeto</strong><span>Recoger y guardar</span></button>
+              <button type="button" data-event-template="heal"><strong>Descanso</strong><span>Curar todo el equipo</span></button>
+              <button type="button" data-event-template="switch"><strong>Interruptor</strong><span>Alternar una bandera</span></button>
+              <button type="button" data-event-template="sound"><strong>Sonido</strong><span>Reproducir un jingle</span></button>
               <button type="button" data-event-template="vibration"><strong>Vibración</strong><span>Vibración + sacudida</span></button>
               <button type="button" data-event-template="transition"><strong>Nuevo mapa</strong><span>Fundido y traslado</span></button>
             </div>
@@ -571,8 +677,9 @@
                 <label>Columna <input id="eventColInput" type="number" step="1" /></label>
                 <label>Fila <input id="eventRowInput" type="number" step="1" /></label>
               </div>
+              <label class="editor-field">Nombre <input id="eventLabelInput" type="text" maxlength="120" /></label>
               <label class="editor-field">Tipo
-                <select id="eventTypeInput"><option value="dialogue">Diálogo</option><option value="thought">Pensamiento</option><option value="vibration">Vibración</option><option value="teleport">Teletransporte</option><option value="transition">Transición de mapa</option></select>
+                <select id="eventTypeInput"><option value="dialogue">Diálogo</option><option value="thought">Pensamiento</option><option value="computer">Leer PC</option><option value="letter">Abrir carta</option><option value="pickup">Coger objeto</option><option value="heal">Curar equipo</option><option value="switch">Interruptor</option><option value="sound">Sonido</option><option value="vibration">Vibración</option><option value="teleport">Teletransporte</option><option value="transition">Transición de mapa</option></select>
               </label>
               <label class="editor-field">Activación <select id="eventTriggerInput"><option value="interact">Al interactuar</option><option value="step">Al pisar</option></select></label>
               <label class="editor-field" data-event-fields="message">Mensaje <textarea id="eventMessageInput" rows="4" maxlength="1000"></textarea></label>
@@ -589,6 +696,17 @@
                 <label>Duración ms <input id="eventDurationInput" type="number" step="10" /></label>
                 <label>Intensidad <input id="eventIntensityInput" type="number" step="0.1" /></label>
               </div>
+              <div data-event-fields="pickup" class="hidden">
+                <label class="editor-field">Objeto <select id="eventItemKindInput"><option value="balls">Poké Balls</option><option value="potions">Pociones</option><option value="maxPotions">Pociones Máximas</option><option value="berries">Bayas</option><option value="ultraBalls">Ultra Balls</option><option value="masterBalls">Master Balls</option><option value="rareCandies">Caramelos Raros</option><option value="prismBatteries">Baterías Prisma</option><option value="prismShards">Fragmentos Prisma</option><option value="money">Dinero</option></select></label>
+                <div class="editor-number-grid"><label>Cantidad <input id="eventAmountInput" type="number" min="1" max="99" step="1" /></label><label>Nombre visible <input id="eventItemNameInput" type="text" maxlength="120" /></label></div>
+              </div>
+              <label class="editor-field hidden" data-event-fields="switch">Bandera del interruptor <input id="eventFlagInput" type="text" maxlength="80" placeholder="luz-sotano" /></label>
+              <label class="editor-field hidden" data-event-fields="sound">Jingle <select id="eventJingleInput"><option value="success">Éxito</option><option value="capture">Captura</option><option value="level">Subida de nivel</option><option value="encounter">Encuentro</option><option value="lose">Derrota</option></select></label>
+              <details class="map-editor-create">
+                <summary>Condición avanzada</summary>
+                <label class="editor-field">Exigir bandera <input id="eventRequiresFlagInput" type="text" maxlength="80" placeholder="Opcional" /></label>
+                <label class="editor-field">Estado exigido <select id="eventRequiredFlagValueInput"><option value="true">Activada</option><option value="false">Desactivada</option></select></label>
+              </details>
               <label class="editor-check"><input id="eventOnceInput" type="checkbox" /> Ejecutar una sola vez</label>
               <label class="editor-check"><input id="eventEnabledInput" type="checkbox" checked /> Evento activo</label>
               <p id="eventValidation" class="editor-validation" role="status"></p>
@@ -658,7 +776,7 @@
                 <details class="map-editor-shortcuts"><summary>Atajos y ayuda</summary><p><kbd>1–6</kbd> cambiar modo · <kbd>B/E/I/R/F</kbd> herramientas · <kbd>P</kbd> sendero · <kbd>−/+</kbd> pincel · clic derecho borrar · <kbd>/</kbd> buscar · <kbd>Esc</kbd> cancelar · <kbd>Ctrl</kbd>+<kbd>Z</kbd> deshacer · <kbd>Ctrl</kbd>+<kbd>S</kbd> sincronizar · <kbd>Ctrl</kbd>+<kbd>C/V</kbd> copiar/pegar · <kbd>Espacio</kbd>+arrastrar desplazar · rueda zoom · <kbd>G</kbd> abrir/cerrar</p></details>
               </div>
             </details>
-            <datalist id="mapEditorMapOptions"><option value="san-pablo"></option><option value="city"></option><option value="current"></option><option value="new-map"></option></datalist>
+            <datalist id="mapEditorMapOptions"><option value="san-pablo"></option><option value="city"></option><option value="current"></option><option value="new-map"></option><option value="pradera-bifaz"></option></datalist>
             <datalist id="mapEditorBuildingOptions"></datalist>
           </div>
         </aside>
@@ -718,24 +836,30 @@
     </main>
     <script src="map-registry.js?v=1"></script>
     <script src="map-geography.js?v=2"></script>
-    <script src="map-editor-rules.js?v=2"></script>
-    <script src="map-editor-data.js?v=5"></script>
+    <script src="map-editor-rules.js?v=6"></script>
+    <script src="map-editor-data.js?v=6"></script>
     <script src="assets/generated/san-pablo-neighborhood/catalog.js?v=2"></script>
-    <script src="map-layout.js?v=10"></script>
-    <script src="map-data.js?v=28"></script>
+    <script src="assets/generated/san-pablo-barrio-c-pixellab/catalog.js?v=2"></script>
+    <script src="map-layout.js?v=12"></script>
+    <script src="map-data.js?v=32"></script>
     <script src="maps/san-pablo/register.js?v=1"></script>
     <script src="maps/route-test/editor-data.js?v=1"></script>
     <script src="maps/route-test/map.js?v=2"></script>
     <script src="maps/ciudad-azahar/editor-data.js?v=1"></script>
     <script src="maps/ciudad-azahar/layout.js?v=1"></script>
     <script src="maps/ciudad-azahar/map.js?v=1"></script>
+    <script src="maps/plaza-farmacia/editor-data.js?v=2"></script>
+    <script src="maps/plaza-farmacia/map.js?v=2"></script>
+    <script src="maps/pradera-bifaz/editor-data.js?v=1"></script>
+    <script src="maps/pradera-bifaz/map.js?v=3"></script>
     <!-- GAME_MAP_PACKAGES -->
+    <script src="perspective-zone-core.js?v=12"></script>
     <script src="map-bootstrap.js?v=1"></script>
     <script src="player-movement.js?v=3"></script>
     <script src="attack-effects.js?v=1"></script>
     <script src="sanpledex-animation-data.js?v=5"></script>
     <script src="game-music.js?v=2"></script>
-    <script src="script.js?v=106"></script>
-    <script src="map-editor-standalone.js?v=2"></script>
+    <script src="script.js?v=130"></script>
+    <script src="map-editor-standalone.js?v=8"></script>
   </body>
 </html>

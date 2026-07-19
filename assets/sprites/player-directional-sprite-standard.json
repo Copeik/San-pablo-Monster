@@ -1,32 +1,42 @@
 {
-  "version": 1,
+  "version": 2,
+  "source": "PixelLab MCP",
+  "characterId": "b96197cb-8527-4fdf-bd6d-d48c01c41804",
+  "animation": "Walk",
   "cellSize": 64,
   "grid": {
-    "columns": 4,
-    "rows": 4
+    "columns": 6,
+    "rows": 8
   },
   "rowOrder": [
-    "down-left",
+    "down",
     "down-right",
+    "right",
+    "up-right",
+    "up",
     "up-left",
-    "up-right"
+    "left",
+    "down-left"
   ],
   "cycle": [
-    "neutral",
-    "stride-a",
-    "neutral",
-    "stride-b"
+    "walk-0",
+    "walk-1",
+    "walk-2",
+    "walk-3",
+    "walk-4",
+    "walk-5"
   ],
-  "anchors": {
-    "headCenterX": 32,
-    "feetRow": 59
+  "normalization": {
+    "sourceCellSize": 112,
+    "crop": {
+      "x": 24,
+      "y": 26,
+      "width": 64,
+      "height": 64
+    },
+    "canvasCenterX": 32,
+    "movementAnchorY": 60
   },
-  "scale": {
-    "maximumVisibleHeight": 56,
-    "minimumVisibleHeight": 50,
-    "maximumDirectionScaleDriftPercent": 5
-  },
-  "oppositeDirectionPolicy": "exact-horizontal-pixel-mirror",
   "rendering": {
     "imageSmoothingEnabled": false,
     "runtimeScale": 1

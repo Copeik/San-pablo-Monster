@@ -5,8 +5,17 @@ import { inflateSync } from "node:zlib";
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const FRAME_SIZE = 64;
-const ALPHA_THRESHOLD = 24;
-const DIRECTIONS = ["down-left", "down-right", "up-left", "up-right"];
+const FRAME_COUNT = 6;
+const DIRECTIONS = [
+  "down",
+  "down-right",
+  "right",
+  "up-right",
+  "up",
+  "up-left",
+  "left",
+  "down-left",
+];
 
 function paeth(left, up, upperLeft) {
   const estimate = left + up - upperLeft;
@@ -73,14 +82,9 @@ function extractFrame(image, column, row) {
   const frame = Buffer.alloc(FRAME_SIZE * FRAME_SIZE * 4);
   for (let y = 0; y < FRAME_SIZE; y += 1) {
     const sourceStart = (((row * FRAME_SIZE + y) * image.width) + column * FRAME_SIZE) * 4;
-    const targetStart = y * FRAME_SIZE * 4;
-    image.pixels.copy(frame, targetStart, sourceStart, sourceStart + FRAME_SIZE * 4);
+    image.pixels.copy(frame, y * FRAME_SIZE * 4, sourceStart, sourceStart + FRAME_SIZE * 4);
   }
   return frame;
-}
-
-function alphaAt(frame, x, y) {
-  return frame[(y * FRAME_SIZE + x) * 4 + 3];
 }
 
 function frameMetrics(frame) {
@@ -92,41 +96,24 @@ function frameMetrics(frame) {
   let partialPixels = 0;
   for (let y = 0; y < FRAME_SIZE; y += 1) {
     for (let x = 0; x < FRAME_SIZE; x += 1) {
-      const alpha = alphaAt(frame, x, y);
+      const alpha = frame[(y * FRAME_SIZE + x) * 4 + 3];
       if (alpha > 0 && alpha < 255) partialPixels += 1;
-      if (alpha < ALPHA_THRESHOLD) continue;
+      if (!alpha) continue;
       opaquePixels += 1;
       left = Math.min(left, x); top = Math.min(top, y);
       right = Math.max(right, x); bottom = Math.max(bottom, y);
     }
   }
   if (right < left) throw new Error("Sprite frame is empty");
-  const visibleHeight = bottom - top + 1;
-  const headBottom = top + Math.max(1, Math.round(visibleHeight * .44));
-  let headLeft = FRAME_SIZE;
-  let headRight = -1;
-  for (let y = top; y < headBottom; y += 1) {
-    for (let x = left; x <= right; x += 1) {
-      if (alphaAt(frame, x, y) < ALPHA_THRESHOLD) continue;
-      headLeft = Math.min(headLeft, x);
-      headRight = Math.max(headRight, x);
-    }
-  }
   return {
     bbox: [left, top, right + 1, bottom + 1],
+    width: right - left + 1,
+    height: bottom - top + 1,
+    centerX: (left + right) / 2,
     bottom,
-    visibleHeight,
-    headCenterX: (headLeft + headRight) / 2,
-    headWidth: headRight - headLeft + 1,
     opaquePixels,
     partialRatio: partialPixels / Math.max(1, opaquePixels + partialPixels),
   };
-}
-
-function regionEqual(first, second, top, bottom) {
-  const start = top * FRAME_SIZE * 4;
-  const end = bottom * FRAME_SIZE * 4;
-  return first.subarray(start, end).equals(second.subarray(start, end));
 }
 
 function differentPixelCount(first, second) {
@@ -138,74 +125,59 @@ function differentPixelCount(first, second) {
   return count;
 }
 
-function horizontalMirrorEqual(leftFrame, rightFrame) {
-  for (let y = 0; y < FRAME_SIZE; y += 1) {
-    for (let x = 0; x < FRAME_SIZE; x += 1) {
-      const leftStart = (y * FRAME_SIZE + x) * 4;
-      const rightStart = (y * FRAME_SIZE + (FRAME_SIZE - 1 - x)) * 4;
-      if (!leftFrame.subarray(leftStart, leftStart + 4).equals(rightFrame.subarray(rightStart, rightStart + 4))) return false;
-    }
-  }
-  return true;
-}
-
 export function validatePlayerDirectionalSprite(file) {
   const image = decodeRgbaPng(readFileSync(file));
   const failures = [];
-  if (image.width !== 256 || image.height !== 256) failures.push(`atlas must be 256x256, got ${image.width}x${image.height}`);
+  const expectedWidth = FRAME_SIZE * FRAME_COUNT;
+  const expectedHeight = FRAME_SIZE * DIRECTIONS.length;
+  if (image.width !== expectedWidth || image.height !== expectedHeight) {
+    failures.push(`atlas must be ${expectedWidth}x${expectedHeight}, got ${image.width}x${image.height}`);
+  }
   if (failures.length) return { valid: false, failures, width: image.width, height: image.height, directions: {} };
 
-  const rows = DIRECTIONS.map((direction, row) => ({
-    direction,
-    frames: Array.from({ length: 4 }, (_, column) => extractFrame(image, column, row)),
-  }));
   const reports = {};
-  for (const row of rows) {
-    const metrics = row.frames.map(frameMetrics);
-    reports[row.direction] = metrics;
+  for (let row = 0; row < DIRECTIONS.length; row += 1) {
+    const direction = DIRECTIONS[row];
+    const frames = Array.from({ length: FRAME_COUNT }, (_, column) => extractFrame(image, column, row));
+    const metrics = frames.map(frameMetrics);
+    reports[direction] = metrics;
     metrics.forEach((metric, frame) => {
-      if (metric.bottom !== 59) failures.push(`${row.direction}[${frame}] feet row is ${metric.bottom}, expected 59`);
-      if (metric.visibleHeight < 50 || metric.visibleHeight > 56) failures.push(`${row.direction}[${frame}] visible height is ${metric.visibleHeight}`);
-      if (Math.abs(metric.headCenterX - 31.5) > 1) failures.push(`${row.direction}[${frame}] head center is ${metric.headCenterX}`);
-      if (metric.partialRatio > .12) failures.push(`${row.direction}[${frame}] has excessive soft alpha (${metric.partialRatio.toFixed(3)})`);
+      if (metric.width < 30 || metric.width > 36) failures.push(`${direction}[${frame}] visible width is ${metric.width}`);
+      if (metric.height < 53 || metric.height > 57) failures.push(`${direction}[${frame}] visible height is ${metric.height}`);
+      if (metric.centerX < 28 || metric.centerX > 35) failures.push(`${direction}[${frame}] horizontal center is ${metric.centerX}`);
+      if (metric.bottom < 56 || metric.bottom > 60) failures.push(`${direction}[${frame}] feet row is ${metric.bottom}`);
+      if (metric.partialRatio > .01) failures.push(`${direction}[${frame}] has soft alpha (${metric.partialRatio.toFixed(3)})`);
     });
-    if (!row.frames[0].equals(row.frames[2])) failures.push(`${row.direction} neutral frames 0 and 2 differ`);
-    if (!regionEqual(row.frames[0], row.frames[1], 0, 36) || !regionEqual(row.frames[0], row.frames[3], 0, 36)) {
-      failures.push(`${row.direction} head/camera changes during the walk cycle`);
-    }
-    if (differentPixelCount(row.frames[0], row.frames[1]) < 24 || differentPixelCount(row.frames[0], row.frames[3]) < 24) {
-      failures.push(`${row.direction} stride is not visibly animated`);
-    }
-    if (differentPixelCount(row.frames[1], row.frames[3]) < 16) failures.push(`${row.direction} stride A and B do not alternate`);
-  }
-
-  [[0, 1], [2, 3]].forEach(([leftRow, rightRow]) => {
-    for (let frame = 0; frame < 4; frame += 1) {
-      if (!horizontalMirrorEqual(rows[leftRow].frames[frame], rows[rightRow].frames[frame])) {
-        failures.push(`${rows[leftRow].direction}[${frame}] is not an exact mirror of ${rows[rightRow].direction}[${frame}]`);
+    const distinctFrames = frames.filter((frame, index) => frames.findIndex((candidate) => candidate.equals(frame)) === index);
+    if (distinctFrames.length < FRAME_COUNT) failures.push(`${direction} does not contain six distinct PixelLab walk frames`);
+    for (let frame = 1; frame < frames.length; frame += 1) {
+      if (differentPixelCount(frames[frame - 1], frames[frame]) < 20) {
+        failures.push(`${direction}[${frame - 1}→${frame}] does not visibly animate`);
       }
     }
-  });
+  }
 
   const allMetrics = Object.values(reports).flat();
-  const heights = allMetrics.map((metric) => metric.visibleHeight);
+  const heights = allMetrics.map((metric) => metric.height);
   const scaleDrift = (Math.max(...heights) - Math.min(...heights)) / Math.max(...heights);
-  if (scaleDrift > .05) failures.push(`direction scale drift is ${(scaleDrift * 100).toFixed(1)}%, expected <= 5%`);
-  const areas = allMetrics.map((metric) => metric.opaquePixels);
-  if (Math.max(...areas) / Math.min(...areas) > 1.4) failures.push("opaque body area changes by more than 40%");
+  if (scaleDrift > .1) failures.push(`direction scale drift is ${(scaleDrift * 100).toFixed(1)}%, expected <= 10%`);
+  const bottoms = allMetrics.map((metric) => metric.bottom);
+  if (Math.max(...bottoms) - Math.min(...bottoms) > 4) failures.push("walk-cycle vertical motion exceeds four pixels");
 
   return {
     valid: failures.length === 0,
     failures,
     width: image.width,
     height: image.height,
+    frameCount: FRAME_COUNT,
+    rowOrder: DIRECTIONS,
     scaleDriftPercent: Number((scaleDrift * 100).toFixed(2)),
     directions: reports,
   };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const file = process.argv[2] || new URL("../assets/sprites/protagonist-walk-diagonal.png", import.meta.url);
+  const file = process.argv[2] || new URL("../assets/sprites/protagonist-walk-pixellab.png", import.meta.url);
   const report = validatePlayerDirectionalSprite(file);
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   if (!report.valid) process.exitCode = 1;

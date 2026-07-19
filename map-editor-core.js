@@ -379,7 +379,9 @@ export class PresenceGate {
   signature(value) {
     const selection = value?.selection ? `${value.selection.entity || ""}:${value.selection.id || ""}` : "";
     const cursor = value?.cursor ? `${Math.round(value.cursor.x)},${Math.round(value.cursor.y)}` : "";
-    const player = value?.player ? `${Math.round(value.player.x)},${Math.round(value.player.y)},${value.player.direction || ""},${Number(value.player.moving)}` : "";
+    const player = value?.player
+      ? `${Math.round(value.player.x)},${Math.round(value.player.y)},${value.player.direction || ""},${Number(value.player.moving)},${value.player.dimension || ""},${value.player.interior || ""},${Number(value.player.running)},${Math.floor(Number(value.player.frame) || 0)}`
+      : "";
     return `${value?.name || ""}|${value?.mode || ""}|${selection}|${cursor}|${player}`;
   }
 

@@ -141,7 +141,19 @@ const CITY_BASE_DOORS = [
   { col: 45, row: 13, label: "UNED Sevilla", action: "lab", npc: "professor" },
   { col: 42, row: 54, label: "Campus Cívico", action: "lab", npc: "professor" },
   { col: 69, row: 60, label: "Banco San Pablo", action: "closed" },
-  { col: 67, row: 73, label: "Servicios del Sureste", action: "closed" },
+  {
+    id: "pradera-bifaz-gate",
+    col: 67,
+    row: 73,
+    label: "Pabellón Bifaz",
+    action: "transition",
+    targetMap: "pradera-bifaz",
+    targetX: 160,
+    targetY: 462,
+    targetDirection: "right",
+    effect: "fade",
+    message: "El pabellón se abre como un diorama. Al otro lado, las fachadas parecen tener más de una forma.",
+  },
 ];
 const CITY_HIDDEN_ASSET_DOORS = new Set((CITY_LAYOUT.hiddenAssetDoors || [])
   .map((door) => `${door.col},${door.row}`));
@@ -233,6 +245,28 @@ window.CITY_MAP_CONFIG = Object.freeze({
 
   /* Puertas iniciales. El editor permite corregir o ampliar cualquiera. */
   doors: CITY_EDITED_BASE_DOORS,
+
+  /* Accesos a mapas de distrito. Este evento interactivo evita que la
+     llegada de vuelta active inmediatamente otro teletransporte. */
+  events: Object.freeze([
+    Object.freeze({
+      id: "plaza-farmacia-access",
+      scene: "world",
+      col: 31,
+      row: 16,
+      label: "Acceso a Plaza de la Farmacia",
+      type: "transition",
+      trigger: "interact",
+      message: "Cruzas hacia la plaza de la farmacia de Calle Jerusalen.",
+      targetMap: "plaza-farmacia",
+      targetX: 640,
+      targetY: 848,
+      targetDirection: "up",
+      effect: "fade",
+      once: false,
+      enabled: true,
+    }),
+  ]),
 
   /* NPC exteriores. col/row indican la casilla; direction: down/left/right/up. */
   npcs: [
@@ -490,6 +524,26 @@ window.CITY_MAP_CONFIG = Object.freeze({
       ],
     },
   ],
+
+  /* Los tres cristales son objetos persistentes del mundo: cada uno suma un
+     Fragmento Prisma y desaparece al recogerlo. Juntos activan el umbral. */
+  worldObjects: Object.freeze([
+    Object.freeze({
+      id: "prism-shard-jerusalen", dimension: "san_pablo",
+      x: 700, y: 505, kind: "prismShards", amount: 1,
+      name: "Fragmento Prisma de Jerusalén", sprite: "odd-keystone", crystal: true,
+    }),
+    Object.freeze({
+      id: "prism-shard-persepolis", dimension: "san_pablo",
+      x: 520, y: 1300, kind: "prismShards", amount: 1,
+      name: "Fragmento Prisma de Persépolis", sprite: "odd-keystone", crystal: true,
+    }),
+    Object.freeze({
+      id: "prism-shard-siracusa", dimension: "san_pablo",
+      x: 900, y: 1572, kind: "prismShards", amount: 1,
+      name: "Fragmento Prisma de Siracusa", sprite: "odd-keystone", crystal: true,
+    }),
+  ]),
 
   /* El HUD usa las mismas lineas maestras que el compilador de calles. */
   streets: (CITY_LAYOUT.roads || []).map((road) => ({

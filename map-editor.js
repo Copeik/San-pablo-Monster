@@ -35,7 +35,7 @@ import {
   };
   const emptyData = () => ({
     version: 3,
-    tileOverrides: {}, groundOverrides: {}, mapSize: {
+    tileOverrides: {}, groundOverrides: {}, interiorGroundOverrides: {}, mapSize: {
       cols: Number(initialGrid.cols) || MAP_EDITOR_RULES.world.cols,
       rows: Number(initialGrid.rows) || MAP_EDITOR_RULES.world.rows,
     },
@@ -49,6 +49,9 @@ import {
       ...emptyData(),
       tileOverrides: { ...(isPlainRecord(source.tileOverrides) ? source.tileOverrides : {}) },
       groundOverrides: { ...(isPlainRecord(source.groundOverrides) ? source.groundOverrides : {}) },
+      interiorGroundOverrides: Object.fromEntries(Object.entries(isPlainRecord(source.interiorGroundOverrides) ? source.interiorGroundOverrides : {})
+        .filter(([, overrides]) => isPlainRecord(overrides))
+        .map(([scene, overrides]) => [scene, { ...overrides }])),
       mapSize: {
         cols: clamp(mapSize.cols, MAP_EDITOR_RULES.world.minCols, MAP_EDITOR_RULES.world.maxCols, Number(initialGrid.cols) || MAP_EDITOR_RULES.world.cols),
         rows: clamp(mapSize.rows, MAP_EDITOR_RULES.world.minRows, MAP_EDITOR_RULES.world.maxRows, Number(initialGrid.rows) || MAP_EDITOR_RULES.world.rows),
@@ -79,13 +82,16 @@ import {
   let inviteUrl = "";
   let collaborators = [];
   let presenceTimer = 0;
+  let presenceMovementTimer = 0;
   let presenceHeartbeatTimer = 0;
   let reconnectTimer = 0;
   let reconnectAttempt = 0;
   let flushTimer = 0;
   let diagnosticsTimer = 0;
   let sending = false;
-  let presenceRequestInFlight = false;
+  let presenceRequestsInFlight = 0;
+  let presenceSendQueued = false;
+  let presenceSequence = Date.now() * 1000;
   let pollingOnline = false;
   let presenceCursor = null;
   let pendingBatches = [];
@@ -239,11 +245,14 @@ import {
     linkedAssetId: $("#entranceLinkedAssetInput"),
   };
   const eventInputs = {
-    col: $("#eventColInput"), row: $("#eventRowInput"), type: $("#eventTypeInput"),
+    col: $("#eventColInput"), row: $("#eventRowInput"), label: $("#eventLabelInput"), type: $("#eventTypeInput"),
     trigger: $("#eventTriggerInput"), message: $("#eventMessageInput"),
     targetMap: $("#eventTargetMapInput"), targetX: $("#eventTargetXInput"), targetY: $("#eventTargetYInput"),
     targetDirection: $("#eventTargetDirectionInput"), effect: $("#eventEffectInput"),
     duration: $("#eventDurationInput"), intensity: $("#eventIntensityInput"),
+    itemKind: $("#eventItemKindInput"), itemName: $("#eventItemNameInput"), amount: $("#eventAmountInput"),
+    flag: $("#eventFlagInput"), requiresFlag: $("#eventRequiresFlagInput"), requiredFlagValue: $("#eventRequiredFlagValueInput"),
+    jingle: $("#eventJingleInput"),
     once: $("#eventOnceInput"), enabled: $("#eventEnabledInput"),
   };
 
@@ -303,8 +312,12 @@ import {
       return;
     }
     if (operation.type === "ground.set") {
-      if (operation.value == null) delete data.groundOverrides[operation.key];
-      else data.groundOverrides[operation.key] = operation.value;
+      const collection = operation.scene
+        ? (data.interiorGroundOverrides[operation.scene] ||= {})
+        : data.groundOverrides;
+      if (operation.value == null) delete collection[operation.key];
+      else collection[operation.key] = operation.value;
+      if (operation.scene && !Object.keys(collection).length) delete data.interiorGroundOverrides[operation.scene];
       return;
     }
     if (operation.type === "map.resize") {
@@ -341,7 +354,7 @@ import {
     }
     if (operation.type === "ground.set") {
       const [col, row] = operation.key.split(",").map(Number);
-      bridge.setGround(col, row, operation.value == null ? "inherit" : operation.value);
+      bridge.setGround(col, row, operation.value == null ? "inherit" : operation.value, operation.scene || "world");
       return;
     }
     if (operation.type === "map.resize") {
@@ -539,12 +552,14 @@ import {
     (drag?.groupBefore || []).forEach((entity) => activeKeys.add(operationKey({ type: "entity.set", entity: "asset", id: entity.id })));
     const interrupted = [...incomingKeys].some((key) => activeKeys.has(key));
     if (interrupted) cancelCurrentAction({ clearSelection: false });
+    const hasAssetChanges = operations.some((operation) => operation.entity === "asset");
     operations.forEach((operation) => {
       applyDataOperation(operation);
       applyBridgeOperation(operation);
       remoteChangedKeys.add(operationKey(operation));
       remoteKeyRevisions.set(operationKey(operation), Number(payload.revision) || revision);
     });
+    if (hasAssetChanges) bridge.applyAssetSnapshot?.(data);
     rawDataSnapshot = clone(data);
     scheduleMapDiagnostics();
     const terrainCount = operations.filter((operation) => operation.type === "tile.set").length;
@@ -629,11 +644,15 @@ import {
 
   async function publishPresence(cursor = presenceCursor, { heartbeat = false } = {}) {
     if (soloMode) return { send: false, wait: 0, changed: false };
-    if (presenceRequestInFlight) return;
+    if (presenceRequestsInFlight >= 3) {
+      presenceSendQueued = true;
+      return { send: false, wait: MAP_EDITOR_RULES.timing.presenceMovementMs, changed: true };
+    }
     const payload = presencePayload(cursor);
     const decision = presenceGate.decision(payload, Date.now(), { heartbeat });
     if (!decision.send) return decision;
-    presenceRequestInFlight = true;
+    payload.sequence = ++presenceSequence;
+    presenceRequestsInFlight += 1;
     try {
       const response = await fetch(apiUrl("/api/dev/map-editor/presence"), {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -643,7 +662,11 @@ import {
       if (!response.ok) throw new Error(result.error || `Error ${response.status}`);
       renderPresence(result.users);
     } finally {
-      presenceRequestInFlight = false;
+      presenceRequestsInFlight = Math.max(0, presenceRequestsInFlight - 1);
+      if (presenceSendQueued && enabled) {
+        presenceSendQueued = false;
+        sendPresence(presenceCursor);
+      }
     }
   }
 
@@ -666,7 +689,11 @@ import {
 
   function startPresenceHeartbeat() {
     if (soloMode) return;
+    window.clearInterval(presenceMovementTimer);
     window.clearInterval(presenceHeartbeatTimer);
+    presenceMovementTimer = window.setInterval(() => {
+      if (enabled) sendPresence(presenceCursor);
+    }, MAP_EDITOR_RULES.timing.presenceMovementMs);
     presenceHeartbeatTimer = window.setInterval(() => {
       if (!enabled) return;
       void publishPresence(presenceCursor, { heartbeat: true }).catch(() => {});
@@ -709,6 +736,7 @@ import {
   function npcRecord(npc) {
     const record = {
       id: npc.id, col: Math.floor(Number(npc.col)), row: Math.floor(Number(npc.row)),
+      scene: String(npc.scene || bridge.sceneInfo?.().id || "world").slice(0, 64),
       direction: npc.direction || "down", name: String(npc.name || "NPC").slice(0, 80),
       sprite: npc.sprite || "guide", lines: (npc.lines || []).map(String).slice(0, MAP_EDITOR_RULES.lengths.npcLines),
     };
@@ -828,7 +856,7 @@ import {
       validation.errors.forEach((message) => push("error", kind, entity, message));
       validation.warnings.forEach((message) => push("warning", kind, entity, message));
       if ((kind === "entrance" || kind === "event") && (entity.action === "transition" || ["teleport", "transition"].includes(entity.type))) {
-        const positionKey = `${entity.col},${entity.row}`;
+        const positionKey = `${entity.scene || "world"}|${entity.col},${entity.row}`;
         const previous = occupiedTransitions.get(positionKey);
         if (previous) push("warning", kind, entity, `Comparte casilla de transición con ${previous}.`);
         else occupiedTransitions.set(positionKey, entity.label || entity.id);
@@ -913,12 +941,16 @@ import {
       const fallback = key === "targetDirection" ? "down" : key === "effect" ? "fade" : "";
       input.value = entrance[key] ?? fallback;
     });
+    $("#deleteEntranceButton").textContent = bridge.isBaseEntity?.("entrance", entrance.id) ? "Ocultar" : "Eliminar";
     validateEntrance(entrance);
   }
 
   function updateEventFieldVisibility(type) {
     $$('[data-event-fields="target"]').forEach((element) => element.classList.toggle("hidden", !["teleport", "transition"].includes(type)));
     $$('[data-event-fields="vibration"]').forEach((element) => element.classList.toggle("hidden", type !== "vibration"));
+    $$('[data-event-fields="pickup"]').forEach((element) => element.classList.toggle("hidden", type !== "pickup"));
+    $$('[data-event-fields="switch"]').forEach((element) => element.classList.toggle("hidden", type !== "switch"));
+    $$('[data-event-fields="sound"]').forEach((element) => element.classList.toggle("hidden", type !== "sound"));
   }
 
   function renderEventSelection(event) {
@@ -929,11 +961,15 @@ import {
       return;
     }
     setInfo("#eventSelectionInfo", event.label || event.id, `C${event.col} · F${event.row} · ${event.type}`);
-    eventInputs.col.value = event.col; eventInputs.row.value = event.row; eventInputs.type.value = event.type || "dialogue";
+    eventInputs.col.value = event.col; eventInputs.row.value = event.row; eventInputs.label.value = event.label || "Evento"; eventInputs.type.value = event.type || "dialogue";
     eventInputs.trigger.value = event.trigger || "interact"; eventInputs.message.value = Array.isArray(event.message) ? event.message.join("\n") : event.message || "";
     eventInputs.targetMap.value = event.targetMap || ""; eventInputs.targetX.value = event.targetX ?? ""; eventInputs.targetY.value = event.targetY ?? "";
     eventInputs.targetDirection.value = event.targetDirection || "down"; eventInputs.effect.value = event.effect || (event.type === "transition" ? "fade" : "none");
     eventInputs.duration.value = event.duration ?? 440; eventInputs.intensity.value = event.intensity ?? 1;
+    eventInputs.itemKind.value = event.itemKind || "potions"; eventInputs.itemName.value = event.itemName || ""; eventInputs.amount.value = event.amount ?? 1;
+    eventInputs.flag.value = event.flag || ""; eventInputs.requiresFlag.value = event.requiresFlag || "";
+    eventInputs.requiredFlagValue.value = event.requiredFlagValue === false ? "false" : "true";
+    eventInputs.jingle.value = event.jingle || "success";
     eventInputs.once.checked = Boolean(event.once); eventInputs.enabled.checked = event.enabled !== false;
     updateEventFieldVisibility(event.type);
     validateEvent(event);
@@ -945,6 +981,7 @@ import {
     renderNpcSelection(selected?.kind === "npc" ? entity : null);
     renderEntranceSelection(selected?.kind === "entrance" ? entity : null);
     renderEventSelection(selected?.kind === "event" ? entity : null);
+    syncPerspectiveEntranceButton();
     const multiActions = $("#assetMultiActions");
     if (multiActions) multiActions.classList.toggle("hidden", multiSelection.size < 2);
     if (selected?.kind === "asset" && multiSelection.size > 1) setInfo("#assetSelectionInfo", `${multiSelection.size} objetos seleccionados`, "Shift + clic para añadir o quitar");
@@ -1160,7 +1197,9 @@ import {
   function setMode(nextMode) {
     const modes = new Set(EDITOR_MODE_ORDER);
     const scene = bridge.sceneInfo?.() || {};
-    const resolvedMode = scene.kind === "interior" ? "objects" : (modes.has(nextMode) ? nextMode : "objects");
+    const resolvedMode = scene.kind === "interior" && !["objects", "ground", "npcs", "entrances", "events"].includes(nextMode)
+      ? "objects"
+      : (modes.has(nextMode) ? nextMode : "objects");
     if (resolvedMode !== mode && (drag || activeTransaction || keyboardTransaction || formTransaction)) commitTransientTransactions();
     mode = resolvedMode;
     $$('[data-editor-mode]').forEach((button) => {
@@ -1180,7 +1219,11 @@ import {
     updateEditorOverlays();
     bridge.setEditorMode?.(mode);
     editor.dataset.tool = mode === "ground" ? groundTool : mode === "terrain" ? terrainTool : "select";
-    if (selected?.kind !== ({ objects: "asset", npcs: "npc", entrances: "entrance", events: "event" }[mode])) setSelected(null, null);
+    const modeEntityKind = { objects: "asset", npcs: "npc", entrances: "entrance", events: "event" }[mode];
+    const outlinerFilter = $("#mapEditorFilterInput");
+    if (outlinerFilter && modeEntityKind) outlinerFilter.value = modeEntityKind;
+    if (selected?.kind !== modeEntityKind) setSelected(null, null);
+    else renderOutliner();
     persistWorkspacePreferences();
     sendPresence();
   }
@@ -1327,7 +1370,8 @@ import {
     commitTransientTransactions();
     const grid = bridge.grid(); const col = clamp(Math.floor(position.x / grid.tileSize), 0, grid.cols - 1);
     const row = clamp(Math.floor(position.y / grid.tileSize), 0, grid.rows - 1);
-    const npc = { id: uniqueId("npc"), col, row, direction: "down", name: template === "patrol" ? "Paseante" : "Vecino", sprite: npcInputs.sprite?.value || "guide", lines: ["Hola, entrenador."] };
+    const scene = bridge.sceneInfo?.() || { id: "world" };
+    const npc = { id: uniqueId("npc"), col, row, scene: scene.id || "world", direction: "down", name: template === "patrol" ? "Paseante" : "Vecino", sprite: npcInputs.sprite?.value || "guide", lines: ["Hola, entrenador."] };
     if (template === "patrol") npc.patrol = { to: [col, Math.max(0, row - 4)], tilesPerSecond: .75 };
     const operation = { type: "entity.set", entity: "npc", collection: "addedNpcs", id: npc.id, value: npcRecord(npc) };
     bridge.setEntity("npc", npc.id, npc); queueOperation(operation);
@@ -1339,20 +1383,62 @@ import {
     commitTransientTransactions();
     const grid = bridge.grid(); const col = clamp(Math.floor(position.x / grid.tileSize), 0, grid.cols - 1);
     const row = clamp(Math.floor(position.y / grid.tileSize), 0, grid.rows - 1);
-    const entrance = template === "new-map"
-      ? { id: uniqueId("entrance"), col, row, label: "Salida a nuevo mapa", action: "transition", targetMap: "new-map", targetX: 64, targetY: 64, targetDirection: "down", effect: "fade" }
-      : { id: uniqueId("entrance"), col, row, label: "Casa", action: "house", targetMap: "", targetX: null, targetY: null, targetDirection: "down", effect: "fade" };
+    const scene = bridge.sceneInfo?.() || { id: "world", kind: "world" };
+    const entrance = template === "pradera-bifaz"
+      ? { id: uniqueId("entrance"), col, row, scene: scene.id || "world", label: "Pabellón Bifaz", action: "transition", targetMap: "pradera-bifaz", targetX: 160, targetY: 462, targetDirection: "right", effect: "fade" }
+      : template === "new-map"
+        ? { id: uniqueId("entrance"), col, row, scene: scene.id || "world", label: "Salida a nuevo mapa", action: "transition", targetMap: "new-map", targetX: 64, targetY: 64, targetDirection: "down", effect: "fade" }
+        : scene.kind === "interior"
+          ? { id: uniqueId("entrance"), col, row, scene: scene.id, label: "Salida", action: "exit", targetMap: "", targetX: null, targetY: null, targetDirection: "down", effect: "fade" }
+          : { id: uniqueId("entrance"), col, row, scene: "world", label: "Casa", action: "house", targetMap: "", targetX: null, targetY: null, targetDirection: "down", effect: "fade" };
     const operation = { type: "entity.set", entity: "entrance", collection: "entrances", id: entrance.id, value: entrance };
     bridge.setEntity("entrance", entrance.id, entrance); queueOperation(operation);
     pushHistory(operation, { type: "entity.delete", entity: "entrance", collection: "entrances", id: entrance.id, hide: false }, "Añadir entrada");
     setSelected("entrance", entrance.id); return entrance;
   }
 
+  function perspectiveEntranceForEditor() {
+    return entityById("entrance", "pradera-bifaz-gate")
+      || (bridge.entities?.("entrance") || []).find((candidate) => candidate.targetMap === "pradera-bifaz");
+  }
+
+  function syncPerspectiveEntranceButton() {
+    const button = $("#focusPerspectiveEntranceButton");
+    if (!button) return;
+    const available = Boolean(perspectiveEntranceForEditor());
+    button.disabled = !available;
+    button.textContent = available
+      ? "⌖ Localizar Pabellón Bifaz existente"
+      : "⌖ Pabellón Bifaz · abre San Pablo";
+    button.title = available
+      ? "Seleccionar la puerta y centrarla en el mapa"
+      : "Cambia el mapa activo a San Pablo para editar esta entrada";
+  }
+
+  function focusPerspectiveEntrance() {
+    const entrance = perspectiveEntranceForEditor();
+    if (!entrance) {
+      syncPerspectiveEntranceButton();
+      return false;
+    }
+    setMode("entrances");
+    setSelected("entrance", entrance.id);
+    bridge.focusEntity?.("entrance", entrance.id);
+    return true;
+  }
+
   function addEvent(template = "thought", position = bridge.viewportCenter()) {
     commitTransientTransactions();
     const grid = bridge.grid(); const col = clamp(Math.floor(position.x / grid.tileSize), 0, grid.cols - 1);
     const row = clamp(Math.floor(position.y / grid.tileSize), 0, grid.rows - 1);
-    const base = { id: uniqueId("event"), col, row, label: "Evento", type: template, trigger: "interact", message: "Algo llama tu atención.", once: false, enabled: true };
+    const scene = bridge.sceneInfo?.() || { id: "world" };
+    const base = { id: uniqueId("event"), col, row, scene: scene.id || "world", label: "Evento", type: template, trigger: "interact", message: "Algo llama tu atención.", once: false, enabled: true };
+    if (template === "computer") Object.assign(base, { label: "PC", message: "El PC muestra información interesante." });
+    if (template === "letter") Object.assign(base, { label: "Carta", message: "La carta contiene un mensaje para el entrenador." });
+    if (template === "pickup") Object.assign(base, { label: "Objeto", message: "Has encontrado un objeto.", itemKind: "potions", itemName: "Poción", amount: 1, once: true });
+    if (template === "heal") Object.assign(base, { label: "Punto de descanso", message: "Tu equipo recupera toda su energía." });
+    if (template === "switch") Object.assign(base, { label: "Interruptor", message: "El mecanismo cambia de estado.", flag: uniqueId("mecanismo") });
+    if (template === "sound") Object.assign(base, { label: "Sonido", message: "Escuchas una melodía.", jingle: "success" });
     if (template === "vibration") Object.assign(base, { message: "El suelo tiembla bajo tus pies.", duration: 440, intensity: 1 });
     if (template === "transition") Object.assign(base, { label: "Ir a nuevo mapa", message: "Cruzas hacia otra zona…", targetMap: "new-map", targetX: 64, targetY: 64, targetDirection: "down", effect: "fade" });
     const operation = { type: "entity.set", entity: "event", collection: "events", id: base.id, value: base };
@@ -1383,11 +1469,14 @@ import {
     commitTransientTransactions();
     const entity = selectedEntity(); if (!entity || !selected) return;
     const { kind, id } = selected; const collection = entityCollection(kind, id);
-    const baseEntity = (kind === "asset" && collection === "assetOverrides") || (kind === "npc" && collection === "npcOverrides");
+    const baseEntrance = kind === "entrance" && (bridge.isBaseEntity?.("entrance", id)
+      || !data.entrances.some((entry) => entry.id === id));
+    const baseEntity = (kind === "asset" && collection === "assetOverrides")
+      || (kind === "npc" && collection === "npcOverrides") || baseEntrance;
     const verb = baseEntity ? "ocultar" : "eliminar";
     if (!window.confirm(`¿Quieres ${verb} «${entity.label || entity.name || id}»?`)) return;
     let operation;
-    if (kind === "entrance" && !data.entrances.some((entry) => entry.id === id)) {
+    if (baseEntrance) {
       operation = { type: "entity.set", entity: kind, collection: "entrances", id, value: { ...clone(entity), enabled: false } };
     } else operation = { type: "entity.delete", entity: kind, collection, id, hide: baseEntity };
     const inverse = entityBeforeOperation(kind, entity);
@@ -1451,13 +1540,18 @@ import {
   function stageTerrainCells(cells, builder, selectedType = mode === "ground" ? groundType : terrainType, layer = mode === "ground" ? "ground" : "terrain") {
     const startedAt = performance.now();
     const value = selectedType === "inherit" ? null : selectedType;
-    const collection = layer === "ground" ? data.groundOverrides : data.tileOverrides;
+    const scene = bridge.sceneInfo?.() || { id: "world", kind: "world" };
+    const groundScene = layer === "ground" && scene.kind === "interior" ? scene.id : "";
+    const collection = layer === "ground"
+      ? (groundScene ? (data.interiorGroundOverrides[groundScene] ||= {}) : data.groundOverrides)
+      : data.tileOverrides;
     const operationType = layer === "ground" ? "ground.set" : "tile.set";
     cells.forEach(({ col, row }) => {
       const key = `${col},${row}`; const before = collection[key] ?? null;
       const after = layer === "ground" && value !== null ? mergeGroundPaintValue(before, value) : value;
       if (before === after) return;
-      stageTransaction(builder, { type: operationType, key, value: after }, { type: operationType, key, value: before });
+      const address = groundScene ? { scene: groundScene } : {};
+      stageTransaction(builder, { type: operationType, key, value: after, ...address }, { type: operationType, key, value: before, ...address });
     });
     const elapsed = performance.now() - startedAt;
     const previous = Number(document.documentElement.dataset.editorMaxTerrainStageMs) || 0;
@@ -1915,7 +2009,20 @@ import {
 
     const readEvent = () => {
       const event = selectedEntity(); if (!event || selected?.kind !== "event") return null;
-      return { ...event, col: numberValue(eventInputs.col), row: numberValue(eventInputs.row), type: eventInputs.type.value, trigger: eventInputs.trigger.value, message: eventInputs.message.value, targetMap: eventInputs.targetMap.value || null, targetX: eventInputs.targetX.value === "" ? null : numberValue(eventInputs.targetX), targetY: eventInputs.targetY.value === "" ? null : numberValue(eventInputs.targetY), targetDirection: eventInputs.targetDirection.value, effect: eventInputs.effect.value, duration: numberValue(eventInputs.duration), intensity: numberValue(eventInputs.intensity), once: eventInputs.once.checked, enabled: eventInputs.enabled.checked };
+      return {
+        ...event,
+        col: numberValue(eventInputs.col), row: numberValue(eventInputs.row), label: eventInputs.label.value,
+        type: eventInputs.type.value, trigger: eventInputs.trigger.value, message: eventInputs.message.value,
+        targetMap: eventInputs.targetMap.value || null,
+        targetX: eventInputs.targetX.value === "" ? null : numberValue(eventInputs.targetX),
+        targetY: eventInputs.targetY.value === "" ? null : numberValue(eventInputs.targetY),
+        targetDirection: eventInputs.targetDirection.value, effect: eventInputs.effect.value,
+        duration: numberValue(eventInputs.duration), intensity: numberValue(eventInputs.intensity),
+        itemKind: eventInputs.itemKind.value, itemName: eventInputs.itemName.value,
+        amount: numberValue(eventInputs.amount), flag: eventInputs.flag.value || null,
+        requiresFlag: eventInputs.requiresFlag.value || null, requiredFlagValue: eventInputs.requiredFlagValue.value !== "false",
+        jingle: eventInputs.jingle.value, once: eventInputs.once.checked, enabled: eventInputs.enabled.checked,
+      };
     };
     Object.values(eventInputs).forEach((input) => input.addEventListener("change", () => {
       updateEventFieldVisibility(eventInputs.type.value);
@@ -1993,6 +2100,7 @@ import {
     setRange(npcInputs.patrolSpeed, MAP_EDITOR_RULES.ranges.patrolSpeed);
     [entranceInputs.targetX, entranceInputs.targetY, eventInputs.targetX, eventInputs.targetY].forEach((input) => setRange(input, MAP_EDITOR_RULES.ranges.targetCoordinate));
     setRange(eventInputs.duration, MAP_EDITOR_RULES.ranges.duration); setRange(eventInputs.intensity, MAP_EDITOR_RULES.ranges.intensity);
+    setRange(eventInputs.amount, MAP_EDITOR_RULES.ranges.itemAmount);
     eventInputs.message.maxLength = MAP_EDITOR_RULES.lengths.eventMessage; npcInputs.lines.maxLength = MAP_EDITOR_RULES.lengths.npcLines * (MAP_EDITOR_RULES.lengths.npcLine + 1);
   }
 
@@ -2028,10 +2136,16 @@ import {
 
   function resetGroundOverrides() {
     commitTransientTransactions();
-    const entries = Object.keys(data.groundOverrides);
+    const scene = bridge.sceneInfo?.() || { id: "world", kind: "world" };
+    const groundScene = scene.kind === "interior" ? scene.id : "";
+    const collection = groundScene ? (data.interiorGroundOverrides[groundScene] || {}) : data.groundOverrides;
+    const entries = Object.keys(collection);
     if (!entries.length) return;
     const builder = beginTransaction("Borrar suelo pintado");
-    entries.forEach((key) => stageTransaction(builder, { type: "ground.set", key, value: null }, { type: "ground.set", key, value: data.groundOverrides[key] }));
+    entries.forEach((key) => {
+      const address = groundScene ? { scene: groundScene } : {};
+      stageTransaction(builder, { type: "ground.set", key, value: null, ...address }, { type: "ground.set", key, value: collection[key], ...address });
+    });
     commitTransaction(builder);
   }
 
@@ -2048,9 +2162,24 @@ import {
     bridge.setEditorOverlays?.(overlays);
   }
 
+  function setEditorPanelCollapsed(collapsed) {
+    const shouldCollapse = Boolean(collapsed);
+    editor.classList.toggle("collapsed", shouldCollapse);
+    if (shouldCollapse) editor.classList.remove("fullscreen-inspector");
+    const toggle = $("#mapEditorSheetToggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", String(!shouldCollapse));
+      toggle.setAttribute("aria-label", shouldCollapse ? "Mostrar menú lateral" : "Ocultar menú lateral");
+      toggle.title = shouldCollapse ? "Mostrar menú lateral" : "Ocultar menú lateral y editar detrás";
+      toggle.textContent = shouldCollapse ? "☰" : "›";
+    }
+    if (shouldCollapse) $("#mapEditorExpandSheetButton")?.setAttribute("aria-pressed", "false");
+  }
+
   function prepareOpenEditor() {
     const scene = bridge.sceneInfo?.() || { id: "world", kind: "world", label: "San Pablo" };
     const interior = scene.kind === "interior";
+    if (selected && !entityById(selected.kind, selected.id)) setSelected(null, null);
     const categorySelect = $("#assetCatalogCategory");
     if (categorySelect) {
       if (interior) categorySelect.value = "furniture";
@@ -2061,18 +2190,25 @@ import {
     if (eyebrow) eyebrow.textContent = interior ? "MODO DIOS · INTERIOR" : "MODO DIOS · SOLO DESARROLLO";
     if (title) title.textContent = interior ? `Decorar ${scene.label || "casa"}` : "Editor del mundo";
     $$('[data-editor-mode]').forEach((button) => {
-      const unavailable = interior && button.dataset.editorMode !== "objects";
+      const unavailable = interior && !["objects", "ground", "npcs", "entrances", "events"].includes(button.dataset.editorMode);
       button.disabled = unavailable;
       button.setAttribute("aria-disabled", String(unavailable));
     });
-    if (interior) setMode("objects");
+    if (interior && !["objects", "ground", "npcs", "entrances", "events"].includes(mode)) setMode("objects");
+    $$('[data-ground-scope="world"]').forEach((element) => element.classList.toggle("hidden", interior));
+    $$('[data-ground-scope="interior"]').forEach((element) => element.classList.toggle("hidden", !interior));
+    if (interior && groundTool === "path") setPaintingTool("pencil", "ground", { persist: false });
+    if (interior && !groundType.startsWith("interior-")) groundType = "interior-oak-honey";
+    if (!interior && groundType.startsWith("interior-")) groundType = "grass";
+    $$('[data-ground-type]').forEach((element) => element.classList.toggle("selected", element.dataset.groundType === groundType));
+    const expansion = $("#groundEditorPanel .map-editor-expansion");
+    if (expansion) expansion.classList.toggle("hidden", interior);
     populatePrototypes();
     populateNpcSprites();
     renderSelection();
     renderOutliner();
-    editor.classList.remove("collapsed");
+    setEditorPanelCollapsed(false);
     editor.classList.remove("fullscreen-inspector");
-    $("#mapEditorSheetToggle")?.setAttribute("aria-expanded", "true");
     $("#mapEditorExpandSheetButton")?.setAttribute("aria-pressed", "false");
     window.setTimeout(() => $("[data-editor-mode][aria-selected='true']")?.focus(), 0);
     updateZoomLabel();
@@ -2102,6 +2238,7 @@ import {
       editorName = nameInput.value.trim().slice(0, MAP_EDITOR_RULES.lengths.actorName) || `Editor ${actorId.slice(-4).toUpperCase()}`;
       nameInput.value = editorName; safelyStore(persistentStorage, "pokemon-map-editor-name", editorName); sendPresence();
     });
+    document.addEventListener("map-editor-player-presence-change", () => sendPresence(presenceCursor));
     $("#copyEditorInviteButton").addEventListener("click", async () => {
       const value = inviteUrl || window.location.href;
       try { await navigator.clipboard.writeText(value); setConnection("online", "Enlace copiado"); }
@@ -2187,6 +2324,7 @@ import {
     $("#duplicateNpcButton").addEventListener("click", duplicateSelected); $("#deleteNpcButton").addEventListener("click", deleteSelected);
     $("#testNpcButton").addEventListener("click", () => { const npc = selectedEntity(); if (npc) bridge.previewEvent?.({ id: `preview-${npc.id}`, col: npc.col, row: npc.row, type: "dialogue", label: npc.name, message: (npc.lines || []).join("\n") }); });
     $("#addEntranceButton").addEventListener("click", () => addEntrance($("[data-entrance-template].selected")?.dataset.entranceTemplate || "interior"));
+    $("#focusPerspectiveEntranceButton")?.addEventListener("click", focusPerspectiveEntrance);
     $$('[data-entrance-template]').forEach((button) => button.addEventListener("click", () => { $$('[data-entrance-template]').forEach((entry) => entry.classList.toggle("selected", entry === button)); }));
     $("#duplicateEntranceButton").addEventListener("click", duplicateSelected); $("#deleteEntranceButton").addEventListener("click", deleteSelected);
     $("#testEntranceButton").addEventListener("click", () => {
@@ -2213,13 +2351,11 @@ import {
       bridge.centerAt?.((col + .5) * grid.tileSize, (row + .5) * grid.tileSize);
     });
     $("#mapEditorSheetToggle")?.addEventListener("click", () => {
-      editor.classList.toggle("collapsed"); const expanded = !editor.classList.contains("collapsed");
-      $("#mapEditorSheetToggle").setAttribute("aria-expanded", String(expanded));
+      setEditorPanelCollapsed(!editor.classList.contains("collapsed"));
     });
     $("#mapEditorExpandSheetButton")?.addEventListener("click", () => {
       const expanded = editor.classList.toggle("fullscreen-inspector");
-      editor.classList.remove("collapsed");
-      $("#mapEditorSheetToggle")?.setAttribute("aria-expanded", "true");
+      setEditorPanelCollapsed(false);
       $("#mapEditorExpandSheetButton")?.setAttribute("aria-pressed", String(expanded));
     });
     $("#mapEditorSearchInput")?.addEventListener("input", renderOutliner); $("#mapEditorFilterInput")?.addEventListener("change", renderOutliner);
@@ -2342,6 +2478,7 @@ import {
     window.addEventListener("pagehide", () => {
       commitTransientTransactions();
       eventSource?.close();
+      window.clearInterval(presenceMovementTimer);
       window.clearInterval(presenceHeartbeatTimer);
       window.clearTimeout(reconnectTimer);
       if (pendingBatches.length) {

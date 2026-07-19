@@ -36,7 +36,7 @@ La barra superior conserva siempre herramienta, estado de guardado, deshacer/reh
 - **Conflicto:** servidor y cambio local tocaron la misma clave.
 - **Error:** la validación o persistencia falló; cerrar el panel no lo oculta.
 
-En móvil el inspector es una hoja inferior plegable. El botón de expansión permite dedicar toda la pantalla a diálogos o formularios largos.
+El botón **Ocultar menú lateral** reduce el inspector a un único botón flotante y retira el oscurecimiento del mapa, de modo que toda la zona que quedaba detrás continúa siendo editable. El mismo botón vuelve a mostrarlo. En móvil el inspector es una hoja inferior y conserva este comportamiento; el botón de expansión permite dedicar toda la pantalla a diálogos o formularios largos.
 
 ## Navegación y selección
 
@@ -59,9 +59,13 @@ Colocar, mover, escalar, rotar, renombrar, duplicar, copiar/pegar, voltear, agru
 
 ### Interiores de casas
 
-Entra en cualquier casa, centro, tienda o laboratorio y pulsa `G`. El editor cambia automáticamente a **Decorar interior**, deja disponible únicamente la herramienta Objetos y muestra un catálogo separado con 20 muebles PixelLab: camas, literas, armario, estanterías y escritorios frontales/laterales, mesas, sofás, alfombras, escalera, puerta decorativa, chimenea, cocina, planta y lavabo.
+Entra en cualquier casa, centro, tienda o laboratorio y pulsa `G`. El editor cambia automáticamente a **Decorar interior** y habilita **Objetos**, **Suelo**, **NPC**, **Entradas** y **Eventos**; **Terreno** permanece desactivado porque la geometría de paredes pertenece a la sala. El catálogo de objetos incluye 20 muebles PixelLab: camas, literas, armario, estanterías y escritorios frontales/laterales, mesas, sofás, alfombras, escalera, puerta decorativa, chimenea, cocina, planta y lavabo.
 
-Cada entrada posee una escena estable e independiente. Los objetos guardan su identificador de escena en `addedAssets`, por lo que un mueble colocado dentro de una casa no aparece en otra ni en el exterior. Las alfombras se dibujan bajo personajes y muebles sin bloquear el paso; los demás objetos usan colisiones ajustadas a la base y profundidad por coordenada Y. Los PNG y su procedencia están documentados en `assets/interiors/pixellab-house/README.md`.
+Todas las salas empiezan vacías: no se crean muebles ni NPC automáticos. Se conservan únicamente suelo, paredes y una salida de seguridad en la zona inferior. Esa salida desaparece en cuanto la escena contiene una entrada personalizada, de modo que las puertas definitivas quedan completamente bajo control del editor. Para volver al exterior, asigna a una entrada la acción **Salir del interior** (`exit`).
+
+Cada edificio posee una escena estable e independiente. Objetos, NPC, entradas y eventos guardan su identificador `scene`; el suelo pintado se guarda por escena en `interiorGroundOverrides`. Por ello nada colocado en una casa aparece en otra ni contamina el exterior. La paleta de suelo ofrece 16 acabados PixelLab de madera, parquet, cerámica, terracota, piedra, laboratorio, clínica, cocina y moqueta. Se aplican con lápiz, rectángulo o relleno y **Original** recupera la baldosa base.
+
+Las alfombras se dibujan bajo personajes y muebles sin bloquear el paso; los demás objetos usan colisiones ajustadas a la base y profundidad por coordenada Y. Los PNG y su procedencia están documentados en `assets/interiors/pixellab-house/README.md`.
 
 ### Terreno
 
@@ -69,15 +73,17 @@ Lápiz, **Original** (borrador), cuentagotas, rectángulo y relleno conectado. `
 
 ### NPC
 
-Plantillas de diálogo o patrulla, preview del sprite y dirección, líneas de diálogo independientes y ruta dibujada. No se guarda una patrulla fuera del mapa o que atraviese casillas bloqueadas. **Probar** muestra el diálogo sin persistir estado del jugador.
+Plantillas de diálogo o patrulla, preview del sprite y dirección, líneas de diálogo independientes y ruta dibujada. En un interior, el NPC se guarda en esa escena, se dibuja con el mismo renderer del exterior, bloquea el paso y responde a `E` con su diálogo. No se guarda una patrulla fuera del mapa o que atraviese casillas bloqueadas. **Probar** muestra el diálogo sin persistir estado del jugador.
 
 ### Entradas
 
-Interiores, transiciones y acciones locales están diferenciadas. Se muestran origen, flecha y destino de aparición cuando pertenece al mapa actual. Los selectores aceptan mapas y edificios conocidos o un identificador avanzado. Destinos locales fuera del mundo bloquean el guardado; IDs de mapas futuros generan una advertencia.
+Interiores, transiciones, salidas y acciones locales están diferenciadas. Se muestran origen, flecha y destino de aparición cuando pertenece al mapa actual. En una sala, **Salir del interior** llama a la salida real y devuelve al punto desde el que se entró. Los selectores aceptan mapas y edificios conocidos o un identificador avanzado. Destinos locales fuera del mundo bloquean el guardado; IDs de mapas futuros generan una advertencia.
 
 ### Eventos
 
-Diálogo, pensamiento, vibración, teletransporte y transición, activados al interactuar o pisar. Los iconos diferencian el trigger; se avisa de solapamientos e inaccesibilidad y se bloquean mensajes vacíos o destinos inválidos. **Probar** restaura posición y estado después de la previsualización.
+Diálogo, pensamiento, vibración, teletransporte y transición, activados al interactuar o pisar. En interiores también hay plantillas para **PC**, **carta**, **objeto recogible**, **descanso/curación**, **interruptor** y **sonido**. Los eventos de interacción se ejecutan mirando hacia ellos y pulsando `E`; los objetos solo se recogen una vez y los interruptores pueden activar o desactivar una bandera persistente.
+
+Las condiciones avanzadas permiten mostrar un evento únicamente cuando una bandera tenga el valor elegido. Así se pueden encadenar acciones, abrir secretos o cambiar una habitación después de usar un interruptor. Los iconos diferencian el trigger; se avisa de solapamientos e inaccesibilidad y se bloquean mensajes vacíos, objetos incompletos o destinos inválidos. **Probar** restaura posición y estado después de la previsualización.
 
 ### Overlays
 

@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
+import vm from "node:vm";
 import { buildMapEditorBundle } from "../tools/build-map-editor-bundle.mjs";
 import { resolveEditorShortcut } from "../map-editor-core.js";
+import { sanitizeMapEditorData } from "../map-editor-server.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const [client, html, css, runtime, rules, standalone, expectedStandalone] = await Promise.all([
+const [client, html, css, runtime, rules, standalone, expectedStandalone, editorDataSource, layoutSource,
+  neighborhoodCatalogSource, barrioCCatalogSource] = await Promise.all([
   readFile(path.join(ROOT, "map-editor.js"), "utf8"),
   readFile(path.join(ROOT, "index.html"), "utf8"),
   readFile(path.join(ROOT, "styles.css"), "utf8"),
@@ -14,9 +17,13 @@ const [client, html, css, runtime, rules, standalone, expectedStandalone] = awai
   readFile(path.join(ROOT, "map-editor-rules.js"), "utf8"),
   readFile(path.join(ROOT, "map-editor-standalone.js"), "utf8"),
   buildMapEditorBundle(),
+  readFile(path.join(ROOT, "map-editor-data.js"), "utf8"),
+  readFile(path.join(ROOT, "map-layout.js"), "utf8"),
+  readFile(path.join(ROOT, "assets/generated/san-pablo-neighborhood/catalog.js"), "utf8"),
+  readFile(path.join(ROOT, "assets/generated/san-pablo-barrio-c-pixellab/catalog.js"), "utf8"),
 ]);
 
-test("sincronización usa SSE, outbox durable y heartbeat de baja frecuencia", () => {
+test("sincronización usa SSE, outbox durable y presencia de baja latencia", () => {
   assert.doesNotMatch(client, /pollRemoteState|setInterval\([^)]*1200/);
   assert.match(client, /IndexedDbOutboxAdapter/);
   assert.match(client, /pagehide/);
@@ -25,6 +32,25 @@ test("sincronización usa SSE, outbox durable y heartbeat de baja frecuencia", (
   assert.match(client, /outboxId = `\$\{legacyOutboxId\}:\$\{actorId\}`/);
   assert.match(client, /map-editor-close/);
   assert.match(client, /commitTransientTransactions/);
+  assert.match(rules, /presenceMovementMs:\s*50/);
+  assert.match(rules, /flushDelayMs:\s*50/);
+  assert.match(client, /presenceMovementTimer = window\.setInterval/);
+  assert.match(client, /presenceRequestsInFlight >= 3/);
+  assert.match(client, /payload\.sequence = \+\+presenceSequence/);
+  assert.match(runtime, /1 - Math\.exp\(-elapsed \/ 45\)/);
+});
+
+test("presencia y objetos compartidos conservan la escena interior", () => {
+  assert.match(expectedStandalone, /value\.player\.dimension/);
+  assert.match(expectedStandalone, /value\.player\.interior/);
+  assert.match(runtime, /function currentPresenceSceneId\(\)/);
+  assert.match(runtime, /\(collaborator\.player\.interior \|\| null\) === currentPresenceSceneId\(\)/);
+  assert.match(runtime, /playerPresence: \(\) => \(\{[\s\S]*?interior: currentPresenceSceneId\(\)/);
+  assert.match(runtime, /document\.dispatchEvent\(new CustomEvent\("map-editor-player-presence-change"\)\)/);
+  assert.match(client, /document\.addEventListener\("map-editor-player-presence-change",[\s\S]*?sendPresence\(presenceCursor\)/);
+  const remote = functionSource(client, "applyRemoteOperations");
+  assert.match(remote, /operation\.entity === "asset"/);
+  assert.match(remote, /bridge\.applyAssetSnapshot\?\.\(data\)/);
 });
 
 test("tabs, foco, móvil y controles táctiles conservan accesibilidad", () => {
@@ -58,7 +84,7 @@ test("el runtime consume el contrato compartido y no conserva el límite duplica
 
 test("el juego conserva un arranque clásico compatible con abrir index.html directamente", () => {
   assert.match(html, /<script src="map-registry\.js\?v=1"><\/script>/);
-  assert.match(html, /<script src="map-editor-rules\.js\?v=2"><\/script>/);
+  assert.match(html, /<script src="map-editor-rules\.js\?v=\d+"><\/script>/);
   assert.match(html, /<script src="map-bootstrap\.js\?v=1"><\/script>/);
   assert.match(html, /<script src="player-movement\.js\?v=\d+"><\/script>/);
   assert.match(html, /<script src="script\.js\?v=\d+"><\/script>/);
@@ -88,6 +114,68 @@ test("el editor separa mapas, destinos registrados y bandejas durables", () => {
   assert.match(runtime, /state\.mapId = target\.id/);
   assert.match(runtime, /pokemon-map-transfer-resume/);
   assert.match(runtime, /MAP_REGISTRY\.get\(targetMap\)/);
+});
+
+test("Pradera Bifaz queda persistida, visible y enfocable desde el editor", () => {
+  const dataWindow = {};
+  vm.runInNewContext(editorDataSource, { window: dataWindow }, { filename: "map-editor-data.js" });
+  const entrances = dataWindow.CITY_MAP_EDITOR_DATA.entrances
+    .filter((entrance) => entrance.id === "pradera-bifaz-gate");
+  assert.equal(entrances.length, 1, "la entrada estable no debe duplicarse");
+  const persistedEntrance = JSON.parse(JSON.stringify(entrances[0]));
+  assert.deepEqual(persistedEntrance, {
+    id: "pradera-bifaz-gate",
+    scene: "world",
+    col: 67,
+    row: 73,
+    label: "Pabellón Bifaz",
+    action: "transition",
+    targetMap: "pradera-bifaz",
+    targetX: 160,
+    targetY: 462,
+    targetDirection: "right",
+    effect: "fade",
+    linkedAssetId: "southeast-services",
+  });
+  assert.deepEqual(sanitizeMapEditorData({ entrances: [persistedEntrance] }).entrances[0], persistedEntrance);
+
+  const layoutWindow = { CITY_MAP_EDITOR_DATA: dataWindow.CITY_MAP_EDITOR_DATA };
+  const layoutContext = vm.createContext({ window: layoutWindow });
+  vm.runInContext(neighborhoodCatalogSource, layoutContext, { filename: "san-pablo-neighborhood/catalog.js" });
+  vm.runInContext(barrioCCatalogSource, layoutContext, { filename: "san-pablo-barrio-c-pixellab/catalog.js" });
+  vm.runInContext(layoutSource, layoutContext, { filename: "map-layout.js" });
+  assert.equal(
+    layoutWindow.CITY_MAP_LAYOUT.worldAssets.find((asset) => asset.id === "southeast-services")?.label,
+    "Pabellón Bifaz",
+  );
+
+  const setMode = functionSource(client, "setMode");
+  assert.match(setMode, /const modeEntityKind = \{ objects: "asset", npcs: "npc", entrances: "entrance", events: "event" \}\[mode\]/);
+  assert.match(setMode, /const outlinerFilter = \$\("#mapEditorFilterInput"\);[\s\S]*?if \(outlinerFilter && modeEntityKind\) outlinerFilter\.value = modeEntityKind/);
+  assert.match(setMode, /if \(selected\?\.kind !== modeEntityKind\) setSelected\(null, null\);\s*else renderOutliner\(\)/);
+
+  const addEntrance = functionSource(client, "addEntrance");
+  assert.match(addEntrance, /template === "pradera-bifaz"[\s\S]*?id: uniqueId\("entrance"\)[\s\S]*?label: "Pabellón Bifaz"[\s\S]*?action: "transition"[\s\S]*?targetMap: "pradera-bifaz"[\s\S]*?targetX: 160[\s\S]*?targetY: 462[\s\S]*?targetDirection: "right"[\s\S]*?effect: "fade"/);
+  assert.doesNotMatch(addEntrance, /pradera-bifaz-gate/);
+
+  const findEntrance = functionSource(client, "perspectiveEntranceForEditor");
+  assert.match(findEntrance, /entityById\("entrance", "pradera-bifaz-gate"\)/);
+  assert.match(findEntrance, /bridge\.entities\?\.\("entrance"\)[\s\S]*?candidate\.targetMap === "pradera-bifaz"/);
+  const syncButton = functionSource(client, "syncPerspectiveEntranceButton");
+  assert.match(syncButton, /button\.disabled = !available/);
+  assert.match(syncButton, /Pabellón Bifaz · abre San Pablo/);
+  assert.match(functionSource(client, "renderSelection"), /syncPerspectiveEntranceButton\(\)/);
+  const focusEntrance = functionSource(client, "focusPerspectiveEntrance");
+  assert.match(focusEntrance, /perspectiveEntranceForEditor\(\)/);
+  assert.match(focusEntrance, /setMode\("entrances"\);[\s\S]*?setSelected\("entrance", entrance\.id\);[\s\S]*?bridge\.focusEntity\?\.\("entrance", entrance\.id\)/);
+  assert.match(functionSource(client, "bindUi"), /#focusPerspectiveEntranceButton"\)\?\.addEventListener\("click", focusPerspectiveEntrance\)/);
+
+  const deleteSelected = functionSource(client, "deleteSelected");
+  assert.match(deleteSelected, /bridge\.isBaseEntity\?\.\("entrance", id\)/);
+  assert.match(deleteSelected, /if \(baseEntrance\)[\s\S]*?enabled: false/);
+  assert.match(functionSource(client, "renderEntranceSelection"), /bridge\.isBaseEntity\?\.\("entrance", entrance\.id\) \? "Ocultar" : "Eliminar"/);
+  assert.match(runtime, /const baseCityEntranceIds = new Set\(BASE_CITY_ENTRANCES/);
+  assert.match(runtime, /isBaseEntity: \(kind, id\)[\s\S]*?baseCityEntranceIds\.has/);
 });
 
 test("suelo visual y expansión son herramientas independientes del terreno", () => {
@@ -398,15 +486,21 @@ test("el catalogo selecciona, arrastra y coloca objetos en las coordenadas del c
   assert.match(dragCue, /box-shadow:\s*inset/);
 });
 
-test("plegar y ampliar funcionan en escritorio y mantienen su estado accesible", () => {
-  assert.match(html, /id="mapEditorSheetToggle"[^>]*aria-expanded="true"/);
+test("ocultar y ampliar funcionan y mantienen su estado accesible", () => {
+  assert.match(html, /id="mapEditorSheetToggle"[^>]*aria-label="Ocultar menú lateral"[^>]*aria-controls="mapEditorWorkspace"[^>]*aria-expanded="true"/);
   assert.match(html, /id="mapEditorExpandSheetButton"[^>]*aria-pressed="false"/);
 
   const prepare = functionSource(client, "prepareOpenEditor");
-  assert.match(prepare, /editor\.classList\.remove\("collapsed"\)/);
+  assert.match(prepare, /setEditorPanelCollapsed\(false\)/);
   assert.match(prepare, /editor\.classList\.remove\("fullscreen-inspector"\)/);
-  assert.match(prepare, /#mapEditorSheetToggle"\)\?\.setAttribute\("aria-expanded", "true"\)/);
   assert.match(prepare, /#mapEditorExpandSheetButton"\)\?\.setAttribute\("aria-pressed", "false"\)/);
+
+  const visibility = functionSource(client, "setEditorPanelCollapsed");
+  assert.match(visibility, /editor\.classList\.toggle\("collapsed", shouldCollapse\)/);
+  assert.match(visibility, /setAttribute\("aria-expanded", String\(!shouldCollapse\)\)/);
+  assert.match(visibility, /"Mostrar menú lateral" : "Ocultar menú lateral"/);
+  assert.match(visibility, /textContent = shouldCollapse \? "☰" : "›"/);
+  assert.match(visibility, /editor\.classList\.remove\("fullscreen-inspector"\)/);
 
   const bindings = functionSource(client, "bindUi");
   const collapseStart = bindings.indexOf('$("#mapEditorSheetToggle")?.addEventListener("click"');
@@ -415,12 +509,9 @@ test("plegar y ampliar funcionan en escritorio y mantienen su estado accesible",
   assert.ok(collapseStart >= 0 && expandStart > collapseStart && expandEnd > expandStart, "faltan los controles de plegado y ampliacion");
   const collapse = bindings.slice(collapseStart, expandStart);
   const expand = bindings.slice(expandStart, expandEnd);
-  assert.match(collapse, /editor\.classList\.toggle\("collapsed"\)/);
-  assert.match(collapse, /const expanded = !editor\.classList\.contains\("collapsed"\)/);
-  assert.match(collapse, /setAttribute\("aria-expanded", String\(expanded\)\)/);
+  assert.match(collapse, /setEditorPanelCollapsed\(!editor\.classList\.contains\("collapsed"\)\)/);
   assert.match(expand, /const expanded = editor\.classList\.toggle\("fullscreen-inspector"\)/);
-  assert.match(expand, /editor\.classList\.remove\("collapsed"\)/);
-  assert.match(expand, /#mapEditorSheetToggle"\)\?\.setAttribute\("aria-expanded", "true"\)/);
+  assert.match(expand, /setEditorPanelCollapsed\(false\)/);
   assert.match(expand, /#mapEditorExpandSheetButton"\)\?\.setAttribute\("aria-pressed", String\(expanded\)\)/);
 });
 
@@ -461,7 +552,7 @@ test("el escaneo diagnostica entidades, limites, duplicados, dialogo, vinculos y
   assert.match(collect, /contextualEntityValidation\(kind, clone\(record\)\)/);
   assert.match(collect, /seen\.has\(key\)[\s\S]*?seen\.add\(key\)/);
   assert.match(collect, /contextualEntityValidation\(kind, clone\(entity\)\)/);
-  assert.match(collect, /const positionKey = `\$\{entity\.col\},\$\{entity\.row\}`[\s\S]*?occupiedTransitions\.get\(positionKey\)[\s\S]*?occupiedTransitions\.set\(positionKey/);
+  assert.match(collect, /const positionKey = `\$\{entity\.scene \|\| "world"\}\|\$\{entity\.col\},\$\{entity\.row\}`[\s\S]*?occupiedTransitions\.get\(positionKey\)[\s\S]*?occupiedTransitions\.set\(positionKey/);
   assert.match(collect, /return \[\.\.\.new Map\(issues\.map/);
 
   const contextual = functionSource(client, "contextualEntityValidation");

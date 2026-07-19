@@ -193,6 +193,7 @@
       label: "Lavabo con mueble frontal", tags: ["lavabo", "mueble", "cocina", "frontal"], w: 85, h: 85, colliders: [[-28, -18, 56, 18]],
     },
     ...(window.CITY_NEIGHBORHOOD_ASSET_CATALOG || {}),
+    ...(window.CITY_BARRIO_C_ASSET_CATALOG || {}),
   });
 
   const worldAssets = [];
@@ -236,7 +237,7 @@
     door: [69, 60], approach: [2224, 1968, "up"], label: "Banco San Pablo", district: "central-east",
   });
   addAsset("southeast-services", "modern", 2144, 2380, {
-    door: [67, 73], approach: [2160, 2390, "up"], label: "Servicios del Sureste", district: "south-east",
+    door: [67, 73], approach: [2160, 2390, "up"], label: "Pabellón Bifaz", district: "south-east",
   });
   addAsset("south-campus-annex", "modern", 1620, 2478, {
     depthY: 2452, label: "Anexo Sur", district: "south-center",

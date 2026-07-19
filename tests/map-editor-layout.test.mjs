@@ -8,11 +8,13 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const layoutSource = await readFile(path.join(ROOT, "map-layout.js"), "utf8");
 const mapSource = await readFile(path.join(ROOT, "map-data.js"), "utf8");
 const neighborhoodCatalogSource = await readFile(path.join(ROOT, "assets/generated/san-pablo-neighborhood/catalog.js"), "utf8");
+const barrioCCatalogSource = await readFile(path.join(ROOT, "assets/generated/san-pablo-barrio-c-pixellab/catalog.js"), "utf8");
 
 function buildMap(editorData) {
   const window = { CITY_MAP_EDITOR_DATA: editorData };
   const context = vm.createContext({ window, console });
   vm.runInContext(neighborhoodCatalogSource, context, { filename: "catalog.js" });
+  vm.runInContext(barrioCCatalogSource, context, { filename: "barrio-c-catalog.js" });
   vm.runInContext(layoutSource, context, { filename: "map-layout.js" });
   vm.runInContext(mapSource, context, { filename: "map-data.js" });
   return window;
@@ -42,7 +44,8 @@ test("el catálogo expone los recursos urbanos y 20 muebles ortogonales de inter
   const window = buildMap({ version: 3 });
   const catalog = window.CITY_MAP_LAYOUT.assetCatalog;
   assert.equal(Object.keys(window.CITY_NEIGHBORHOOD_ASSET_CATALOG).length, 40);
-  assert.equal(Object.keys(catalog).length, 85);
+  assert.equal(Object.keys(window.CITY_BARRIO_C_ASSET_CATALOG).length, 25);
+  assert.equal(Object.keys(catalog).length, 110);
   const furniture = Object.values(catalog).filter((asset) => asset.interior === true);
   assert.equal(furniture.length, 20);
   assert.equal(furniture.every((asset) => asset.kind === "furniture" && asset.pixelated === true), true);

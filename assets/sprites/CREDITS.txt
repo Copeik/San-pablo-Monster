@@ -6,7 +6,7 @@ Ripped/uploaded by: Dragoon
 Archive: The Spriters Resource
 Source page: https://www.spriters-resource.com/ds_dsi/pokemonheartgoldsoulsilver/asset/26955/
 
-hgss-npc-idle.png contains ten 32x32 idle frames cropped from that sheet. The
+sprites/npcs/source/hgss/hgss-npc-idle.png contains ten 32x32 idle frames cropped from that sheet. The
 solid sheet background was converted to transparency; the sprite pixels were
 otherwise left unchanged.
 
@@ -24,8 +24,17 @@ The 4×4 walking atlases were rebuilt with OpenAI image generation, chroma-key
 extraction and local pixel-grid normalization. They contain four directions
 (down, left, right, up) and the sequence neutral/left/neutral/right.
 
-npcs/npc-01-* through npcs/npc-30-*
-====================================
+protagonist-walk-pixellab.png
+========================================
+
+Eight-direction, six-frame Walk animation exported through the PixelLab MCP
+from the project-owned character "Youngster" (character ID
+b96197cb-8527-4fdf-bd6d-d48c01c41804). The original 112x112 PixelLab frames
+are only cropped to the runtime's 64x64 cell; their sprite pixels and animation
+poses are otherwise unchanged.
+
+npcs/overworld/npc-01-* through npcs/overworld/npc-30-*
+========================================================
 
 Original NPC roster created with OpenAI image generation using
 protagonist-walk.png as the structural and pixel-art style reference. The flat
@@ -33,10 +42,18 @@ chroma backgrounds were removed locally and every sheet was normalized to the
 same 4×4, 64-pixel-cell contract. Character prompts and final assets were made
 for this fan project; no third-party sprite was copied into these 30 sheets.
 
-doctor-potato-source.png / npcs/doctor-potato-walk.png
-=====================================================
+npcs/source/doctor-potato-source.png / npcs/overworld/doctor-potato-walk.png
+=============================================================================
 
 Character animation reference supplied by the project owner. The game reads
 the permanent transparent 4×4 walking atlas directly. It was built
 deterministically from the supplied 6×3 sheet, without generative changes to
 the character, and follows the 64-pixel-cell contract used by overworld NPCs.
+
+npcs/overworld/*.png
+====================
+
+The 48 runtime NPC sheets are deterministic 6x8 compositions derived from the
+project's original 4x4 sheets in npcs/legacy-4x4/. Existing sprite pixels are
+preserved; the six-frame timing and derived diagonal rows only reorganize the
+authored cardinal frames. No additional image-generation service was used.

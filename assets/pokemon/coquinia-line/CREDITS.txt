@@ -1,0 +1,6 @@
+Línea Coquinia
+
+Concepto, nombres y ficha original: material proporcionado por el usuario.
+Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
+
+Archivos: coquinia-front.png, coquinia-back.png, coquiterro-front.png, coquiterro-back.png.

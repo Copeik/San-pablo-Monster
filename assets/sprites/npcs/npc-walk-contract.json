@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "name": "npc-walk-6x8",
+  "cellSize": 64,
+  "grid": {
+    "columns": 6,
+    "rows": 8
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "frameOrderFromLegacy4x4": [0, 1, 2, 3, 2, 1],
+  "derivedDirections": {
+    "down-right": "right",
+    "up-right": "right",
+    "up-left": "left",
+    "down-left": "left"
+  },
+  "rendering": {
+    "imageSmoothingEnabled": false,
+    "runtimeScale": 1
+  }
+}

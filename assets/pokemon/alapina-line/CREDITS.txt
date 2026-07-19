@@ -1,0 +1,6 @@
+Línea Alapiña
+
+Concepto, nombres y ficha original: material proporcionado por el usuario.
+Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
+
+Archivos: alapina-front.png, alapina-back.png, pinorrin-front.png, pinorrin-back.png, conegal-front.png, conegal-back.png.

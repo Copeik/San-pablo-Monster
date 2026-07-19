@@ -1,0 +1,276 @@
+{
+    "version":  1,
+    "contract":  "npc-walk-6x8",
+    "generatedAt":  "2026-07-18T01:06:07.8623122Z",
+    "cellSize":  64,
+    "grid":  {
+                 "columns":  6,
+                 "rows":  8
+             },
+    "frameOrder":  [
+                       0,
+                       1,
+                       2,
+                       3,
+                       2,
+                       1
+                   ],
+    "rowOrder":  [
+                     "down",
+                     "down-right",
+                     "right",
+                     "up-right",
+                     "up",
+                     "up-left",
+                     "left",
+                     "down-left"
+                 ],
+    "derivedDirections":  {
+                              "down-right":  "right",
+                              "up-right":  "right",
+                              "up-left":  "left",
+                              "down-left":  "left"
+                          },
+    "sprites":  [
+                    {
+                        "id":  "abuela-morada",
+                        "file":  "overworld/abuela-morada-walk.png",
+                        "source":  "legacy-4x4/abuela-morada-walk.png"
+                    },
+                    {
+                        "id":  "abuelo-cana",
+                        "file":  "overworld/abuelo-cana-walk.png",
+                        "source":  "legacy-4x4/abuelo-cana-walk.png"
+                    },
+                    {
+                        "id":  "bailaora",
+                        "file":  "overworld/bailaora-walk.png",
+                        "source":  "legacy-4x4/bailaora-walk.png"
+                    },
+                    {
+                        "id":  "camarera-azul",
+                        "file":  "overworld/camarera-azul-walk.png",
+                        "source":  "legacy-4x4/camarera-azul-walk.png"
+                    },
+                    {
+                        "id":  "camarero-bandeja",
+                        "file":  "overworld/camarero-bandeja-walk.png",
+                        "source":  "legacy-4x4/camarero-bandeja-walk.png"
+                    },
+                    {
+                        "id":  "campesino",
+                        "file":  "overworld/campesino-walk.png",
+                        "source":  "legacy-4x4/campesino-walk.png"
+                    },
+                    {
+                        "id":  "chica-lazo",
+                        "file":  "overworld/chica-lazo-walk.png",
+                        "source":  "legacy-4x4/chica-lazo-walk.png"
+                    },
+                    {
+                        "id":  "chica-mochila",
+                        "file":  "overworld/chica-mochila-walk.png",
+                        "source":  "legacy-4x4/chica-mochila-walk.png"
+                    },
+                    {
+                        "id":  "doctor-potato",
+                        "file":  "overworld/doctor-potato-walk.png",
+                        "source":  "legacy-4x4/doctor-potato-walk.png"
+                    },
+                    {
+                        "id":  "hortelano",
+                        "file":  "overworld/hortelano-walk.png",
+                        "source":  "legacy-4x4/hortelano-walk.png"
+                    },
+                    {
+                        "id":  "mochilera",
+                        "file":  "overworld/mochilera-walk.png",
+                        "source":  "legacy-4x4/mochilera-walk.png"
+                    },
+                    {
+                        "id":  "nina-turquesa",
+                        "file":  "overworld/nina-turquesa-walk.png",
+                        "source":  "legacy-4x4/nina-turquesa-walk.png"
+                    },
+                    {
+                        "id":  "nino-polo",
+                        "file":  "overworld/nino-polo-walk.png",
+                        "source":  "legacy-4x4/nino-polo-walk.png"
+                    },
+                    {
+                        "id":  "nino-sol",
+                        "file":  "overworld/nino-sol-walk.png",
+                        "source":  "legacy-4x4/nino-sol-walk.png"
+                    },
+                    {
+                        "id":  "npc-01-nurse",
+                        "file":  "overworld/npc-01-nurse-walk.png",
+                        "source":  "legacy-4x4/npc-01-nurse-walk.png"
+                    },
+                    {
+                        "id":  "npc-02-shopkeeper",
+                        "file":  "overworld/npc-02-shopkeeper-walk.png",
+                        "source":  "legacy-4x4/npc-02-shopkeeper-walk.png"
+                    },
+                    {
+                        "id":  "npc-03-professor",
+                        "file":  "overworld/npc-03-professor-walk.png",
+                        "source":  "legacy-4x4/npc-03-professor-walk.png"
+                    },
+                    {
+                        "id":  "npc-04-grandmother",
+                        "file":  "overworld/npc-04-grandmother-walk.png",
+                        "source":  "legacy-4x4/npc-04-grandmother-walk.png"
+                    },
+                    {
+                        "id":  "npc-05-child",
+                        "file":  "overworld/npc-05-child-walk.png",
+                        "source":  "legacy-4x4/npc-05-child-walk.png"
+                    },
+                    {
+                        "id":  "npc-06-fisher",
+                        "file":  "overworld/npc-06-fisher-walk.png",
+                        "source":  "legacy-4x4/npc-06-fisher-walk.png"
+                    },
+                    {
+                        "id":  "npc-07-grandfather",
+                        "file":  "overworld/npc-07-grandfather-walk.png",
+                        "source":  "legacy-4x4/npc-07-grandfather-walk.png"
+                    },
+                    {
+                        "id":  "npc-08-student",
+                        "file":  "overworld/npc-08-student-walk.png",
+                        "source":  "legacy-4x4/npc-08-student-walk.png"
+                    },
+                    {
+                        "id":  "npc-09-merchant",
+                        "file":  "overworld/npc-09-merchant-walk.png",
+                        "source":  "legacy-4x4/npc-09-merchant-walk.png"
+                    },
+                    {
+                        "id":  "npc-10-artist",
+                        "file":  "overworld/npc-10-artist-walk.png",
+                        "source":  "legacy-4x4/npc-10-artist-walk.png"
+                    },
+                    {
+                        "id":  "npc-11-athlete",
+                        "file":  "overworld/npc-11-athlete-walk.png",
+                        "source":  "legacy-4x4/npc-11-athlete-walk.png"
+                    },
+                    {
+                        "id":  "npc-12-caretaker",
+                        "file":  "overworld/npc-12-caretaker-walk.png",
+                        "source":  "legacy-4x4/npc-12-caretaker-walk.png"
+                    },
+                    {
+                        "id":  "npc-13-gardener",
+                        "file":  "overworld/npc-13-gardener-walk.png",
+                        "source":  "legacy-4x4/npc-13-gardener-walk.png"
+                    },
+                    {
+                        "id":  "npc-14-officer",
+                        "file":  "overworld/npc-14-officer-walk.png",
+                        "source":  "legacy-4x4/npc-14-officer-walk.png"
+                    },
+                    {
+                        "id":  "npc-15-chef",
+                        "file":  "overworld/npc-15-chef-walk.png",
+                        "source":  "legacy-4x4/npc-15-chef-walk.png"
+                    },
+                    {
+                        "id":  "npc-16-mechanic",
+                        "file":  "overworld/npc-16-mechanic-walk.png",
+                        "source":  "legacy-4x4/npc-16-mechanic-walk.png"
+                    },
+                    {
+                        "id":  "npc-17-musician",
+                        "file":  "overworld/npc-17-musician-walk.png",
+                        "source":  "legacy-4x4/npc-17-musician-walk.png"
+                    },
+                    {
+                        "id":  "npc-18-cyclist",
+                        "file":  "overworld/npc-18-cyclist-walk.png",
+                        "source":  "legacy-4x4/npc-18-cyclist-walk.png"
+                    },
+                    {
+                        "id":  "npc-19-hiker",
+                        "file":  "overworld/npc-19-hiker-walk.png",
+                        "source":  "legacy-4x4/npc-19-hiker-walk.png"
+                    },
+                    {
+                        "id":  "npc-20-office-worker",
+                        "file":  "overworld/npc-20-office-worker-walk.png",
+                        "source":  "legacy-4x4/npc-20-office-worker-walk.png"
+                    },
+                    {
+                        "id":  "npc-21-teen-girl",
+                        "file":  "overworld/npc-21-teen-girl-walk.png",
+                        "source":  "legacy-4x4/npc-21-teen-girl-walk.png"
+                    },
+                    {
+                        "id":  "npc-22-teen-boy",
+                        "file":  "overworld/npc-22-teen-boy-walk.png",
+                        "source":  "legacy-4x4/npc-22-teen-boy-walk.png"
+                    },
+                    {
+                        "id":  "npc-23-baker",
+                        "file":  "overworld/npc-23-baker-walk.png",
+                        "source":  "legacy-4x4/npc-23-baker-walk.png"
+                    },
+                    {
+                        "id":  "npc-24-builder",
+                        "file":  "overworld/npc-24-builder-walk.png",
+                        "source":  "legacy-4x4/npc-24-builder-walk.png"
+                    },
+                    {
+                        "id":  "npc-25-doctor",
+                        "file":  "overworld/npc-25-doctor-walk.png",
+                        "source":  "legacy-4x4/npc-25-doctor-walk.png"
+                    },
+                    {
+                        "id":  "npc-26-vendor",
+                        "file":  "overworld/npc-26-vendor-walk.png",
+                        "source":  "legacy-4x4/npc-26-vendor-walk.png"
+                    },
+                    {
+                        "id":  "npc-27-librarian",
+                        "file":  "overworld/npc-27-librarian-walk.png",
+                        "source":  "legacy-4x4/npc-27-librarian-walk.png"
+                    },
+                    {
+                        "id":  "npc-28-tourist",
+                        "file":  "overworld/npc-28-tourist-walk.png",
+                        "source":  "legacy-4x4/npc-28-tourist-walk.png"
+                    },
+                    {
+                        "id":  "npc-29-dancer",
+                        "file":  "overworld/npc-29-dancer-walk.png",
+                        "source":  "legacy-4x4/npc-29-dancer-walk.png"
+                    },
+                    {
+                        "id":  "npc-30-ranger",
+                        "file":  "overworld/npc-30-ranger-walk.png",
+                        "source":  "legacy-4x4/npc-30-ranger-walk.png"
+                    },
+                    {
+                        "id":  "npc-guide",
+                        "file":  "overworld/npc-guide-walk.png",
+                        "source":  "legacy-4x4/npc-guide-walk.png"
+                    },
+                    {
+                        "id":  "rival",
+                        "file":  "overworld/rival-walk.png",
+                        "source":  "legacy-4x4/rival-walk.png"
+                    },
+                    {
+                        "id":  "skater-capucha",
+                        "file":  "overworld/skater-capucha-walk.png",
+                        "source":  "legacy-4x4/skater-capucha-walk.png"
+                    },
+                    {
+                        "id":  "skater-verde",
+                        "file":  "overworld/skater-verde-walk.png",
+                        "source":  "legacy-4x4/skater-verde-walk.png"
+                    }
+                ]
+}

@@ -155,6 +155,24 @@ test("presencia deduplica reposo, limita movimiento y mantiene heartbeat", () =>
   assert.equal(gate.decision({ ...idle, cursor: { x: 11, y: 20 } }, 12110, { heartbeat: true }).send, true);
 });
 
+test("presencia publica los cambios de mapa e interior", () => {
+  const gate = new PresenceGate({ movementInterval: 50, heartbeatInterval: 12000 });
+  const outside = {
+    name: "Alice",
+    mode: "objects",
+    player: { x: 480, y: 560, direction: "up", dimension: "san_pablo", interior: null, moving: false },
+  };
+  assert.equal(gate.decision(outside, 0).send, true);
+  assert.equal(gate.decision({
+    ...outside,
+    player: { ...outside.player, dimension: "prism" },
+  }, 50).send, true);
+  assert.equal(gate.decision({
+    ...outside,
+    player: { ...outside.player, interior: "interior:casa-azul:abc" },
+  }, 100).send, true);
+});
+
 test("una transacción grande usa fragmentos idempotentes únicos y conserva su grupo", () => {
   const operations = Array.from({ length: 600 }, (_, index) => tileOperation(index % 79, Math.floor(index / 79), "blocked"));
   const longId = `tx-${"x".repeat(77)}`;
@@ -196,6 +214,22 @@ test("cliente y servidor comparten límites y rechazan sin truncar", () => {
   });
   assert.equal(outside.valid, false);
   assert.match(outside.errors.join(" "), /Destino X/);
+});
+
+test("NPC y entradas aceptan escenas, y exit solo es válido dentro de un interior", () => {
+  const scene = "interior:casa-prueba:abc";
+  assert.equal(validateEditorEntity("npc", {
+    id: "npc-interior", col: 3, row: 4, scene, sprite: "guide", direction: "down", lines: ["Hola"],
+  }).valid, true);
+  assert.equal(validateEditorEntity("entrance", {
+    id: "salida-interior", col: 14, row: 17, scene, action: "exit",
+  }).valid, true);
+  assert.equal(validateEditorEntity("entrance", {
+    id: "salida-exterior", col: 14, row: 17, scene: "world", action: "exit",
+  }).valid, false);
+  assert.equal(validateEditorEntity("entrance", {
+    id: "salida-mala", col: 14, row: 17, scene: "../interior", action: "exit",
+  }).valid, false);
 });
 
 test("el snapshot exige arrays y diccionarios en sus colecciones publicas", () => {

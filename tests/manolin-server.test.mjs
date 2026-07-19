@@ -76,6 +76,20 @@ test("limpia razonamiento, conserva seis intercambios y mide similitud", () => {
   assert.equal(isUsableCharacterReply("Miarma, tu calva alumbra el camino mientras esa barriga llega media hora antes que tú."), true);
 });
 
+test("comprime recursos estáticos grandes cuando el navegador acepta gzip", async () => {
+  const compressed = await fetch(`${origin}/script.js`, { headers: { "Accept-Encoding": "gzip" } });
+  assert.equal(compressed.status, 200);
+  assert.equal(compressed.headers.get("content-encoding"), "gzip");
+  assert.equal(compressed.headers.get("vary"), "Accept-Encoding");
+  assert.equal(compressed.headers.get("content-length"), null);
+  assert.match(await compressed.text(), /function|const|let/);
+
+  const identity = await fetch(`${origin}/script.js`, { headers: { "Accept-Encoding": "identity" } });
+  assert.equal(identity.status, 200);
+  assert.equal(identity.headers.get("content-encoding"), null);
+  assert.ok(Number(identity.headers.get("content-length")) > 0);
+});
+
 test("mantiene la clave en servidor y devuelve solo la pulla", async () => {
   const response = await fetch(`${origin}/api/manolin/chat`, {
     method: "POST",

@@ -5,7 +5,12 @@ import { validatePlayerDirectionalSprite } from "../tools/validate-player-direct
 
 await import("../player-movement.js");
 
-const { advanceAnimationPhase, movementIntent, smoothVelocity } = globalThis.PLAYER_MOVEMENT_CORE;
+const {
+  WALK_FRAME_COUNT,
+  advanceAnimationPhase,
+  movementIntent,
+  smoothVelocity,
+} = globalThis.PLAYER_MOVEMENT_CORE;
 
 test("diagonal movement is normalized and uses the most recently pressed facing direction", () => {
   const intent = movementIntent({ up: true, right: true }, "right");
@@ -54,7 +59,8 @@ test("velocity easing is stable across different frame sizes", () => {
   assert.equal(sixtyFps.y, 0);
 });
 
-test("walk animation starts at neutral and advances by distance without a run-toggle phase jump", () => {
+test("the six-frame PixelLab walk cycle advances by distance without a run-toggle phase jump", () => {
+  assert.equal(WALK_FRAME_COUNT, 6);
   let phase = advanceAnimationPhase(0, 11.9, false);
   assert.equal(Math.floor(phase), 0);
   phase = advanceAnimationPhase(phase, .1, false);
@@ -63,28 +69,33 @@ test("walk animation starts at neutral and advances by distance without a run-to
   phase = advanceAnimationPhase(phase, 16, true);
   assert.equal(Math.floor(phase), 2);
   phase = advanceAnimationPhase(phase, 32, true);
+  assert.equal(Math.floor(phase), 4);
+  phase = advanceAnimationPhase(phase, 32, true);
   assert.equal(Math.floor(phase), 0);
 });
 
-test("the transparent diagonal sprite sheet is present and wired into the renderer", () => {
-  const sprite = readFileSync(new URL("../assets/sprites/protagonist-walk-diagonal.png", import.meta.url));
+test("the eight-direction PixelLab walk atlas is present and wired into the renderer", () => {
+  const sprite = readFileSync(new URL("../assets/sprites/protagonist-walk-pixellab.png", import.meta.url));
   const runtime = readFileSync(new URL("../script.js", import.meta.url), "utf8");
   const standard = JSON.parse(readFileSync(new URL("../assets/sprites/player-directional-sprite-standard.json", import.meta.url), "utf8"));
-  const report = validatePlayerDirectionalSprite(new URL("../assets/sprites/protagonist-walk-diagonal.png", import.meta.url));
+  const report = validatePlayerDirectionalSprite(new URL("../assets/sprites/protagonist-walk-pixellab.png", import.meta.url));
 
   assert.deepEqual([...sprite.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-  assert.equal(sprite.readUInt32BE(16), 256);
-  assert.equal(sprite.readUInt32BE(20), 256);
+  assert.equal(sprite.readUInt32BE(16), 384);
+  assert.equal(sprite.readUInt32BE(20), 512);
   assert.equal(sprite[25], 6);
   assert.equal(report.valid, true, report.failures.join("\n"));
-  assert.equal(report.scaleDriftPercent, 0);
-  assert.deepEqual(standard.cycle, ["neutral", "stride-a", "neutral", "stride-b"]);
-  assert.equal(standard.anchors.feetRow, 59);
-  assert.equal(standard.oppositeDirectionPolicy, "exact-horizontal-pixel-mirror");
-  assert.match(runtime, /PLAYER_DIAGONAL_SHEET_URL/);
-  assert.match(runtime, /0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE/);
-  assert.match(runtime, /"down-left": 0[\s\S]*"down-right": 1[\s\S]*"up-left": 2[\s\S]*"up-right": 3/);
+  assert.equal(report.frameCount, 6);
+  assert.equal(standard.source, "PixelLab MCP");
+  assert.equal(standard.characterId, "b96197cb-8527-4fdf-bd6d-d48c01c41804");
+  assert.equal(standard.cycle.length, 6);
+  assert.equal(standard.rowOrder.length, 8);
+  assert.match(runtime, /protagonist-walk-pixellab\.png/);
+  assert.match(runtime, /const PLAYER_WALK_FRAME_COUNT = 6/);
+  assert.match(runtime, /const PLAYER_DIRECTION_ROWS = Object\.freeze/);
+  assert.match(runtime, /Array\.from\(\{ length: PLAYER_WALK_FRAME_COUNT \}/);
+  assert.match(runtime, /dataset\.playerAnimationSource = "pixellab:b96197cb-8527-4fdf-bd6d-d48c01c41804:walk"/);
   assert.match(runtime, /playerAnimationDirection = intent\.animationDirection/);
   assert.match(runtime, /const requestedDirection = playerAnimationDirection \|\| state\.direction/);
-  assert.doesNotMatch(runtime, /animationTime < frameDuration/);
+  assert.match(runtime, /animationFrame = Math\.floor\(animationPhase\) % PLAYER_WALK_FRAME_COUNT/);
 });

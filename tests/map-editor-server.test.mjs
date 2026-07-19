@@ -74,22 +74,23 @@ test("normaliza y migra los datos del editor al esquema v3", () => {
     addedAssets: [{ id: "editor-bench-1", sprite: "bench", scene: "interior:house-1:abc", x: 120, y: 200, scale: .1 }],
     hiddenAssets: ["old-house", "old-house", "../bad"],
     npcOverrides: { guide: { col: 4, row: 5, direction: "left", name: "Guía" } },
-    addedNpcs: [{ id: "npc-new", col: 7, row: 8, direction: "down", name: "Sol", sprite: "guide", lines: ["Hola"] }],
+    addedNpcs: [{ id: "npc-new", col: 7, row: 8, scene: "interior:house-1:abc", direction: "down", name: "Sol", sprite: "guide", lines: ["Hola"] }],
     hiddenNpcs: ["npc-old"],
-    entrances: [{ id: "exit-north", col: 2, row: 1, action: "transition", targetMap: "route_1", targetX: 20, targetY: 30 }],
+    entrances: [{ id: "exit-north", col: 2, row: 1, scene: "interior:house-1:abc", action: "transition", targetMap: "route_1", targetX: 20, targetY: 30 }],
     events: [{ id: "thought-1", col: 8, row: 9, type: "thought", trigger: "step", message: "Algo se mueve", once: true }],
   }), {
     version: 3,
     tileOverrides: { "2,3": "encounter" },
     groundOverrides: {},
+    interiorGroundOverrides: {},
     mapSize: { cols: 79, rows: 79 },
     assetOverrides: { house: { x: 4096, y: 40, scale: 4, rotation: 0, solid: false, label: "Casa editada" } },
     addedAssets: [{ x: 120, y: 200, scale: .25, rotation: 0, solid: true, scene: "interior:house-1:abc", id: "editor-bench-1", sprite: "bench" }],
     hiddenAssets: ["old-house"],
     npcOverrides: { guide: { col: 4, row: 5, direction: "left", name: "Guía" } },
-    addedNpcs: [{ id: "npc-new", col: 7, row: 8, direction: "down", name: "Sol", sprite: "guide", lines: ["Hola"] }],
+    addedNpcs: [{ id: "npc-new", col: 7, row: 8, scene: "interior:house-1:abc", direction: "down", name: "Sol", sprite: "guide", lines: ["Hola"] }],
     hiddenNpcs: ["npc-old"],
-    entrances: [{ id: "exit-north", col: 2, row: 1, action: "transition", targetMap: "route_1", targetX: 20, targetY: 30 }],
+    entrances: [{ id: "exit-north", col: 2, row: 1, scene: "interior:house-1:abc", action: "transition", targetMap: "route_1", targetX: 20, targetY: 30 }],
     events: [{ id: "thought-1", col: 8, row: 9, type: "thought", trigger: "step", message: "Algo se mueve", once: true, enabled: true }],
   });
 });
@@ -163,12 +164,13 @@ test("guarda suelo visual y amplía el mapa sin permitir reducciones", async (t)
     actorId: "builder", baseRevision: 0, transactionId: "ground-and-size",
     operations: [
       { type: "ground.set", key: "80,80", value: "grass|path-asphalt" },
+      { type: "ground.set", scene: "interior:casa:abc", key: "3,4", value: "interior-oak-honey" },
       { type: "map.resize", value: { cols: 89, rows: 91 } },
     ],
   });
   assert.equal(expanded.status, 200);
   const expandedBody = await expanded.json();
-  assert.equal(expandedBody.counts.ground, 1);
+  assert.equal(expandedBody.counts.ground, 2);
 
   const shrink = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
     actorId: "builder", baseRevision: 1, transactionId: "no-shrink",
@@ -178,6 +180,7 @@ test("guarda suelo visual y amplía el mapa sin permitir reducciones", async (t)
   const snapshot = await (await fetch(`${app.origin}/api/dev/map-editor`)).json();
   assert.deepEqual(snapshot.data.mapSize, { cols: 89, rows: 91 });
   assert.deepEqual(snapshot.data.groundOverrides, { "80,80": "grass|path-asphalt" });
+  assert.deepEqual(snapshot.data.interiorGroundOverrides, { "interior:casa:abc": { "3,4": "interior-oak-honey" } });
 });
 
 test("valida operaciones estrictamente, no trunca y mantiene el archivo anterior", async (t) => {
@@ -317,6 +320,33 @@ test("SSE emite snapshot, presencia y operaciones autoritativas", async (t) => {
   assert.equal(operationEvent.data.actorId, "bob");
   assert.equal(operationEvent.data.revision, 1);
   assert.deepEqual(operationEvent.data.operations, [{ type: "tile.set", key: "6,6", value: "event" }]);
+
+  const interiorAssetResponse = await postJson(`${app.origin}/api/dev/map-editor/operations`, {
+    actorId: "bob", name: "Bob", baseRevision: 1,
+    operations: [{
+      type: "entity.set", entity: "asset", collection: "addedAssets", id: "shared-interior-rug",
+      value: { id: "shared-interior-rug", sprite: "interiorRugOval", scene: "interior:casa:abc", x: 320, y: 288, scale: 1, rotation: 0, solid: false },
+    }],
+  });
+  assert.equal(interiorAssetResponse.status, 200);
+  const interiorAssetEvent = await stream.next("operations");
+  assert.equal(interiorAssetEvent.data.revision, 2);
+  assert.equal(interiorAssetEvent.data.operations[0].value.scene, "interior:casa:abc");
+});
+
+test("presencia descarta posiciones antiguas que llegan fuera de orden", async (t) => {
+  const app = await startEditorServer(); t.after(() => app.close());
+  const current = await postJson(`${app.origin}/api/dev/map-editor/presence`, {
+    actorId: "alice", sequence: 200, player: { x: 200, y: 300, direction: "right", moving: true },
+  });
+  assert.equal(current.status, 200);
+
+  const stale = await postJson(`${app.origin}/api/dev/map-editor/presence`, {
+    actorId: "alice", sequence: 199, player: { x: 20, y: 30, direction: "left", moving: true },
+  });
+  assert.equal(stale.status, 200);
+  const users = (await stale.json()).users;
+  assert.equal(users.find((user) => user.actorId === "alice").player.x, 200);
 });
 
 test("un fallo de persistencia no avanza memoria, revisión ni archivo", async (t) => {

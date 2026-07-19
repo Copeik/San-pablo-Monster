@@ -1,0 +1,6 @@
+Línea Heroiny
+
+Concepto, nombres y ficha original: material proporcionado por el usuario.
+Sprites: vistas frontal y trasera pixel-art extraídas de la ficha original y limpiadas a fondo transparente.
+
+Archivos: heroiny-front.png, heroiny-back.png, diacetyl-front.png, diacetyl-back.png.

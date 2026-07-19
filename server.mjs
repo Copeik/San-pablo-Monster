@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createGzip } from "node:zlib";
 import { createMapEditorHub, sanitizeMapEditorData } from "./map-editor-server.mjs";
 import { MAP_EDITOR_RULES, validateMapEditorData } from "./map-editor-contract.js";
 
@@ -355,14 +356,21 @@ async function serveStatic(request, response, pathname) {
   try { info = await stat(target); } catch { json(response, 404, { error: "No encontrado" }); return; }
   if (!info.isFile()) { json(response, 404, { error: "No encontrado" }); return; }
   const liveDevelopmentData = target.endsWith("map-editor-data.js") || target.endsWith("editor-data.js");
-  response.writeHead(200, {
-    "Content-Type": MIME_TYPES.get(path.extname(target).toLowerCase()) || "application/octet-stream",
-    "Content-Length": info.size,
+  const contentType = MIME_TYPES.get(path.extname(target).toLowerCase()) || "application/octet-stream";
+  const compressible = /^(?:text\/|application\/(?:javascript|json)|image\/svg\+xml)/.test(contentType);
+  const acceptsGzip = compressible && info.size >= 1024 && /(?:^|,)\s*gzip(?:\s*;|\s*,|\s*$)/i.test(String(request.headers["accept-encoding"] || ""));
+  const headers = {
+    "Content-Type": contentType,
     "Cache-Control": target.endsWith("index.html") || liveDevelopmentData ? "no-cache" : "public, max-age=3600",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",
-  });
+    "Vary": "Accept-Encoding",
+  };
+  if (acceptsGzip) headers["Content-Encoding"] = "gzip";
+  else headers["Content-Length"] = info.size;
+  response.writeHead(200, headers);
   if (request.method === "HEAD") response.end();
+  else if (acceptsGzip) createReadStream(target).pipe(createGzip()).pipe(response);
   else createReadStream(target).pipe(response);
 }
 

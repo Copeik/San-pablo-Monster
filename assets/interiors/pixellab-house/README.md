@@ -29,4 +29,10 @@ Los archivos mantienen el lienzo original de 85 × 85 px para que compartan esca
 
 Generaciones fuente: `f257f30b-aa1e-4e7f-b953-208d4c2edcb3` y `9800eaa5-1108-4f43-97b0-f48f3d68754b`. Etiqueta PixelLab: `pokemon-adventure-interior`.
 
+## Suelos pintables
+
+La carpeta `floors/` contiene 16 tiles PixelLab de 32 × 32 px, sin perspectiva y repetibles: maderas, parquet, cerámicas, terracota, piedra, laboratorio, clínica, cocina y moquetas. Se generaron con `create_tiles_pro` y el trabajo PixelLab `a944d66b-b5c6-48b0-af7a-57b27377d2d3` (semilla `260718`).
+
+En un interior, el Modo Dios habilita **Suelo** y guarda el pincel por identificador de escena en `interiorGroundOverrides`; por ello dos casas pueden pintar la misma casilla con acabados distintos sin compartir el resultado.
+
 El uso del servicio y de las salidas está sujeto a los [Términos de servicio de PixelLab](https://pixellab.ai/termsofservice).

@@ -1,12 +1,15 @@
 param(
   [string]$Source = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\source\rival.png"),
-  [string]$Output = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\rival-walk.png"),
-  [string]$Preview = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\rival-preview.png")
+  [string]$Output = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\legacy-4x4\rival-walk.png"),
+  [string]$Preview = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\previews\rival-preview.png")
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
+
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Output) | Out-Null
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Preview) | Out-Null
 
 $sourceBitmap = [System.Drawing.Bitmap]::new($Source)
 $sourceCentersX = @(222, 414, 607, 805)

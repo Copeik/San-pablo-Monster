@@ -97,6 +97,7 @@ function cleanNpc(value, { id = "", requireIdentity = false } = {}) {
   if (value.col !== undefined) npc.col = Math.floor(clamp(value.col, 0, MAP_EDITOR_RULES.world.maxCols - 1));
   if (value.row !== undefined) npc.row = Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.maxRows - 1));
   if (DIRECTIONS.has(value.direction)) npc.direction = value.direction;
+  const scene = cleanToken(value.scene, 64); if (scene) npc.scene = scene;
   const name = cleanText(value.name, MAP_EDITOR_RULES.lengths.npcName); if (name) npc.name = name;
   const sprite = cleanEditorId(value.sprite); if (sprite) npc.sprite = sprite;
   if (Array.isArray(value.lines)) npc.lines = cleanStringList(value.lines);
@@ -120,8 +121,10 @@ function cleanEntrance(value, id = "") {
     row: Math.floor(clamp(value.row, 0, MAP_EDITOR_RULES.world.maxRows - 1)),
   };
   if (!entrance.id) return null;
+  const scene = cleanToken(value.scene, 64); if (scene) entrance.scene = scene;
   const label = cleanText(value.label, MAP_EDITOR_RULES.lengths.label); if (label) entrance.label = label;
-  const action = cleanToken(value.action); if (action) entrance.action = action;
+  const requestedAction = MAP_EDITOR_RULES.types.entranceAction.includes(value.action) ? value.action : "closed";
+  entrance.action = requestedAction === "exit" && (!scene || scene === "world") ? "closed" : requestedAction;
   const targetMap = cleanEditorId(value.targetMap); if (targetMap) entrance.targetMap = targetMap;
   if (Number.isFinite(Number(value.targetX))) entrance.targetX = clamp(value.targetX, ...MAP_EDITOR_RULES.ranges.targetCoordinate);
   if (Number.isFinite(Number(value.targetY))) entrance.targetY = clamp(value.targetY, ...MAP_EDITOR_RULES.ranges.targetCoordinate);
@@ -143,6 +146,8 @@ function cleanEvent(value, id = "") {
     trigger: EVENT_TRIGGERS.has(value.trigger) ? value.trigger : "interact",
   };
   if (!event.id) return null;
+  const scene = cleanToken(value.scene, 64); if (scene) event.scene = scene;
+  const label = cleanText(value.label, MAP_EDITOR_RULES.lengths.label); if (label) event.label = label;
   const message = cleanText(value.message, MAP_EDITOR_RULES.lengths.eventMessage); if (message) event.message = message;
   const targetMap = cleanEditorId(value.targetMap); if (targetMap) event.targetMap = targetMap;
   if (Number.isFinite(Number(value.targetX))) event.targetX = clamp(value.targetX, ...MAP_EDITOR_RULES.ranges.targetCoordinate);
@@ -151,6 +156,13 @@ function cleanEvent(value, id = "") {
   const effect = cleanToken(value.effect); if (effect) event.effect = effect;
   if (Number.isFinite(Number(value.duration))) event.duration = clamp(value.duration, ...MAP_EDITOR_RULES.ranges.duration);
   if (Number.isFinite(Number(value.intensity))) event.intensity = clamp(value.intensity, ...MAP_EDITOR_RULES.ranges.intensity);
+  if (MAP_EDITOR_RULES.types.eventItem.includes(value.itemKind)) event.itemKind = value.itemKind;
+  const itemName = cleanText(value.itemName, MAP_EDITOR_RULES.lengths.label); if (itemName) event.itemName = itemName;
+  if (Number.isFinite(Number(value.amount))) event.amount = Math.floor(clamp(value.amount, ...MAP_EDITOR_RULES.ranges.itemAmount));
+  const flag = cleanEditorId(value.flag); if (flag) event.flag = flag;
+  const requiresFlag = cleanEditorId(value.requiresFlag); if (requiresFlag) event.requiresFlag = requiresFlag;
+  if (typeof value.requiredFlagValue === "boolean") event.requiredFlagValue = value.requiredFlagValue;
+  if (MAP_EDITOR_RULES.types.jingle.includes(value.jingle)) event.jingle = value.jingle;
   event.once = value.once === true;
   event.enabled = value.enabled !== false;
   return event;
@@ -179,6 +191,7 @@ export function emptyMapEditorData() {
     version: 3,
     tileOverrides: {},
     groundOverrides: {},
+    interiorGroundOverrides: {},
     mapSize: { cols: MAP_EDITOR_RULES.world.cols, rows: MAP_EDITOR_RULES.world.rows },
     assetOverrides: {},
     addedAssets: [],
@@ -204,7 +217,22 @@ export function sanitizeMapEditorData(value) {
     .slice(0, MAP_EDITOR_RULES.limits.groundOverrides)
     .forEach(([rawKey, type]) => {
       const key = cleanTileKey(rawKey);
-      if (key && isGroundPaintValue(type)) result.groundOverrides[key] = type;
+      if (key && isGroundPaintValue(type) && !String(type).startsWith("interior-")) result.groundOverrides[key] = type;
+    });
+  let interiorGroundCount = 0;
+  Object.entries(isPlainObject(source.interiorGroundOverrides) ? source.interiorGroundOverrides : {})
+    .forEach(([rawScene, overrides]) => {
+      const scene = cleanToken(rawScene, 64);
+      if (!scene || !isPlainObject(overrides) || interiorGroundCount >= MAP_EDITOR_RULES.limits.groundOverrides) return;
+      const cleaned = {};
+      Object.entries(overrides).forEach(([rawKey, type]) => {
+        if (interiorGroundCount >= MAP_EDITOR_RULES.limits.groundOverrides) return;
+        const key = cleanTileKey(rawKey);
+        if (!key || !isGroundPaintValue(type) || !String(type).startsWith("interior-")) return;
+        cleaned[key] = type;
+        interiorGroundCount += 1;
+      });
+      if (Object.keys(cleaned).length) result.interiorGroundOverrides[scene] = cleaned;
     });
   if (isPlainObject(source.mapSize)) {
     result.mapSize = {
@@ -268,7 +296,8 @@ export async function atomicWriteMapEditorData(filePath, data) {
 export function mapEditorCounts(data) {
   return {
     tiles: Object.keys(data.tileOverrides).length,
-    ground: Object.keys(data.groundOverrides).length,
+    ground: Object.keys(data.groundOverrides).length + Object.values(data.interiorGroundOverrides || {})
+      .reduce((total, overrides) => total + Object.keys(overrides || {}).length, 0),
     objects: Object.keys(data.assetOverrides).length + data.addedAssets.length,
     npcs: Object.keys(data.npcOverrides).length + data.addedNpcs.length,
     entrances: data.entrances.length,
@@ -308,8 +337,10 @@ function normalizeOperation(rawOperation) {
   }
   if (rawOperation.type === "ground.set") {
     const key = cleanTileKey(rawOperation.key);
+    const sceneToken = cleanToken(rawOperation.scene, 64);
+    const scene = sceneToken === "world" ? "" : sceneToken;
     if (!key || (rawOperation.value !== null && !isGroundPaintValue(rawOperation.value))) fail("Casilla o tipo de suelo no válido");
-    return { type: "ground.set", key, value: rawOperation.value };
+    return { type: "ground.set", key, value: rawOperation.value, ...(scene ? { scene } : {}) };
   }
   if (rawOperation.type === "map.resize") {
     return {
@@ -352,7 +383,9 @@ function normalizeOperation(rawOperation) {
 
 function operationKey(operation) {
   if (operation.type === "tile.set") return `tile:${operation.key}`;
-  if (operation.type === "ground.set") return `ground:${operation.key}`;
+  if (operation.type === "ground.set") return operation.scene
+    ? `ground:${operation.scene}|${operation.key}`
+    : `ground:${operation.key}`;
   if (operation.type === "map.resize") return "map:size";
   if (operation.type === "list.set") return `list:${operation.list}`;
   return `entity:${operation.entity}:${operation.id}`;
@@ -367,7 +400,12 @@ function operationTouchedKeys(operation) {
 
 function currentValueForKey(data, key) {
   if (key.startsWith("tile:")) return data.tileOverrides[key.slice(5)] ?? null;
-  if (key.startsWith("ground:")) return data.groundOverrides[key.slice(7)] ?? null;
+  if (key.startsWith("ground:")) {
+    const address = key.slice(7);
+    const separator = address.lastIndexOf("|");
+    if (separator > 0) return data.interiorGroundOverrides?.[address.slice(0, separator)]?.[address.slice(separator + 1)] ?? null;
+    return data.groundOverrides[address] ?? null;
+  }
   if (key === "map:size") return clone(data.mapSize);
   if (key === "list:hiddenAssets" || key === "list:hiddenNpcs") return clone(data[key.slice(5)] || []);
   const match = /^entity:(asset|npc|entrance|event):(.+)$/.exec(key);
@@ -386,8 +424,12 @@ function applyOperation(data, operation) {
     return;
   }
   if (operation.type === "ground.set") {
-    if (operation.value === null) delete data.groundOverrides[operation.key];
-    else data.groundOverrides[operation.key] = operation.value;
+    const collection = operation.scene
+      ? (data.interiorGroundOverrides[operation.scene] ||= {})
+      : data.groundOverrides;
+    if (operation.value === null) delete collection[operation.key];
+    else collection[operation.key] = operation.value;
+    if (operation.scene && !Object.keys(collection).length) delete data.interiorGroundOverrides[operation.scene];
     return;
   }
   if (operation.type === "map.resize") {
@@ -443,6 +485,7 @@ function cleanPresence(value) {
   if (!actorId) fail("Falta actorId");
   const user = {
     actorId,
+    sequence: Number.isSafeInteger(Number(value.sequence)) ? Math.max(0, Number(value.sequence)) : 0,
     name: cleanText(value.name, MAP_EDITOR_RULES.lengths.actorName) || "Editor",
     color: /^#[0-9a-f]{6}$/i.test(value.color) ? value.color : "#55c2ff",
     cursor: null,
@@ -513,7 +556,7 @@ export function createMapEditorHub({ editorDataPath, persist = atomicWriteMapEdi
     const cutoff = now() - PRESENCE_TTL_MS;
     return [...presence.values()]
       .filter((entry) => activeActors.has(entry.actorId) || entry.updatedAt >= cutoff)
-      .map(({ updatedAt, ...entry }) => clone(entry));
+      .map(({ updatedAt, sequence, ...entry }) => clone(entry));
   };
 
   const broadcast = (event, payload, id = null) => {
@@ -620,8 +663,12 @@ export function createMapEditorHub({ editorDataPath, persist = atomicWriteMapEdi
     updatePresence(rawPresence) {
       const user = cleanPresence(rawPresence);
       const previous = presence.get(user.actorId);
-      const { updatedAt: _updatedAt, ...previousUser } = previous || {};
-      const unchanged = Boolean(previous) && JSON.stringify(previousUser) === JSON.stringify(user);
+      if (previous?.sequence > 0 && user.sequence > 0 && user.sequence <= previous.sequence) {
+        return { users: activeUsers() };
+      }
+      const { updatedAt: _updatedAt, sequence: _previousSequence, ...previousUser } = previous || {};
+      const { sequence: _sequence, ...comparableUser } = user;
+      const unchanged = Boolean(previous) && JSON.stringify(previousUser) === JSON.stringify(comparableUser);
       presence.set(user.actorId, { ...user, updatedAt: now() });
       if (!unchanged) broadcastPresence();
       return { users: activeUsers() };

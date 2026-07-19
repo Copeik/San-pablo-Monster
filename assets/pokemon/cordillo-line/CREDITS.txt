@@ -1,0 +1,6 @@
+Línea Cordillo
+
+Concepto, nombres y ficha original: material proporcionado por el usuario.
+Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
+
+Archivos: cordillo-front.png, cordillo-back.png, rasguelo-front.png, rasguelo-back.png, bordonte-front.png, bordonte-back.png.

@@ -7,6 +7,7 @@ const plainObject = (value) => Boolean(value) && typeof value === "object" && !A
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const CONTRACT_GROUND_PATH_PREFIX = "path-";
 const CONTRACT_GROUND_LAYER_SEPARATOR = "|";
+const SCENE_PATTERN = /^[a-z0-9][a-z0-9_.:-]{0,63}$/i;
 
 export function groundPaintLayers(value) {
   if (typeof value !== "string" || !value) return null;
@@ -21,7 +22,7 @@ export function groundPaintLayers(value) {
     if (isPath(parts[0])) return { base: null, path: parts[0] };
     return null;
   }
-  return isBase(parts[0]) && isPath(parts[1]) ? { base: parts[0], path: parts[1] } : null;
+  return isBase(parts[0]) && !parts[0].startsWith("interior-") && isPath(parts[1]) ? { base: parts[0], path: parts[1] } : null;
 }
 
 export function isGroundPaintValue(value) {
@@ -30,7 +31,9 @@ export function isGroundPaintValue(value) {
 
 export function editorOperationKey(operation) {
   if (operation?.type === "tile.set") return `tile:${operation.key}`;
-  if (operation?.type === "ground.set") return `ground:${operation.key}`;
+  if (operation?.type === "ground.set") return operation.scene
+    ? `ground:${operation.scene}|${operation.key}`
+    : `ground:${operation.key}`;
   if (operation?.type === "map.resize") return "map:size";
   if (operation?.type === "list.set") return `list:${operation.list}`;
   return `entity:${operation?.entity || ""}:${operation?.id || ""}`;
@@ -63,6 +66,11 @@ function textError(value, maximum, label, { optional = false } = {}) {
 function idError(value, label, { optional = false } = {}) {
   if ((value === undefined || value === null || value === "") && optional) return "";
   return isEditorId(value) ? "" : `${label} debe usar letras, números, guiones o guiones bajos y medir como máximo ${MAP_EDITOR_RULES.lengths.id} caracteres.`;
+}
+
+function sceneError(value, label = "La escena", { optional = false } = {}) {
+  if ((value === undefined || value === null || value === "") && optional) return "";
+  return typeof value === "string" && SCENE_PATTERN.test(value) ? "" : `${label} no es válida.`;
 }
 
 function pushIf(errors, message) {
@@ -102,6 +110,7 @@ export function validateEditorEntity(kind, value, { requireIdentity = true } = {
     if (requireIdentity) pushIf(errors, idError(value.sprite, "El sprite"));
   } else if (kind === "npc") {
     if (hasOwn(value, "col") || requireIdentity) validateGridPosition(value, errors);
+    pushIf(errors, sceneError(value.scene, "La escena", { optional: true }));
     pushIf(errors, textError(value.name, MAP_EDITOR_RULES.lengths.npcName, "El nombre", { optional: true }));
     if (hasOwn(value, "sprite") || requireIdentity) pushIf(errors, idError(value.sprite, "El sprite"));
     if (hasOwn(value, "direction") && !MAP_EDITOR_RULES.types.direction.includes(value.direction)) errors.push("La dirección del NPC no es válida.");
@@ -122,8 +131,10 @@ export function validateEditorEntity(kind, value, { requireIdentity = true } = {
     }
   } else if (kind === "entrance") {
     validateGridPosition(value, errors);
+    pushIf(errors, sceneError(value.scene, "La escena", { optional: true }));
     pushIf(errors, textError(value.label, MAP_EDITOR_RULES.lengths.label, "El nombre", { optional: true }));
     if (!MAP_EDITOR_RULES.types.entranceAction.includes(value.action)) errors.push("La acción de entrada no es válida.");
+    if (value.action === "exit" && (!value.scene || value.scene === "world")) errors.push("La acción de salida necesita una escena interior.");
     pushIf(errors, idError(value.targetMap, "El mapa de destino", { optional: value.action !== "transition" }));
     pushIf(errors, numberError(value.targetX, MAP_EDITOR_RULES.ranges.targetCoordinate, "Destino X", { optional: value.action !== "transition" }));
     pushIf(errors, numberError(value.targetY, MAP_EDITOR_RULES.ranges.targetCoordinate, "Destino Y", { optional: value.action !== "transition" }));
@@ -134,10 +145,13 @@ export function validateEditorEntity(kind, value, { requireIdentity = true } = {
     if (value.targetMap && !registeredTargetMap(value.targetMap)) warnings.push("El destino se validará cuando ese mapa esté registrado.");
   } else if (kind === "event") {
     validateGridPosition(value, errors);
+    pushIf(errors, textError(value.label, MAP_EDITOR_RULES.lengths.label, "El nombre", { optional: true }));
+    pushIf(errors, sceneError(value.scene, "La escena", { optional: true }));
     if (!MAP_EDITOR_RULES.types.event.includes(value.type)) errors.push("El tipo de evento no es válido.");
     if (!MAP_EDITOR_RULES.types.trigger.includes(value.trigger)) errors.push("La activación del evento no es válida.");
-    pushIf(errors, textError(value.message, MAP_EDITOR_RULES.lengths.eventMessage, "El mensaje", { optional: !["dialogue", "thought"].includes(value.type) }));
-    if (["dialogue", "thought"].includes(value.type) && !String(value.message || "").trim()) errors.push("El evento necesita un mensaje.");
+    const needsMessage = ["dialogue", "thought", "computer", "letter"].includes(value.type);
+    pushIf(errors, textError(value.message, MAP_EDITOR_RULES.lengths.eventMessage, "El mensaje", { optional: !needsMessage }));
+    if (needsMessage && !String(value.message || "").trim()) errors.push("El evento necesita un mensaje.");
     const needsTarget = ["teleport", "transition"].includes(value.type);
     pushIf(errors, idError(value.targetMap, "El mapa de destino", { optional: !needsTarget }));
     pushIf(errors, numberError(value.targetX, MAP_EDITOR_RULES.ranges.targetCoordinate, "Destino X", { optional: !needsTarget }));
@@ -147,6 +161,15 @@ export function validateEditorEntity(kind, value, { requireIdentity = true } = {
     if (value.effect !== undefined && !MAP_EDITOR_RULES.types.effect.includes(value.effect)) errors.push("El efecto no es válido.");
     pushIf(errors, numberError(value.duration, MAP_EDITOR_RULES.ranges.duration, "La duración", { optional: value.type !== "vibration" }));
     pushIf(errors, numberError(value.intensity, MAP_EDITOR_RULES.ranges.intensity, "La intensidad", { optional: value.type !== "vibration" }));
+    if (value.type === "pickup") {
+      if (!MAP_EDITOR_RULES.types.eventItem.includes(value.itemKind)) errors.push("El objeto entregado no es válido.");
+      pushIf(errors, numberError(value.amount, MAP_EDITOR_RULES.ranges.itemAmount, "La cantidad", { integer: true }));
+      pushIf(errors, textError(value.itemName, MAP_EDITOR_RULES.lengths.label, "El nombre del objeto", { optional: true }));
+    }
+    if (value.type === "switch") pushIf(errors, idError(value.flag, "La bandera del interruptor"));
+    else pushIf(errors, idError(value.flag, "La bandera", { optional: true }));
+    pushIf(errors, idError(value.requiresFlag, "La condición", { optional: true }));
+    if (value.type === "sound" && !MAP_EDITOR_RULES.types.jingle.includes(value.jingle)) errors.push("El sonido no es válido.");
     if (needsTarget && value.targetMap && !registeredTargetMap(value.targetMap)) warnings.push("El destino se validará cuando ese mapa esté registrado.");
   } else {
     errors.push("El tipo de entidad no es válido.");
@@ -171,6 +194,11 @@ export function validateEditorOperation(operation) {
       ? isGroundPaintValue(operation.value)
       : MAP_EDITOR_RULES.types.terrain.includes(operation.value);
     if (operation.value !== null && !validValue) errors.push(operation.type === "ground.set" ? "El tipo de suelo no es válido." : "El tipo de terreno no es válido.");
+    if (operation.type === "ground.set") {
+      pushIf(errors, sceneError(operation.scene, "La escena", { optional: true }));
+      const interiorValue = typeof operation.value === "string" && operation.value.startsWith("interior-");
+      if (operation.value !== null && interiorValue !== Boolean(operation.scene)) errors.push("Los suelos de interior necesitan una escena interior y no pueden usarse en el exterior.");
+    }
     return { valid: errors.length === 0, errors, warnings: [] };
   }
   if (operation.type === "map.resize") {
@@ -209,6 +237,7 @@ export function validateMapEditorData(value) {
   const collections = [
     ["tileOverrides", value.tileOverrides, MAP_EDITOR_RULES.limits.tileOverrides, "record"],
     ["groundOverrides", value.groundOverrides, MAP_EDITOR_RULES.limits.groundOverrides, "record"],
+    ["interiorGroundOverrides", value.interiorGroundOverrides, MAP_EDITOR_RULES.limits.groundOverrides, "record"],
     ["assetOverrides", value.assetOverrides, MAP_EDITOR_RULES.limits.assetOverrides, "record"],
     ["addedAssets", value.addedAssets, MAP_EDITOR_RULES.limits.addedAssets, "array"],
     ["hiddenAssets", value.hiddenAssets, MAP_EDITOR_RULES.limits.hiddenAssets, "array"],
@@ -232,6 +261,17 @@ export function validateMapEditorData(value) {
   Object.entries(plainObject(value.groundOverrides) ? value.groundOverrides : {}).forEach(([key, ground]) => {
     const result = validateEditorOperation({ type: "ground.set", key, value: ground });
     errors.push(...result.errors.map((message) => `${key}: ${message}`));
+  });
+  Object.entries(plainObject(value.interiorGroundOverrides) ? value.interiorGroundOverrides : {}).forEach(([scene, overrides]) => {
+    pushIf(errors, sceneError(scene, "La escena interior"));
+    if (!plainObject(overrides)) {
+      errors.push(`${scene}: los suelos interiores no tienen el formato esperado.`);
+      return;
+    }
+    Object.entries(overrides).forEach(([key, ground]) => {
+      const result = validateEditorOperation({ type: "ground.set", scene, key, value: ground });
+      errors.push(...result.errors.map((message) => `${scene}/${key}: ${message}`));
+    });
   });
   if (value.mapSize != null) {
     const result = validateEditorOperation({ type: "map.resize", value: value.mapSize });

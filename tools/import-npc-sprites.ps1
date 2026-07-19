@@ -1,6 +1,6 @@
 param(
   [string]$SourceDir = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\source"),
-  [string]$OutputDir = (Join-Path $PSScriptRoot "..\assets\sprites\npcs"),
+  [string]$OutputDir = (Join-Path $PSScriptRoot "..\assets\sprites\npcs\legacy-4x4"),
   [int]$StartIndex = 0,
   [int]$Count = [int]::MaxValue
 )
@@ -181,7 +181,9 @@ function New-RosterPreview {
       try { $graphics.DrawImageUnscaled($sheet, $left + 13, $top + 8) } finally { $sheet.Dispose() }
       $graphics.DrawString($Definitions[$index].id, $font, [System.Drawing.Brushes]::Black, $left + 13, $top + 270)
     }
-    $preview.Save((Join-Path $OutputDir "npc-imported-roster-preview.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+    $previewOutput = Join-Path $PSScriptRoot "..\assets\sprites\npcs\previews\npc-imported-roster-preview.png"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $previewOutput) | Out-Null
+    $preview.Save($previewOutput, [System.Drawing.Imaging.ImageFormat]::Png)
   } finally {
     $darkBrush.Dispose(); $lightBrush.Dispose(); $font.Dispose(); $graphics.Dispose(); $preview.Dispose()
   }
