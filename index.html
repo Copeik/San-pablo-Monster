@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Una aventura Pokémon web sobre un mapa de estilo HeartGold y SoulSilver." />
     <title>Pokémon · Ciudad Pokémon</title>
-  <link rel="stylesheet" href="styles.css?v=50" />
+  <link rel="stylesheet" href="styles.css?v=52" />
     <link rel="stylesheet" href="perspective-zone.css?v=13" />
   </head>
   <body>
@@ -50,20 +50,20 @@
           </div>
           <div class="title-visual" aria-hidden="true">
             <span class="sun"></span>
-            <img src="assets/pokemon/petrillo-line/petrillo-front.png" class="title-pokemon petrillo" alt="" />
-            <img src="assets/pokemon/luminai-line/luminio-front.png" class="title-pokemon luminio" alt="" />
+            <img src="assets/pokemon/petrillo-line/petrillo/idle-front.webp" class="title-pokemon petrillo" alt="" />
+            <img src="assets/pokemon/luminai-line/luminio/idle-front.webp" class="title-pokemon luminio" alt="" />
             <span class="city-silhouette"></span>
           </div>
         </section>
 
-        <section id="starterIntroScreen" class="starter-intro-screen screen hidden" aria-label="Introducción a San Pablo">
-          <video id="starterIntroVideo" preload="auto" playsinline>
+        <section id="starterIntroScreen" class="starter-intro-screen screen hidden" aria-label="Introducción de la aventura">
+          <video id="starterIntroVideo" preload="none" playsinline>
             <source src="assets/video/san-pablo-intro.mp4" type="video/mp4" />
           </video>
           <div class="starter-intro-shade" aria-hidden="true"></div>
           <div class="starter-intro-location">
             <span>DESTINO INICIAL</span>
-            <strong>SAN PABLO · SEVILLA</strong>
+            <strong>DISTRITO ADA-EFESO</strong>
           </div>
           <div class="starter-intro-copy">
             <span>COMIENZA LA AVENTURA</span>
@@ -75,7 +75,7 @@
         </section>
 
         <section id="fragmentCinematicScreen" class="fragment-cinematic-screen hidden" role="dialog" aria-modal="true" aria-label="Visión de los Fragmentos Prisma">
-          <video id="fragmentCinematicVideo" preload="auto" playsinline>
+          <video id="fragmentCinematicVideo" preload="none" playsinline>
             <source src="assets/video/fragmentos-prisma.mp4" type="video/mp4" />
           </video>
           <div class="fragment-cinematic-shade" aria-hidden="true"></div>
@@ -90,7 +90,14 @@
 
         <section id="worldScreen" class="world-screen screen hidden">
           <div class="world-overlay">
-            <div class="location-card"><small>UBICACIÓN</small><strong id="areaName">Ciudad Pokémon</strong></div>
+            <div class="location-card">
+              <small>UBICACIÓN</small>
+              <strong id="areaName">Ciudad Pokémon</strong>
+              <span id="dayNightStatus" class="day-night-status">
+                <i id="dayNightIcon" aria-hidden="true">☀</i>
+                <span><b id="dayNightLabel">DÍA</b><time id="dayNightClock" datetime="12:00">12:00</time></span>
+              </span>
+            </div>
             <div id="questPill" class="quest-pill"><span>!</span><div><small>OBJETIVO</small><strong>Explora la ciudad</strong></div></div>
           </div>
 
@@ -347,11 +354,11 @@
                   <span class="attack-dex-preview-label">VISTA PREVIA EN COMBATE</span>
                   <div class="attack-dex-preview-source">
                     <span class="attack-dex-preview-platform"></span>
-                    <img id="attackDexPreviewAttacker" src="assets/pokemon/petrillo-line/petrillo-back.png" alt="Pokémon atacante" draggable="false" />
+                    <img id="attackDexPreviewAttacker" src="assets/pokemon/petrillo-line/petrillo/idle-back.webp" alt="Pokémon atacante" draggable="false" />
                   </div>
                   <div class="attack-dex-preview-target">
                     <span class="attack-dex-preview-platform"></span>
-                    <img id="attackDexPreviewDefender" src="assets/pokemon/luminai-line/luminio-front.png" alt="Pokémon objetivo" draggable="false" />
+                    <img id="attackDexPreviewDefender" src="assets/pokemon/luminai-line/luminio/idle-front.webp" alt="Pokémon objetivo" draggable="false" />
                   </div>
                 </div>
                 <button id="attackDexPlay" class="attack-dex-play" type="button">▶ Probar efecto</button>
@@ -835,7 +842,6 @@
       </footer>
     </main>
     <script src="map-registry.js?v=1"></script>
-    <script src="map-geography.js?v=2"></script>
     <script src="map-editor-rules.js?v=6"></script>
     <script src="map-editor-data.js?v=6"></script>
     <script src="assets/generated/san-pablo-neighborhood/catalog.js?v=2"></script>
@@ -848,18 +854,64 @@
     <script src="maps/ciudad-azahar/editor-data.js?v=1"></script>
     <script src="maps/ciudad-azahar/layout.js?v=1"></script>
     <script src="maps/ciudad-azahar/map.js?v=1"></script>
-    <script src="maps/plaza-farmacia/editor-data.js?v=2"></script>
-    <script src="maps/plaza-farmacia/map.js?v=2"></script>
+    <script src="maps/plaza-farmacia/editor-data.js?v=14"></script>
+    <script src="maps/plaza-farmacia/map.js?v=14"></script>
+    <script src="maps/parking-plaza-farmacia/editor-data.js?v=4"></script>
+    <script src="maps/parking-plaza-farmacia/map.js?v=4"></script>
     <script src="maps/pradera-bifaz/editor-data.js?v=1"></script>
     <script src="maps/pradera-bifaz/map.js?v=3"></script>
+    <script src="maps/ada-efeso/editor-data.js?v=1"></script>
+    <script src="maps/ada-efeso/map.js?v=6"></script>
     <!-- GAME_MAP_PACKAGES -->
     <script src="perspective-zone-core.js?v=12"></script>
     <script src="map-bootstrap.js?v=1"></script>
     <script src="player-movement.js?v=3"></script>
     <script src="attack-effects.js?v=1"></script>
-    <script src="sanpledex-animation-data.js?v=5"></script>
+    <script src="sanpledex-animation-data.js?v=6"></script>
     <script src="game-music.js?v=2"></script>
-    <script src="script.js?v=130"></script>
-    <script src="map-editor-standalone.js?v=8"></script>
+    <script src="day-night-cycle.js?v=1"></script>
+    <script src="maze-raycast-core.js"></script>
+    <script src="assets/sprites/npcs/catalog.js?v=1"></script>
+    <script src="script.js?v=135"></script>
+    <script data-role="map-editor-loader">
+      (() => {
+        "use strict";
+
+        const bridge = window.__pokemonMapEditorBridge;
+        if (!bridge) return;
+
+        const params = new URLSearchParams(window.location.search);
+        const editorRequested = ["1", "true"].includes((params.get("editor") || "").toLowerCase());
+        const localEditorHost = ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+        const editorAvailable = window.location.protocol === "file:" || localEditorHost || editorRequested || params.has("editorToken");
+        let editorLoadPromise = null;
+
+        function loadMapEditor() {
+          if (window.PokemonMapEditor) return Promise.resolve(window.PokemonMapEditor);
+          if (editorLoadPromise) return editorLoadPromise;
+
+          editorLoadPromise = new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = "map-editor-standalone.js?v=8";
+            script.async = true;
+            script.dataset.runtime = "map-editor";
+            script.addEventListener("load", () => resolve(window.PokemonMapEditor), { once: true });
+            script.addEventListener("error", () => {
+              editorLoadPromise = null;
+              bridge.disable();
+              reject(new Error("No se pudo cargar el editor de mapas."));
+            }, { once: true });
+            document.body.append(script);
+          });
+          return editorLoadPromise;
+        }
+
+        document.addEventListener("map-editor-open", () => {
+          void loadMapEditor().catch(() => {});
+        });
+
+        if (editorAvailable) bridge.enable();
+      })();
+    </script>
   </body>
 </html>

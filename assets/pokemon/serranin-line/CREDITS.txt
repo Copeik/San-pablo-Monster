@@ -1,8 +1,0 @@
-Origen: ficha conceptual aportada por el usuario (codex-clipboard-8727f897-4c9e-4382-88b4-75185573c344.png).
-Proceso: recorte de las vistas dibujadas y eliminación del fondo de pergamino; no se generaron perspectivas nuevas.
-
-Archivos extraídos:
-- serranin-front.png
-- serranin-back.png
-- aliolomo-front.png
-- aliolomo-back.png

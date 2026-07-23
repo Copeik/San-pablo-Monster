@@ -1,7 +1,0 @@
-Familia Pipator
-
-Concepto, nombres y ficha original: material proporcionado por el usuario.
-Pipator frontal y espalda: reconstrucción de respaldo generada con PixelLab MCP v3 a partir de la vista original parcialmente tapada por una etiqueta; rotaciones sur/norte, sin texto y con fondo transparente. Trazabilidad: personaje PixelLab 98521591-7a87-4fe0-98bb-97a8fd21fcc2.
-Formas Comando y Paladín: vistas extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: pipator-front.png, pipator-back.png, pipator-comando-front.png, pipator-comando-back.png, pipator-paladin-front.png, pipator-paladin-back.png.

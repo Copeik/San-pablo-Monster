@@ -1,6 +1,0 @@
-Línea Cañijo
-
-Concepto, nombres y ficha original: material proporcionado por el usuario.
-Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: canijo-front.png, canijo-back.png, macarrizo-front.png, macarrizo-back.png, sevillardo-front.png, sevillardo-back.png.

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 
@@ -18,17 +19,32 @@ const firstStages = lines.map(([id]) => id);
 const evolvedStages = lines.flatMap((ids) => ids.slice(1));
 
 
-test("the supplied batch registers 53 consecutive playable species and both sprite views", async () => {
-  const script = await readFile(path.join(root, "script.js"), "utf8");
+test("the supplied batch registers 53 consecutive playable species with six canonical animations", async () => {
+  const [script, registrySource] = await Promise.all([
+    readFile(path.join(root, "script.js"), "utf8"),
+    readFile(path.join(root, "sanpledex-animation-data.js"), "utf8"),
+  ]);
+  const context = { globalThis: {} };
+  vm.runInNewContext(registrySource, context);
   const ids = lines.flat();
   assert.equal(ids.length, 53);
   assert.deepEqual(ids, Array.from({ length: 53 }, (_, index) => 9901 + index));
 
   for (const id of ids) {
     assert.match(script, new RegExp(`^\\s*${id}: \\{ id: ${id},`, "m"), `missing species ${id}`);
-    const mapping = script.match(new RegExp(`^\\s*${id}: \\{ front: "([^"]+)", back: "([^"]+)" \\},`, "m"));
-    assert.ok(mapping, `missing front/back mapping for ${id}`);
-    await Promise.all(mapping.slice(1).map((relative) => access(path.join(root, relative))));
+    const record = context.globalThis.SANPLEDEX_ANIMATION_ASSETS[id];
+    assert.equal(record.profile, "pokemon-animation-only-v1");
+    assert.equal(record.animationOnly, true);
+    const paths = [
+      record.idle.front,
+      record.idle.back,
+      record.attacks.physical.front,
+      record.attacks.physical.back,
+      record.attacks.special.front,
+      record.attacks.special.back,
+    ];
+    assert.equal(new Set(paths).size, 6);
+    await Promise.all(paths.map((relative) => access(path.join(root, relative))));
   }
 });
 
@@ -54,9 +70,16 @@ test("Pipator and Culebrín expose two selectable evolution branches", async () 
 });
 
 
-test("every supplied family records asset provenance", async () => {
-  const script = await readFile(path.join(root, "script.js"), "utf8");
-  const folders = new Set([...script.matchAll(/99\d{2}: \{ front: "assets\/pokemon\/([^/]+)\//g)].map((match) => match[1]));
+test("las 23 familias suministradas conservan únicamente carpetas animation-only", async () => {
+  const source = await readFile(path.join(root, "sanpledex-animation-data.js"), "utf8");
+  const context = { globalThis: {} };
+  vm.runInNewContext(source, context);
+  const folders = new Set(lines.flat().map((id) => (
+    context.globalThis.SANPLEDEX_ANIMATION_ASSETS[id].idle.front.split("/")[2]
+  )));
   assert.equal(folders.size, 23);
-  await Promise.all([...folders].map((folder) => access(path.join(root, "assets", "pokemon", folder, "CREDITS.txt"))));
+  for (const folder of folders) {
+    const entries = await readdir(path.join(root, "assets", "pokemon", folder), { withFileTypes: true });
+    assert.ok(entries.every((entry) => entry.isDirectory()));
+  }
 });

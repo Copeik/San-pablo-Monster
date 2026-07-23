@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-01-nurse",
+  "spriteId": "npc-01-nurse",
+  "displayName": "Enfermera",
+  "entitySlug": "enfermera",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "2c514efa39ba111f66eba3e16b342589c5336f45a5d881aa9baba2d2fe8f72f2",
+  "sourceAssetId": "npc-01-nurse-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-01-nurse-walk.png",
+  "credits": "credits.txt"
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-22-teen-boy",
+  "spriteId": "npc-22-teen-boy",
+  "displayName": "Entrenador Dani",
+  "entitySlug": "entrenador-dani",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "ba22c442d937a59e6390138fe4b2c4f3b7f38a0a0f8a677545e3116baa784a10",
+  "sourceAssetId": "npc-22-teen-boy-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-22-teen-boy-walk.png",
+  "credits": "credits.txt"
+}

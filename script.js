@@ -16,7 +16,12 @@
   const MUSIC_LIBRARY = globalThis.GAME_MUSIC;
   if (!MUSIC_LIBRARY) throw new Error("No se pudo cargar la biblioteca musical chiptune.");
 
+  const DAY_NIGHT_CYCLE = globalThis.DAY_NIGHT_CYCLE;
+  if (!DAY_NIGHT_CYCLE) throw new Error("No se pudo cargar el ciclo local de día y noche.");
+
+  const owns = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
   const SAVE_KEY = "pokemon-city-save-v3";
+  const SAVE_TRANSFER_BACKUP_KEY = `${SAVE_KEY}-transfer-backup`;
   const CITY_MAP = window.CITY_MAP_CONFIG;
   const ACTIVE_MAP_ID = MAP_REGISTRY.resolve(window.ACTIVE_GAME_MAP_ID || CITY_MAP.id || MAP_REGISTRY.defaultMapId);
   const PERSPECTIVE_ZONE_ACTIVE = CITY_MAP.runtime === "perspective-platformer-v1";
@@ -209,6 +214,7 @@
   const BASE_VIEW_HEIGHT = 624;
   const MAX_RENDER_WIDTH = 3840;
   const MAX_RENDER_HEIGHT = 2160;
+  const DAY_NIGHT_MAP_KINDS = new Set(["city", "district", "route"]);
   const SPRITE_CELL_SIZE = 64;
   const PLAYER_WALK_FRAME_COUNT = 6;
   const PLAYER_DIRECTION_ROWS = Object.freeze({
@@ -265,6 +271,16 @@
       money: Math.max(0, Math.floor(Number(params.get("debugMoney")) || 2500)),
     };
   })();
+  const LOCAL_DEBUG_DAY_NIGHT_MINUTES = (() => {
+    if (!new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)) return null;
+    const raw = new URLSearchParams(window.location.search).get("debugTime");
+    const match = /^(\d{1,2}):(\d{2})$/.exec(raw || "");
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours > 23 || minutes > 59) return null;
+    return hours * 60 + minutes;
+  })();
   const LOCAL_DEBUG_PERSPECTIVE = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
     ? (() => {
       const target = new URLSearchParams(window.location.search).get("debugPerspective");
@@ -275,11 +291,16 @@
     && new URLSearchParams(window.location.search).has("debugFragmentCinematic");
   const LOCAL_DEBUG_PLAYER_ATLAS = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
     && new URLSearchParams(window.location.search).has("debugPlayerAtlas");
+  const LOCAL_DEBUG_MAP_OPENING = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
+    && new URLSearchParams(window.location.search).has("debugMapOpening");
   const LOCAL_DEBUG_VOICE = new Set(["localhost", "127.0.0.1"]).has(window.location.hostname)
     ? new URLSearchParams(window.location.search).get("debugVoice")
     : "";
   function clampDebugLevel(value) { return Math.max(1, Math.min(50, Number(value) || 5)); }
   const NORMAL_START = { ...(LOCAL_DEBUG_SPAWN || CITY_MAP.spawn) };
+  const MAP_OPENING = CITY_MAP.openingSequence && typeof CITY_MAP.openingSequence === "object"
+    ? CITY_MAP.openingSequence
+    : null;
   const INITIAL_PORTAL_DOOR = cityEntrances.find((entrance) => entrance.scene === "world" && entrance.action === "prism");
   const INITIAL_PORTAL_POSITION = INITIAL_PORTAL_DOOR
     ? { x: (INITIAL_PORTAL_DOOR.col + .5) * CITY_MAP.tileSize, y: (INITIAL_PORTAL_DOOR.row + .5) * CITY_MAP.tileSize }
@@ -356,11 +377,19 @@
   };
 
   const PLAYER_SHEET_URL = "assets/sprites/protagonist-walk-pixellab.png?v=1";
-  const NPC_SHEET_URL = "assets/sprites/npcs/source/hgss/hgss-npc-idle.png";
-  const NPC_OVERWORLD_SHEET_BASE_URL = "assets/sprites/npcs/overworld";
-  const GUIDE_NPC_SHEET_URL = `${NPC_OVERWORLD_SHEET_BASE_URL}/npc-guide-walk.png`;
+  const PLAYER_OPENING_SHEET_URLS = Object.freeze({
+    fainted: "assets/sprites/protagonist/protagonist-fainted-lying-south-west-pixellab.png?v=1",
+    gettingUp: "assets/sprites/protagonist/protagonist-getting-up-south-west-pixellab.png?v=1",
+  });
+  const NPC_ASSET_CATALOG = globalThis.NPC_ASSET_CATALOG || Object.freeze({});
+  function resolveNpcAssetUrl(spriteId) {
+    return typeof spriteId === "string" && owns(NPC_ASSET_CATALOG, spriteId)
+      ? NPC_ASSET_CATALOG[spriteId]
+      : "";
+  }
   const DOCTOR_POTATO_PORTRAIT_URL = "assets/portraits/doctor-potato.png";
   const DOCTOR_POTATO_THEME_URL = "assets/audio/patata-de-barrio.mp3";
+  const DOCTOR_POTATO_ENABLED = false;
   const MICROPHONE_ACCESS_ENABLED = false;
   const VOICE_NPC_ENABLED = false;
   const VOICE_NPC_SILENCE_MS = 3000;
@@ -392,7 +421,7 @@
       "nino-sol", "chica-lazo", "skater-verde", "mochilera", "campesino",
       "nino-polo", "nina-turquesa", "skater-capucha", "chica-mochila", "hortelano",
       "camarera-azul", "camarero-bandeja", "bailaora", "abuelo-cana", "abuela-morada", "rival",
-    ].map((id) => [id, `${NPC_OVERWORLD_SHEET_BASE_URL}/${id}-walk.png`])),
+    ].map((id) => [id, resolveNpcAssetUrl(id)])),
   });
   const NPC_ROSTER_SHEET_URLS = Object.freeze({
     ...Object.fromEntries([
@@ -401,112 +430,14 @@
     "teen-girl", "teen-boy", "baker", "builder", "doctor", "vendor", "librarian", "tourist", "dancer", "ranger",
   ].map((role, index) => {
     const id = `npc-${String(index + 1).padStart(2, "0")}-${role}`;
-    return [id, `${NPC_OVERWORLD_SHEET_BASE_URL}/${id}-walk.png`];
+    return [id, resolveNpcAssetUrl(id)];
     })),
     ...NPC_IMPORTED_SPRITE_URLS,
-    "doctor-potato": `${NPC_OVERWORLD_SHEET_BASE_URL}/doctor-potato-walk.png`,
+    "guide": resolveNpcAssetUrl("guide"),
+    "doctor-potato": resolveNpcAssetUrl("doctor-potato"),
   });
-  const CUSTOM_POKEMON_ASSETS = Object.freeze({
-    4: { front: "assets/pokemon/braspy-line/braspy-front.png", back: "assets/pokemon/braspy-line/braspy-back.png" },
-    5: { front: "assets/pokemon/braspy-line/ascuero-front.png", back: "assets/pokemon/braspy-line/ascuero-back.png" },
-    6: { front: "assets/pokemon/braspy-line/volcazote-front.png", back: "assets/pokemon/braspy-line/volcazote-back.png" },
-    9001: { front: "assets/pokemon/petrillo-line/petrillo-front.png", back: "assets/pokemon/petrillo-line/petrillo-back.png" },
-    9002: { front: "assets/pokemon/petrillo-line/musgolem-front.png", back: "assets/pokemon/petrillo-line/musgolem-back.png" },
-    9003: { front: "assets/pokemon/petrillo-line/terravordeo-front.png", back: "assets/pokemon/petrillo-line/terravordeo-back.png" },
-    9101: { front: "assets/pokemon/peyote-line/peyote-front.png", back: "assets/pokemon/peyote-line/peyote-back.png" },
-    9102: { front: "assets/pokemon/peyote-line/prensalito-front.png", back: "assets/pokemon/peyote-line/prensalito-back.png" },
-    9201: { front: "assets/pokemon/dracoscama-line/criascama-front.png", back: "assets/pokemon/dracoscama-line/criascama-back.png" },
-    9202: { front: "assets/pokemon/dracoscama-line/aliscama-front.png", back: "assets/pokemon/dracoscama-line/aliscama-back.png" },
-    9203: { front: "assets/pokemon/dracoscama-line/dracoscama-front.png", back: "assets/pokemon/dracoscama-line/dracoscama-back.png" },
-    9301: { front: "assets/pokemon/luminai-line/luminio-front.png", back: "assets/pokemon/luminai-line/luminio-back.png" },
-    9302: { front: "assets/pokemon/luminai-line/lunaria-front.png", back: "assets/pokemon/luminai-line/lunaria-back.png" },
-    9303: { front: "assets/pokemon/luminai-line/lusdria-front.png", back: "assets/pokemon/luminai-line/lusdria-back.png" },
-    9401: { front: "assets/pokemon/sombranol-line/sombranol-front.png", back: "assets/pokemon/sombranol-line/sombranol-back.png" },
-    9402: { front: "assets/pokemon/sombranol-line/penumbra-front.png", back: "assets/pokemon/sombranol-line/penumbra-back.png" },
-    9403: { front: "assets/pokemon/sombranol-line/tenebrantor-front.png", back: "assets/pokemon/sombranol-line/tenebrantor-back.png" },
-    9501: { front: "assets/pokemon/chispin-line/chispin-front.png", back: "assets/pokemon/chispin-line/chispin-back.png" },
-    9502: { front: "assets/pokemon/chispin-line/chisporc-front.png", back: "assets/pokemon/chispin-line/chisporc-back.png" },
-    9601: { front: "assets/pokemon/moskito-line/moskito-front.png", back: "assets/pokemon/moskito-line/moskito-back.png" },
-    9602: { front: "assets/pokemon/moskito-line/zumkito-front.png", back: "assets/pokemon/moskito-line/zumkito-back.png" },
-    9603: { front: "assets/pokemon/moskito-line/sanguento-front.png", back: "assets/pokemon/moskito-line/sanguento-back.png" },
-    9701: { front: "assets/pokemon/alua-line/alua-front.png", back: "assets/pokemon/alua-line/alua-back.png" },
-    9702: { front: "assets/pokemon/alua-line/capulua-front.png", back: "assets/pokemon/alua-line/capulua-back.png" },
-    9703: { front: "assets/pokemon/alua-line/maripulua-front.png", back: "assets/pokemon/alua-line/maripulua-back.png" },
-    9801: { front: "assets/pokemon/rubrisma-line/rubrisma-front.png", back: "assets/pokemon/rubrisma-line/rubrisma-back.png" },
-    9802: { front: "assets/pokemon/rubrisma-line/azuranima-front.png", back: "assets/pokemon/rubrisma-line/azuranima-back.png" },
-    9803: { front: "assets/pokemon/serranin-line/serranin-front.png", back: "assets/pokemon/serranin-line/serranin-back.png" },
-    9804: { front: "assets/pokemon/serranin-line/aliolomo-front.png", back: "assets/pokemon/serranin-line/aliolomo-back.png" },
-    9805: { front: "assets/pokemon/cajhumo-line/cajhumo-front.png", back: "assets/pokemon/cajhumo-line/cajhumo-back.png" },
-    9806: { front: "assets/pokemon/rebehielo-line/rebehielo-front.png", back: "assets/pokemon/rebehielo-line/rebehielo-back.png" },
-    9807: { front: "assets/pokemon/rebehielo-line/picorneo-front.png", back: "assets/pokemon/rebehielo-line/picorneo-back.png" },
-    9808: { front: "assets/pokemon/azahin-line/azahin-front.png", back: "assets/pokemon/azahin-line/azahin-back.png" },
-    9809: { front: "assets/pokemon/azahin-line/naranjil-front.png", back: "assets/pokemon/azahin-line/naranjil-back.png" },
-    9810: { front: "assets/pokemon/azahin-line/citrayo-front.png", back: "assets/pokemon/azahin-line/citrayo-back.png" },
-    9811: { front: "assets/pokemon/barbito-line/barbito-front.png", back: "assets/pokemon/barbito-line/barbito-back.png" },
-    9812: { front: "assets/pokemon/barbito-line/barbalto-front.png", back: "assets/pokemon/barbito-line/barbalto-back.png" },
-    9813: { front: "assets/pokemon/ascuero-line/ascuero-front.png", back: "assets/pokemon/ascuero-line/ascuero-back.png" },
-    9814: { front: "assets/pokemon/ascuero-line/tolebrasa-front.png", back: "assets/pokemon/ascuero-line/tolebrasa-back.png" },
-    9815: { front: "assets/pokemon/ascuero-line/matallama-front.png", back: "assets/pokemon/ascuero-line/matallama-back.png" },
-    9901: { front: "assets/pokemon/cucarin-line/cucarin-front.png", back: "assets/pokemon/cucarin-line/cucarin-back.png" },
-    9902: { front: "assets/pokemon/cucarin-line/cucarrox-front.png", back: "assets/pokemon/cucarin-line/cucarrox-back.png" },
-    9903: { front: "assets/pokemon/cucarin-line/cucarrex-front.png", back: "assets/pokemon/cucarin-line/cucarrex-back.png" },
-    9904: { front: "assets/pokemon/burbixir-line/burbixir-front.png", back: "assets/pokemon/burbixir-line/burbixir-back.png" },
-    9905: { front: "assets/pokemon/burbixir-line/toxifizz-front.png", back: "assets/pokemon/burbixir-line/toxifizz-back.png" },
-    9906: { front: "assets/pokemon/alapina-line/alapina-front.png", back: "assets/pokemon/alapina-line/alapina-back.png" },
-    9907: { front: "assets/pokemon/alapina-line/pinorrin-front.png", back: "assets/pokemon/alapina-line/pinorrin-back.png" },
-    9908: { front: "assets/pokemon/alapina-line/conegal-front.png", back: "assets/pokemon/alapina-line/conegal-back.png" },
-    9909: { front: "assets/pokemon/tortihuevo-line/tortihuevo-front.png", back: "assets/pokemon/tortihuevo-line/tortihuevo-back.png" },
-    9910: { front: "assets/pokemon/tortihuevo-line/patatorti-front.png", back: "assets/pokemon/tortihuevo-line/patatorti-back.png" },
-    9911: { front: "assets/pokemon/tortihuevo-line/tortilloro-front.png", back: "assets/pokemon/tortihuevo-line/tortilloro-back.png" },
-    9912: { front: "assets/pokemon/lincacho-line/lincacho-front.png", back: "assets/pokemon/lincacho-line/lincacho-back.png" },
-    9913: { front: "assets/pokemon/lincacho-line/lincebrio-front.png", back: "assets/pokemon/lincacho-line/lincebrio-back.png" },
-    9914: { front: "assets/pokemon/aquachorro-line/aquachorro-front.png", back: "assets/pokemon/aquachorro-line/aquachorro-back.png" },
-    9915: { front: "assets/pokemon/aquachorro-line/hidrocanonazo-front.png", back: "assets/pokemon/aquachorro-line/hidrocanonazo-back.png" },
-    9916: { front: "assets/pokemon/cincco-line/cincco-front.png", back: "assets/pokemon/cincco-line/cincco-back.png" },
-    9917: { front: "assets/pokemon/cincco-line/cincabrio-front.png", back: "assets/pokemon/cincco-line/cincabrio-back.png" },
-    9918: { front: "assets/pokemon/currasma-line/currasma-front.png", back: "assets/pokemon/currasma-line/currasma-back.png" },
-    9919: { front: "assets/pokemon/gazpinito-line/gazpinito-front.png", back: "assets/pokemon/gazpinito-line/gazpinito-back.png" },
-    9920: { front: "assets/pokemon/gazpinito-line/gazpalado-front.png", back: "assets/pokemon/gazpinito-line/gazpalado-back.png" },
-    9921: { front: "assets/pokemon/turistin-line/turistin-front.png", back: "assets/pokemon/turistin-line/turistin-back.png" },
-    9922: { front: "assets/pokemon/turistin-line/turistardo-front.png", back: "assets/pokemon/turistin-line/turistardo-back.png" },
-    9923: { front: "assets/pokemon/turistin-line/turistimo-front.png", back: "assets/pokemon/turistin-line/turistimo-back.png" },
-    9924: { front: "assets/pokemon/freskito-line/freskito-front.png", back: "assets/pokemon/freskito-line/freskito-back.png" },
-    9925: { front: "assets/pokemon/freskito-line/freskon-front.png", back: "assets/pokemon/freskito-line/freskon-back.png" },
-    9926: { front: "assets/pokemon/freskito-line/freskeaire-front.png", back: "assets/pokemon/freskito-line/freskeaire-back.png" },
-    9927: { front: "assets/pokemon/castanin-line/castanin-front.png", back: "assets/pokemon/castanin-line/castanin-back.png" },
-    9928: { front: "assets/pokemon/castanin-line/castanon-front.png", back: "assets/pokemon/castanin-line/castanon-back.png" },
-    9929: { front: "assets/pokemon/cajito-line/cajito-front.png", back: "assets/pokemon/cajito-line/cajito-back.png" },
-    9930: { front: "assets/pokemon/cajito-line/fernacesto-front.png", back: "assets/pokemon/cajito-line/fernacesto-back.png" },
-    9931: { front: "assets/pokemon/heroiny-line/heroiny-front.png", back: "assets/pokemon/heroiny-line/heroiny-back.png" },
-    9932: { front: "assets/pokemon/heroiny-line/diacetyl-front.png", back: "assets/pokemon/heroiny-line/diacetyl-back.png" },
-    9933: { front: "assets/pokemon/cordillo-line/cordillo-front.png", back: "assets/pokemon/cordillo-line/cordillo-back.png" },
-    9934: { front: "assets/pokemon/cordillo-line/rasguelo-front.png", back: "assets/pokemon/cordillo-line/rasguelo-back.png" },
-    9935: { front: "assets/pokemon/cordillo-line/bordonte-front.png", back: "assets/pokemon/cordillo-line/bordonte-back.png" },
-    9936: { front: "assets/pokemon/vaporan-line/vaporan-front.png", back: "assets/pokemon/vaporan-line/vaporan-back.png" },
-    9937: { front: "assets/pokemon/canijo-line/canijo-front.png", back: "assets/pokemon/canijo-line/canijo-back.png" },
-    9938: { front: "assets/pokemon/canijo-line/macarrizo-front.png", back: "assets/pokemon/canijo-line/macarrizo-back.png" },
-    9939: { front: "assets/pokemon/canijo-line/sevillardo-front.png", back: "assets/pokemon/canijo-line/sevillardo-back.png" },
-    9940: { front: "assets/pokemon/cestin-line/cestin-front.png", back: "assets/pokemon/cestin-line/cestin-back.png" },
-    9941: { front: "assets/pokemon/cestin-line/cestaro-front.png", back: "assets/pokemon/cestin-line/cestaro-back.png" },
-    9942: { front: "assets/pokemon/cestin-line/cestarron-front.png", back: "assets/pokemon/cestin-line/cestarron-back.png" },
-    9943: { front: "assets/pokemon/coquinia-line/coquinia-front.png", back: "assets/pokemon/coquinia-line/coquinia-back.png" },
-    9944: { front: "assets/pokemon/coquinia-line/coquiterro-front.png", back: "assets/pokemon/coquinia-line/coquiterro-back.png" },
-    9945: { front: "assets/pokemon/podenin-line/podenin-front.png", back: "assets/pokemon/podenin-line/podenin-back.png" },
-    9946: { front: "assets/pokemon/podenin-line/sevipod-front.png", back: "assets/pokemon/podenin-line/sevipod-back.png" },
-    9947: { front: "assets/pokemon/nazarion-line/nazarion-front.png", back: "assets/pokemon/nazarion-line/nazarion-back.png" },
-    9948: { front: "assets/pokemon/pipator-line/pipator-front.png", back: "assets/pokemon/pipator-line/pipator-back.png" },
-    9949: { front: "assets/pokemon/pipator-line/pipator-comando-front.png", back: "assets/pokemon/pipator-line/pipator-comando-back.png" },
-    9950: { front: "assets/pokemon/pipator-line/pipator-paladin-front.png", back: "assets/pokemon/pipator-line/pipator-paladin-back.png" },
-    9951: { front: "assets/pokemon/culebrin-line/culebrin-front.png", back: "assets/pokemon/culebrin-line/culebrin-back.png" },
-    9952: { front: "assets/pokemon/culebrin-line/maldrina-front.png", back: "assets/pokemon/culebrin-line/maldrina-back.png" },
-    9953: { front: "assets/pokemon/culebrin-line/lumibrina-front.png", back: "assets/pokemon/culebrin-line/lumibrina-back.png" },
-  });
-  const CUSTOM_POKEMON_FRAME_ASSETS = Object.freeze({
-    9101: {
-      front: "assets/pokemon/peyote-line/peyote-idle-front.webp",
-      back: "assets/pokemon/peyote-line/peyote-idle-back.webp",
-    },
-  });
+  const CUSTOM_POKEMON_ASSETS = Object.freeze({});
+  const CUSTOM_POKEMON_FRAME_ASSETS = Object.freeze({});
   const SANPLEDEX_ANIMATION_ASSETS = globalThis.SANPLEDEX_ANIMATION_ASSETS || Object.freeze({});
   const REDUCED_MOTION_QUERY = typeof window.matchMedia === "function"
     ? window.matchMedia("(prefers-reduced-motion: reduce)")
@@ -623,8 +554,8 @@
   const MOVES = {
     tackle: { name: "Placaje", type: "Normal", power: 12, accuracy: 96, delivery: "melee" },
     vineWhip: { name: "Látigo Cepa", type: "Planta", power: 17, accuracy: 94, delivery: "ranged" },
-    scratch: { name: "Arañazo", type: "Normal", power: 13, accuracy: 97, delivery: "melee" },
-    ember: { name: "Ascuas", type: "Fuego", power: 17, accuracy: 94, delivery: "ranged" },
+    scratch: { name: "Arañazo", type: "Normal", power: 13, accuracy: 97, category: "physical", delivery: "melee" },
+    ember: { name: "Ascuas", type: "Fuego", power: 17, accuracy: 94, category: "special", delivery: "ranged" },
     waterGun: { name: "Pistola Agua", type: "Agua", power: 17, accuracy: 94 },
     gust: { name: "Tornado", type: "Volador", power: 14, accuracy: 95, delivery: "ranged" },
     quickAttack: { name: "Ataque Rápido", type: "Normal", power: 15, accuracy: 98 },
@@ -980,7 +911,7 @@
 
   const defaultState = () => ({
     version: 10, mapRevision: MAP_REVISION, started: false, starterChosen: false,
-    doctorPotatoIntroPending: false, doctorPotatoIntroSeen: false,
+    doctorPotatoIntroPending: false, doctorPotatoIntroSeen: true,
     fragmentCinematicSeen: false,
     worldX: NORMAL_START.x, worldY: NORMAL_START.y, direction: NORMAL_START.direction,
     distance: 0, grassDistance: 0, balls: 6, trainerLevel: 1,
@@ -1295,6 +1226,11 @@
   let musicPreviewTrackId = null;
   let lastMusicFocus = null;
   let lastFrameTime = 0;
+  let dayNightSnapshotCache = null;
+  let dayNightSnapshotAt = -Infinity;
+  let dayNightPresentationSignature = "";
+  let dayNightMusicPhase = null;
+  let dayNightMusicSyncPending = false;
   let animationTime = 0;
   let animationPhase = 0;
   let animationFrame = 0;
@@ -1347,6 +1283,7 @@
   let starterIntroActive = false;
   let fragmentCinematicActive = false;
   let doctorPotatoScene = null;
+  let mapOpeningScene = null;
   let mapEventRunning = false;
   let lastStepEventTile = "";
   let entranceTileIndex = new Map();
@@ -1387,8 +1324,8 @@
   };
 
   const playerSheet = new Image();
-  const npcSheet = new Image();
-  const guideNpcSheet = new Image();
+  const playerOpeningSheets = Object.freeze({ fainted: new Image(), gettingUp: new Image() });
+  const playerOpeningFrames = { fainted: [], gettingUp: [] };
   const npcRosterSheets = new Map();
   const cityMapPreview = new Image();
   const cityNavigationMask = new Image();
@@ -1450,32 +1387,29 @@
   const MAP_PREFETCH_MARGIN = Number(CITY_MAP.prefetchMargin) || 64;
   const MAP_UNLOAD_MARGIN = Number(CITY_MAP.unloadMargin) || 160;
   const MAP_UNLOAD_DELAY_MS = Number(CITY_MAP.unloadDelayMs) || 500;
+  const MAP_STREAMING_QUANTUM = Math.max(32, Number(CITY_MAP.tileSize) * 2 || 64);
+  const MAP_STREAMING_MAX_INTERVAL_MS = 100;
+  const NPC_ROSTER_CACHE_LIMIT = 24;
   const shadowStalkerImage = new Image();
   const prismPortalFragmentsImage = new Image();
   const itemImages = new Map();
   const pokemonArtworkImages = new Map();
+  const pokemonAssetLoadability = new Map();
   const horrorAudio = Object.fromEntries(Object.entries(HORROR_AUDIO_URLS).map(([key, url]) => {
-    const audio = new Audio(url);
-    audio.preload = "auto";
+    const audio = new Audio();
+    audio.preload = "none";
+    audio.src = url;
     audio.loop = key === "chase" || key === "breathing";
     return [key, audio];
   }));
   const dialogMusicAudio = new Audio();
-  dialogMusicAudio.preload = "auto";
+  dialogMusicAudio.preload = "metadata";
   dialogMusicAudio.loop = true;
   dialogMusicAudio.volume = .72;
   let loadedDialogMusicMediaSource = null;
-  let loadedDialogMusicSource = null;
-  let pendingDialogMusicSource = null;
-  let dialogMusicBuffer = null;
-  let dialogMusicBufferPromise = null;
-  let dialogMusicSourceNode = null;
-  let dialogMusicGainNode = null;
   let activeDialogMusicSource = null;
   const activeScareClips = new Set();
   let playerSheetReady = false;
-  let npcSheetReady = false;
-  let guideNpcSheetReady = false;
   let cityMapPreviewReady = false;
   let cityNavigationMaskReady = false;
   let cityNavigationMaskData = null;
@@ -1484,6 +1418,8 @@
   let grassDirtTilesetReady = false;
   let roadSidewalkTilesetReady = false;
   let lastMapCameraSample = { x: camera.x, y: camera.y, time: 0 };
+  let lastMapStreamingSignature = "";
+  let lastMapStreamingUpdateAt = 0;
   let shadowStalkerReady = false;
   const defaultMapTiles = new Map();
   const tileOverrides = new Map();
@@ -1526,6 +1462,8 @@
     perspectiveGateGuide: $("#perspectiveGateGuide"), perspectiveGateGuideDistance: $("#perspectiveGateGuideDistance"),
     perspectiveGateAnnouncer: $("#perspectiveGateAnnouncer"),
     areaToast: $("#areaToast"), flashOverlay: $("#flashOverlay"), areaName: $("#areaName"),
+    dayNightStatus: $("#dayNightStatus"), dayNightIcon: $("#dayNightIcon"),
+    dayNightLabel: $("#dayNightLabel"), dayNightClock: $("#dayNightClock"),
     trainerLevel: $("#trainerLevel"), ballCount: $("#ballCount"), caughtCount: $("#caughtCount"),
     questPill: $("#questPill"), dialogBox: $("#dialogBox"), dialogAvatar: $("#dialogAvatar"),
     dialogSpeaker: $("#dialogSpeaker"), dialogText: $("#dialogText"),
@@ -1623,6 +1561,11 @@
   }
 
   function updateFullscreenButton() {
+    const supported = typeof document.documentElement.requestFullscreen === "function"
+      && typeof document.exitFullscreen === "function";
+    elements.fullscreenButton.hidden = !supported;
+    elements.fullscreenButton.disabled = !supported;
+    if (!supported) return;
     const fullscreen = Boolean(document.fullscreenElement);
     elements.fullscreenButton.textContent = fullscreen ? "↙" : "⛶";
     elements.fullscreenButton.title = fullscreen ? "Salir de pantalla completa" : "Pantalla completa";
@@ -1732,8 +1675,8 @@
     const goal = cells[0];
     const monster = cells.find((cell) => cell.distance > goal.distance * .58 && Math.abs(cell.x - goal.x) + Math.abs(cell.y - goal.y) > 8) || cells[Math.floor(cells.length * .18)];
     const goalPath = [{ x: goal.x, y: goal.y }];
-    while (goalPath.length && (goalPath.at(-1).x !== start.x || goalPath.at(-1).y !== start.y)) {
-      const current = goalPath.at(-1);
+    while (goalPath.length && (goalPath[goalPath.length - 1].x !== start.x || goalPath[goalPath.length - 1].y !== start.y)) {
+      const current = goalPath[goalPath.length - 1];
       const currentDistance = distances.get(`${current.x},${current.y}`);
       const previous = [[1,0],[-1,0],[0,1],[0,-1]]
         .map(([dx, dy]) => ({ x: current.x + dx, y: current.y + dy }))
@@ -2357,15 +2300,22 @@
     document.documentElement.dataset.perspectiveGateGuide = near ? "near" : "visible";
     perspectiveGateGuideSignature = signature;
   }
-  function moveDelivery(move) { return move?.delivery === "ranged" ? "ranged" : "melee"; }
+  function moveAnimationKind(move) {
+    if (move?.category === "special") return "special";
+    if (move?.category === "physical") return "physical";
+    return move?.delivery === "ranged" ? "special" : "physical";
+  }
   function customPokemonAnimation(id) { return SANPLEDEX_ANIMATION_ASSETS[Number(id)] || null; }
-  function customPokemonAttackAnimation(id, variant = "melee") {
-    return customPokemonAnimation(id)?.attacks?.[variant] || null;
+  function customPokemonAttackAnimation(id, variant = "physical") {
+    const attacks = customPokemonAnimation(id)?.attacks;
+    if (!attacks) return null;
+    const legacyVariant = variant === "special" ? "ranged" : "melee";
+    return attacks[variant] || attacks[legacyVariant] || null;
   }
   function customPokemonFrameAsset(id, state = "idle", view = "front", variant = null) {
-    if (prefersReducedMotion()) return null;
     if (state === "front" || state === "back") { view = state; state = "idle"; }
     const animation = customPokemonAnimation(id);
+    if (prefersReducedMotion() && !animation?.animationOnly) return null;
     if (animation) {
       if (state === "attack" && variant) {
         return customPokemonAttackAnimation(id, variant)?.[view]
@@ -2383,12 +2333,16 @@
   }
   function imageCanLoad(src) {
     if (!src) return Promise.resolve(false);
-    return new Promise((resolve) => {
+    const cached = pokemonAssetLoadability.get(src);
+    if (cached) return cached;
+    const pending = new Promise((resolve) => {
       const image = new Image();
       image.onload = () => resolve(true);
       image.onerror = () => resolve(false);
       image.src = src;
     });
+    pokemonAssetLoadability.set(src, pending);
+    return pending;
   }
   function customPokemonAttack(id) { return CUSTOM_POKEMON_ATTACKS[Number(id)] || null; }
   function customAttackStyle(profile) {
@@ -2396,7 +2350,7 @@
     const [mouthX = "50%", mouthY = "50%"] = String(profile.mouth || "50% 50%").split(" ");
     return `--attack-x:${profile.x};--attack-y:${profile.y};--attack-turn:${profile.turn};--attack-scale:${profile.scale};--mouth-x:${mouthX};--mouth-y:${mouthY};`;
   }
-  function isCustomPokemon(id) { return Boolean(CUSTOM_POKEMON_ASSETS[id]); }
+  function isCustomPokemon(id) { return Boolean(customPokemonAnimation(id) || CUSTOM_POKEMON_ASSETS[id]); }
   function isPetrillo(id) { return Number(id) === PETRILLO_ID; }
   function setBattlePokemonMotion(element, id, view = "front") {
     const motion = CUSTOM_POKEMON_MOTIONS[Number(id)];
@@ -2419,10 +2373,13 @@
       ["--attack-x", "--attack-shift-x", "--attack-y", "--attack-turn", "--attack-scale"].forEach((name) => element.style.removeProperty(name));
     }
   }
-  function artworkUrl(id) { return customPokemonAsset(id) || ""; }
-  function iconUrl(id) { return customPokemonAsset(id) || ""; }
-  function frontSpriteUrl(id) { return customPokemonFrameAsset(id) || customPokemonAsset(id) || ""; }
-  function backSpriteUrl(id) { return customPokemonFrameAsset(id, "back") || customPokemonAsset(id, "back") || ""; }
+  function pokemonIdleAsset(id, view = "front") {
+    return customPokemonFrameAsset(id, "idle", view) || customPokemonAsset(id, view) || "";
+  }
+  function artworkUrl(id) { return pokemonIdleAsset(id) || ""; }
+  function iconUrl(id) { return pokemonIdleAsset(id) || ""; }
+  function frontSpriteUrl(id) { return pokemonIdleAsset(id, "front"); }
+  function backSpriteUrl(id) { return pokemonIdleAsset(id, "back"); }
   function itemSpriteUrl(name) { return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${name}.png`; }
   function currentWorldWidth() { return state.interior ? INDOOR_WORLD_WIDTH : (state.dimension === "prism" ? PRISM_WIDTH : WORLD_WIDTH); }
   function currentWorldHeight() { return state.interior ? INDOOR_WORLD_HEIGHT : (state.dimension === "prism" ? PRISM_HEIGHT : WORLD_HEIGHT); }
@@ -2585,13 +2542,18 @@
     image.src = worldAssetUrl(source);
   }
 
+  function visibleWorldAssetsForLoad() {
+    const bounds = visibleBounds(Math.max(MAP_PREFETCH_MARGIN, 192));
+    return cityWorldAssets.filter((asset) => !editorHiddenEntities.has(`asset:${asset.id}`) && worldAssetInView(asset, bounds));
+  }
+
   function loadCityWorldAssets() {
-    cityWorldAssets.forEach(ensureCityWorldAssetImage);
+    visibleWorldAssetsForLoad().forEach(ensureCityWorldAssetImage);
     updateWorldAssetDataset();
   }
 
   function worldAssetsReady() {
-    const expected = new Set(cityWorldAssets.map(worldAssetSource).filter(Boolean));
+    const expected = new Set(visibleWorldAssetsForLoad().map(worldAssetSource).filter(Boolean));
     return [...expected].every((source) => cityWorldAssetImages.get(source)?.ready);
   }
 
@@ -2606,7 +2568,7 @@
     const interior = cityEntrances
       .map((door) => NPC_DEFS[door.npc]?.sprite)
       .filter((sprite) => typeof sprite === "string" && NPC_ROSTER_SHEET_URLS[sprite]);
-    return new Set([...interior, ...exterior, "doctor-potato"]);
+    return new Set([...interior, ...exterior, ...(DOCTOR_POTATO_ENABLED ? ["doctor-potato"] : [])]);
   }
 
   function updateNpcDeploymentDataset() {
@@ -2621,27 +2583,69 @@
     const records = [...npcRosterSheets.values()];
     const ready = records.filter((record) => record.ready).length;
     const failed = records.filter((record) => record.failed).length;
-    document.documentElement.dataset.npcRosterCount = String(records.length);
+    const total = Object.keys(NPC_ROSTER_SHEET_URLS).length;
+    document.documentElement.dataset.npcRosterCount = String(total);
     document.documentElement.dataset.npcRosterLoaded = String(ready);
-    document.documentElement.dataset.npcRosterReady = failed ? "error" : (ready === records.length ? "true" : "loading");
-    const doctorPotato = npcRosterSheets.get("doctor-potato");
-    document.documentElement.dataset.doctorPotatoSpriteReady = doctorPotato?.failed
+    document.documentElement.dataset.npcRosterReady = failed
       ? "error"
-      : String(Boolean(doctorPotato?.ready));
+      : (ready === total ? "true" : (records.length ? "partial" : "deferred"));
+    const doctorPotato = DOCTOR_POTATO_ENABLED ? npcRosterSheets.get("doctor-potato") : null;
+    document.documentElement.dataset.doctorPotatoSpriteReady = DOCTOR_POTATO_ENABLED
+      ? (doctorPotato?.failed ? "error" : String(Boolean(doctorPotato?.ready)))
+      : "disabled";
     updateNpcDeploymentDataset();
   }
 
-  function loadNpcRosterSprites() {
-    Object.entries(NPC_ROSTER_SHEET_URLS).forEach(([id, source]) => {
-      const image = new Image();
-      const record = { image, ready: false, failed: false };
-      npcRosterSheets.set(id, record);
-      image.onload = () => { record.ready = true; record.failed = false; updateNpcRosterDataset(); };
-      image.onerror = () => { record.ready = false; record.failed = true; updateNpcRosterDataset(); };
-      image.decoding = "async";
-      image.src = source;
-    });
+  function ensureNpcRosterSprite(spriteId) {
+    const source = NPC_ROSTER_SHEET_URLS[spriteId];
+    if (!source) return null;
+    const existing = npcRosterSheets.get(spriteId);
+    if (existing) {
+      existing.lastUsedAt = performance.now();
+      return existing;
+    }
+    const image = new Image();
+    const record = { image, ready: false, failed: false, lastUsedAt: performance.now() };
+    npcRosterSheets.set(spriteId, record);
+    image.onload = () => { record.ready = true; record.failed = false; updateNpcRosterDataset(); };
+    image.onerror = () => { record.ready = false; record.failed = true; updateNpcRosterDataset(); };
+    image.decoding = "async";
+    image.src = source;
     updateNpcRosterDataset();
+    return record;
+  }
+
+  function trimNpcRosterCache(keepIds = new Set()) {
+    if (npcRosterSheets.size <= NPC_ROSTER_CACHE_LIMIT) return;
+    const candidates = [...npcRosterSheets.entries()]
+      .filter(([spriteId, record]) => !keepIds.has(spriteId) && (record.ready || record.failed))
+      .sort((left, right) => left[1].lastUsedAt - right[1].lastUsedAt);
+    while (npcRosterSheets.size > NPC_ROSTER_CACHE_LIMIT && candidates.length) {
+      const [spriteId, record] = candidates.shift();
+      record.image.onload = null;
+      record.image.onerror = null;
+      record.image.removeAttribute("src");
+      npcRosterSheets.delete(spriteId);
+    }
+    updateNpcRosterDataset();
+  }
+
+  function loadNpcRosterSprites(spriteIds = []) {
+    spriteIds.forEach(ensureNpcRosterSprite);
+    updateNpcRosterDataset();
+  }
+
+  function loadPrismAssets() {
+    if (!shadowStalkerImage.getAttribute("src")) {
+      shadowStalkerImage.decoding = "async";
+      shadowStalkerImage.onload = () => { shadowStalkerReady = true; };
+      shadowStalkerImage.onerror = () => { shadowStalkerReady = false; };
+      shadowStalkerImage.src = SHADOW_SPRITE_URL;
+    }
+    if (!prismPortalFragmentsImage.getAttribute("src")) {
+      prismPortalFragmentsImage.decoding = "async";
+      prismPortalFragmentsImage.src = PRISM_PORTAL_FRAGMENTS_URL;
+    }
   }
 
   function loadAssets() {
@@ -2656,10 +2660,21 @@
     }
     playerSheet.onload = () => { buildPlayerFrames(); playerSheetReady = true; updateAssetNotice(); };
     playerSheet.onerror = () => { playerSheetReady = false; elements.assetNotice.textContent = "Personaje en modo alternativo"; };
-    npcSheet.onload = () => { npcSheetReady = true; };
-    npcSheet.onerror = () => { npcSheetReady = false; };
-    guideNpcSheet.onload = () => { guideNpcSheetReady = true; updateAssetNotice(); };
-    guideNpcSheet.onerror = () => { guideNpcSheetReady = false; elements.assetNotice.textContent = "NPC en modo alternativo"; };
+    if (MAP_OPENING) {
+      document.documentElement.dataset.playerOpeningAssetsReady = "loading";
+      Object.entries(playerOpeningSheets).forEach(([kind, image]) => {
+        image.decoding = "async";
+        image.onload = () => buildPlayerOpeningFrames(kind, image);
+        image.onerror = () => {
+          playerOpeningFrames[kind] = [];
+          document.documentElement.dataset.playerOpeningAssetsReady = "error";
+          console.warn(`No se pudo cargar la animación PixelLab de apertura: ${kind}.`);
+        };
+        image.src = PLAYER_OPENING_SHEET_URLS[kind];
+      });
+    } else {
+      document.documentElement.dataset.playerOpeningAssetsReady = "unused";
+    }
     cityMapPreview.onload = () => { cityMapPreviewReady = true; updateMapTileStreaming(); updateAssetNotice(); };
     cityMapPreview.onerror = () => { cityMapPreviewReady = false; elements.assetNotice.textContent = "No se pudo cargar la vista previa del mapa"; };
     cityNavigationMask.onload = () => { buildNavigationMaskData(); updateAssetNotice(); };
@@ -2695,11 +2710,7 @@
     grassDirtTilesetImage.onerror = () => { grassDirtTilesetReady = false; document.documentElement.dataset.pathTexturesReady = "error"; };
     roadSidewalkTilesetImage.onload = () => { roadSidewalkTilesetReady = true; updatePathTextureDataset(); };
     roadSidewalkTilesetImage.onerror = () => { roadSidewalkTilesetReady = false; document.documentElement.dataset.pathTexturesReady = "error"; };
-    shadowStalkerImage.onload = () => { shadowStalkerReady = true; };
-    shadowStalkerImage.onerror = () => { shadowStalkerReady = false; };
     playerSheet.src = PLAYER_SHEET_URL;
-    npcSheet.src = NPC_SHEET_URL;
-    guideNpcSheet.src = GUIDE_NPC_SHEET_URL;
     loadNpcRosterSprites();
     cityMapPreview.decoding = "async";
     cityMapPreview.src = CITY_MAP.previewImage;
@@ -2723,9 +2734,6 @@
     roadSidewalkTilesetImage.src = "assets/generated/san-pablo-derived/tileset-road-sidewalk.png?v=1";
     loadCityWorldAssets();
     updateMapTileStreaming();
-    shadowStalkerImage.src = SHADOW_SPRITE_URL;
-    prismPortalFragmentsImage.src = PRISM_PORTAL_FRAGMENTS_URL;
-    Object.values(horrorAudio).forEach((audio) => audio.load());
   }
 
   function updateAssetNotice() {
@@ -2736,7 +2744,7 @@
       : !(CITY_MAP.tiles || []).length;
     document.documentElement.dataset.cityMapReady = visibleReady ? "true" : "loading";
     const failedAssets = [...cityWorldAssetImages.values()].filter((record) => record.failed).length;
-    if (visibleReady && playerSheetReady && guideNpcSheetReady && worldAssetsReady() && encounterGrassReady()) elements.assetNotice.classList.add("hidden");
+    if (visibleReady && playerSheetReady && worldAssetsReady() && encounterGrassReady()) elements.assetNotice.classList.add("hidden");
     else if (!visibleReady && state.started && state.dimension === "san_pablo" && !state.interior) {
       elements.assetNotice.textContent = `Cargando mapa HD visible… ${readyCount}/${visibleIds.length}`;
       elements.assetNotice.classList.remove("hidden");
@@ -2781,6 +2789,8 @@
     [...cityMapTileCache.keys()].forEach(releaseMapTile);
     cityMapVisibleTileIds.clear();
     lastMapCameraSample = { x: camera.x, y: camera.y, time: 0 };
+    lastMapStreamingSignature = "";
+    lastMapStreamingUpdateAt = 0;
     updateMapStreamingDataset();
   }
 
@@ -2957,11 +2967,18 @@
     const outsideCity = !state.started || state.dimension !== "san_pablo" || Boolean(state.interior)
       || elements.worldScreen.classList.contains("hidden");
     if (outsideCity) {
-      releaseAllMapTiles();
+      if (cityMapTileCache.size || cityMapVisibleTileIds.size || lastMapStreamingSignature) releaseAllMapTiles();
       return;
     }
 
     const view = mapViewportBounds(renderScale);
+    const streamingSignature = `${Math.floor(view.left / MAP_STREAMING_QUANTUM)}:${Math.floor(view.top / MAP_STREAMING_QUANTUM)}`
+      + `:${Math.floor(view.right / MAP_STREAMING_QUANTUM)}:${Math.floor(view.bottom / MAP_STREAMING_QUANTUM)}`;
+    if (streamingSignature === lastMapStreamingSignature
+      && now - lastMapStreamingUpdateAt < MAP_STREAMING_MAX_INTERVAL_MS) return;
+    lastMapStreamingSignature = streamingSignature;
+    lastMapStreamingUpdateAt = now;
+    loadCityWorldAssets();
     const elapsedSeconds = lastMapCameraSample.time ? clamp((now - lastMapCameraSample.time) / 1000, .001, .25) : 0;
     const velocityX = elapsedSeconds ? (camera.x - lastMapCameraSample.x) / elapsedSeconds : 0;
     const velocityY = elapsedSeconds ? (camera.y - lastMapCameraSample.y) / elapsedSeconds : 0;
@@ -3043,8 +3060,8 @@
     if (typeof value !== "string" || !value) return null;
     const parts = value.split(GROUND_LAYER_SEPARATOR);
     if (parts.length > 2) return null;
-    const isBase = (entry) => Object.hasOwn(GROUND_PALETTE_INDEX, entry);
-    const isInterior = (entry) => Object.hasOwn(INTERIOR_FLOOR_SOURCES, entry);
+    const isBase = (entry) => owns(GROUND_PALETTE_INDEX, entry);
+    const isInterior = (entry) => owns(INTERIOR_FLOOR_SOURCES, entry);
     const isPath = (entry) => entry.startsWith(GROUND_PATH_PREFIX) && isBase(entry.slice(GROUND_PATH_PREFIX.length));
     if (parts.length === 1) {
       if (isBase(parts[0])) return { base: parts[0], path: null };
@@ -3847,6 +3864,22 @@
     return canvas;
   }
 
+  function buildPlayerOpeningFrames(kind, image) {
+    const sourceSize = image.naturalHeight;
+    const frameCount = sourceSize > 0 ? Math.floor(image.naturalWidth / sourceSize) : 0;
+    playerOpeningFrames[kind] = Array.from({ length: frameCount }, (_, index) => {
+      const canvas = createPlayerFrameCanvas();
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      context.drawImage(image, index * sourceSize, 0, sourceSize, sourceSize, 0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE);
+      return canvas;
+    });
+    document.documentElement.dataset.playerOpeningAnimationSource = "pixellab:b96197cb-8527-4fdf-bd6d-d48c01c41804:south-west";
+    document.documentElement.dataset[`playerOpening${kind === "gettingUp" ? "GettingUp" : "Fainted"}Frames`] = String(frameCount);
+    document.documentElement.dataset.playerOpeningAssetsReady = String(
+      playerOpeningFrames.fainted.length > 0 && playerOpeningFrames.gettingUp.length > 0,
+    );
+  }
+
   function resetPlayerAnimation() {
     animationFrame = 0;
     animationTime = 0;
@@ -4040,6 +4073,18 @@
     renderPlayerAnimationDebugAtlas();
   }
 
+  function hasBuildingEditor() {
+    return Boolean(elements.buildingEditor && elements.buildingEditorButton);
+  }
+
+  function isBuildingEditorOpen() {
+    return Boolean(elements.buildingEditor?.classList.contains("open"));
+  }
+
+  function setBuildingEditorDisabled(disabled) {
+    if (elements.buildingEditorButton) elements.buildingEditorButton.disabled = Boolean(disabled);
+  }
+
   function enterWorldForBuildingEditor() {
     const titleVisible = !elements.titleScreen.classList.contains("hidden");
     const starterIntroVisible = !elements.starterIntroScreen.classList.contains("hidden");
@@ -4066,7 +4111,7 @@
   }
 
   function openBuildingEditor() {
-    if (!developerEditorEnabled) return;
+    if (!developerEditorEnabled || !hasBuildingEditor() || !elements.editorScrim) return;
     closeMusicLibrary(false);
     editorReturnFocus = document.activeElement;
     enterWorldForBuildingEditor();
@@ -4090,10 +4135,16 @@
   }
 
   function closeBuildingEditorPanel() {
-    const wasOpen = elements.buildingEditor.classList.contains("open");
+    if (!elements.buildingEditor) {
+      editorCameraActive = false;
+      editorTerrainPreview = [];
+      editorMarquee = null;
+      return;
+    }
+    const wasOpen = isBuildingEditorOpen();
     elements.buildingEditor.classList.remove("open");
     elements.buildingEditor.setAttribute("aria-hidden", "true");
-    elements.editorScrim.classList.add("hidden");
+    elements.editorScrim?.classList.add("hidden");
     editorCameraActive = false;
     editorTerrainPreview = [];
     editorMarquee = null;
@@ -4105,6 +4156,7 @@
   }
 
   function updateTileEditorInfo() {
+    if (!elements.tileEditorHint || !elements.tileSelectionInfo) return;
     const labels = { inherit: "Valor original", walkable: "Transitable", blocked: "Bloqueada", door: "Puerta", encounter: "Hierba / encuentro", event: "Evento" };
     elements.tileEditorHint.textContent = `Modo actual: ${labels[selectedTileType]}`;
     $$('[data-tile-type]').forEach((button) => button.classList.toggle("selected", button.dataset.tileType === selectedTileType));
@@ -4119,7 +4171,7 @@
   }
 
   function handleMapEditorClick(event) {
-    if (!elements.buildingEditor.classList.contains("open")) return;
+    if (!isBuildingEditorOpen()) return;
     if (window.PokemonMapEditor?.consumeLegacyClick?.(event)) return;
     const rect = elements.canvas.getBoundingClientRect();
     const worldX = camera.x + (event.clientX - rect.left) * (VIEW_WIDTH / rect.width);
@@ -4326,7 +4378,15 @@
 
   function loadGame() {
     try {
-      const raw = window.localStorage.getItem(SAVE_KEY);
+      let raw = null;
+      try {
+        raw = window.localStorage.getItem(SAVE_KEY);
+      } catch (error) {
+        console.warn("El almacenamiento local no está disponible; se intentará recuperar la copia de esta pestaña.", error);
+      }
+      if (!raw) {
+        try { raw = window.sessionStorage.getItem(SAVE_TRANSFER_BACKUP_KEY); } catch { /* opcional */ }
+      }
       if (!raw) return false;
       const saved = JSON.parse(raw);
       const savedMapId = MAP_REGISTRY.resolve(saved.mapId || MAP_REGISTRY.defaultMapId);
@@ -4349,6 +4409,10 @@
       next.gifts = saved.gifts && typeof saved.gifts === "object" ? { ...saved.gifts } : {};
       next.doctorPotatoIntroSeen = Boolean(saved.doctorPotatoIntroSeen || next.gifts.doctorPotato);
       next.doctorPotatoIntroPending = Boolean(saved.doctorPotatoIntroPending) && !next.doctorPotatoIntroSeen;
+      if (!DOCTOR_POTATO_ENABLED || MAP_OPENING?.skipDoctorPotato) {
+        next.doctorPotatoIntroPending = false;
+        next.doctorPotatoIntroSeen = true;
+      }
       next.fragmentCinematicSeen = Boolean(saved.fragmentCinematicSeen);
       next.inventory = { ...defaultState().inventory, ...(saved.inventory || {}) };
       const savedPrismProgress = saved.prismProgress && typeof saved.prismProgress === "object"
@@ -4441,15 +4505,30 @@
   }
 
   function saveGame(showConfirmation = false) {
-    if (!state.started) return;
+    if (!state.started) return false;
+    const serialized = JSON.stringify(state);
+    let persisted = false;
+    const errors = [];
     try {
-      window.localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      window.localStorage.setItem(SAVE_KEY, serialized);
+      persisted = true;
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      window.sessionStorage.setItem(SAVE_TRANSFER_BACKUP_KEY, serialized);
+      persisted = true;
+    } catch (error) {
+      errors.push(error);
+    }
+    if (persisted) {
       showSaveStatus();
       if (showConfirmation) showDialog(["Partida guardada en este navegador."], "✓");
-    } catch (error) {
-      console.warn("No se pudo guardar la partida.", error);
+    } else {
+      console.warn("No se pudo guardar la partida.", ...errors);
       if (showConfirmation) showDialog(["No ha sido posible guardar la partida."], "!");
     }
+    return persisted;
   }
 
   function showSaveStatus() {
@@ -4476,7 +4555,7 @@
   }
 
   function startNewGame() {
-    if (ACTIVE_MAP_ID !== MAP_REGISTRY.defaultMapId) {
+    if (ACTIVE_MAP_ID !== MAP_REGISTRY.defaultMapId && !MAP_OPENING?.startNewGameHere) {
       try {
         window.localStorage.removeItem(SAVE_KEY);
         window.sessionStorage.setItem("pokemon-new-game", "1");
@@ -4484,14 +4563,14 @@
       window.location.assign(mapNavigationUrl(MAP_REGISTRY.defaultMapId));
       return;
     }
-    primeDialogMusic(DOCTOR_POTATO_THEME_URL);
+    if (DOCTOR_POTATO_ENABLED) primeDialogMusic(DOCTOR_POTATO_THEME_URL);
     if (VOICE_NPC_ENABLED) requestVoiceNpcAccess();
     requestGameFullscreen();
     fragmentCinematicActive = false;
     elements.fragmentCinematicVideo.pause();
     elements.fragmentCinematicScreen.classList.add("hidden");
     doctorPotatoScene = null;
-    document.documentElement.dataset.doctorPotatoScene = "idle";
+    document.documentElement.dataset.doctorPotatoScene = DOCTOR_POTATO_ENABLED ? "idle" : "disabled";
     elements.worldScreen.classList.remove("cinematic-dialog");
     state = defaultState();
     elements.starterModal.classList.remove("hidden");
@@ -4516,12 +4595,16 @@
   function showStarterIntro(id) {
     starterIntroActive = true;
     stopBackgroundMusic();
+    if (MAP_OPENING?.skipStarterVideo) {
+      finishStarterIntro();
+      return;
+    }
     elements.titleScreen.classList.add("hidden");
     elements.worldScreen.classList.add("hidden");
     elements.battleScreen.classList.add("hidden");
     elements.starterIntroScreen.classList.remove("hidden");
     elements.playStarterIntro.classList.add("hidden");
-    elements.starterIntroStatus.textContent = `${POKEMON[id].name} te acompañará por las calles de San Pablo.`;
+    elements.starterIntroStatus.textContent = `${POKEMON[id].name} te acompañará por las calles de ${CITY_MAP.name || "la ciudad"}.`;
     elements.starterIntroVideo.muted = !state.sound;
     try { elements.starterIntroVideo.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
     const playback = elements.starterIntroVideo.play();
@@ -4596,22 +4679,104 @@
     ], "◇", () => showAreaToast("PORTAL PRISMA DESBLOQUEADO"));
   }
 
+  function mapOpeningTiming(name, fallback) {
+    const value = Number(MAP_OPENING?.timing?.[name]);
+    return Number.isFinite(value) && value >= 0 ? value : fallback;
+  }
+
+  function setMapOpeningPhase(phase) {
+    if (!mapOpeningScene || mapOpeningScene.phase === phase) return;
+    mapOpeningScene.phase = phase;
+    mapOpeningScene.phaseStartedAt = mapOpeningScene.elapsed;
+    document.documentElement.dataset.mapOpeningScene = phase;
+    if (phase === "startled") {
+      playTone(740, .07, "square", .025);
+      void playWorldVibration(170, .28);
+    }
+  }
+
+  function completeMapOpeningSequence() {
+    if (!mapOpeningScene) return;
+    const { onComplete } = mapOpeningScene;
+    const openingId = String(MAP_OPENING?.id || "map-opening");
+    mapOpeningScene = null;
+    elements.flashOverlay.classList.remove("wake-from-unconscious");
+    state.direction = "down";
+    playerAnimationDirection = MAP_OPENING?.player?.standingDirection === "down-left" ? "down-left" : "down";
+    preferredMovementDirection = state.direction;
+    resetPlayerAnimation();
+    if (!LOCAL_DEBUG_MAP_OPENING && !state.triggeredEvents.includes(openingId)) state.triggeredEvents.push(openingId);
+    inputLocked = false;
+    document.documentElement.dataset.mapOpeningScene = "complete";
+    document.documentElement.dataset.mapOpeningThieves = "hidden";
+    if (!LOCAL_DEBUG_MAP_OPENING) saveGame();
+    if (typeof onComplete === "function") onComplete();
+  }
+
+  function updateMapOpeningSequence(deltaSeconds) {
+    if (!mapOpeningScene || deltaSeconds <= 0) return;
+    const scene = mapOpeningScene;
+    scene.elapsed += deltaSeconds * 1000;
+    const faintedEnd = mapOpeningTiming("faintedMs", 2300);
+    const gettingUpEnd = faintedEnd + mapOpeningTiming("gettingUpMs", 1600);
+    const startledEnd = gettingUpEnd + mapOpeningTiming("startledMs", 560);
+    const fleeEnd = startledEnd + mapOpeningTiming("fleeMs", 2100);
+    if (scene.elapsed < faintedEnd) setMapOpeningPhase("fainted");
+    else if (scene.elapsed < gettingUpEnd) setMapOpeningPhase("getting-up");
+    else if (scene.elapsed < startledEnd) setMapOpeningPhase("startled");
+    else if (scene.elapsed < fleeEnd) setMapOpeningPhase("fleeing");
+    else completeMapOpeningSequence();
+  }
+
+  function startMapOpeningSequence(onComplete) {
+    const openingId = String(MAP_OPENING?.id || "");
+    if (!MAP_OPENING || !openingId || mapOpeningScene || !state.started || state.interior || state.dimension !== "san_pablo") return false;
+    if (!LOCAL_DEBUG_MAP_OPENING && state.triggeredEvents.includes(openingId)) return false;
+    const player = MAP_OPENING.player || {};
+    state.worldX = clamp(Number(player.x) || NORMAL_START.x, 35, WORLD_WIDTH - 35);
+    state.worldY = clamp(Number(player.y) || NORMAL_START.y, 45, WORLD_HEIGHT - 30);
+    state.direction = "down";
+    playerAnimationDirection = "down-left";
+    preferredMovementDirection = state.direction;
+    camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, Math.max(0, WORLD_WIDTH - VIEW_WIDTH));
+    camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, Math.max(0, WORLD_HEIGHT - VIEW_HEIGHT));
+    clearDirectionalInput();
+    resetPlayerMotion();
+    resetPlayerAnimation();
+    inputLocked = true;
+    mapOpeningScene = { elapsed: 0, phase: "fainted", phaseStartedAt: 0, onComplete };
+    (MAP_OPENING.thieves || []).forEach((thief) => ensureNpcRosterSprite(thief.sprite));
+    document.documentElement.dataset.mapOpeningScene = "fainted";
+    document.documentElement.dataset.mapOpeningDirection = String(player.faintedDirection || "south-west");
+    document.documentElement.dataset.mapOpeningThieves = String((MAP_OPENING.thieves || []).length);
+    const overlay = elements.flashOverlay;
+    overlay.classList.remove("fade", "encounter", "wake-from-unconscious");
+    void overlay.offsetWidth;
+    overlay.style.setProperty("--wake-duration", `${mapOpeningTiming("fadeMs", 2400)}ms`);
+    overlay.classList.add("wake-from-unconscious");
+    return true;
+  }
+
   function beginWorldEvents(onComplete) {
-    const afterDoctorPotato = () => {
-      if (!startFragmentCinematic() && typeof onComplete === "function") onComplete();
+    const afterMapOpening = () => {
+      const afterDoctorPotato = () => {
+        if (!startFragmentCinematic() && typeof onComplete === "function") onComplete();
+      };
+      if (DOCTOR_POTATO_ENABLED && !MAP_OPENING?.skipDoctorPotato && startDoctorPotatoIntro(afterDoctorPotato)) return;
+      afterDoctorPotato();
     };
-    if (!startDoctorPotatoIntro(afterDoctorPotato)) afterDoctorPotato();
+    if (!startMapOpeningSequence(afterMapOpening)) afterMapOpening();
   }
 
   function finishStarterIntro() {
     if (!starterIntroActive) return;
-    primeDialogMusic(DOCTOR_POTATO_THEME_URL);
+    if (DOCTOR_POTATO_ENABLED && !MAP_OPENING?.skipDoctorPotato) primeDialogMusic(DOCTOR_POTATO_THEME_URL);
     starterIntroActive = false;
     elements.starterIntroVideo.pause();
     elements.starterIntroScreen.classList.add("hidden");
     state.started = true;
-    state.doctorPotatoIntroPending = true;
-    state.doctorPotatoIntroSeen = false;
+    state.doctorPotatoIntroPending = DOCTOR_POTATO_ENABLED && !MAP_OPENING?.skipDoctorPotato;
+    state.doctorPotatoIntroSeen = !state.doctorPotatoIntroPending;
     showWorld();
     saveGame();
     playJingle("success");
@@ -4619,7 +4784,7 @@
   }
 
   function continueGame() {
-    primeDialogMusic(DOCTOR_POTATO_THEME_URL);
+    if (DOCTOR_POTATO_ENABLED && !MAP_OPENING?.skipDoctorPotato) primeDialogMusic(DOCTOR_POTATO_THEME_URL);
     if (VOICE_NPC_ENABLED) requestVoiceNpcAccess();
     requestGameFullscreen();
     if (!loadGame()) return;
@@ -4633,7 +4798,7 @@
     elements.starterIntroScreen.classList.add("hidden");
     elements.battleScreen.classList.add("hidden");
     elements.worldScreen.classList.remove("hidden");
-    elements.buildingEditorButton.disabled = PERSPECTIVE_ZONE_ACTIVE || state.dimension === "prism" || Boolean(state.interior && state.interior !== "building");
+    setBuildingEditorDisabled(PERSPECTIVE_ZONE_ACTIVE || state.dimension === "prism" || Boolean(state.interior && state.interior !== "building"));
     elements.worldScreen.classList.toggle("maze-mode", state.dimension === "prism");
     elements.worldScreen.classList.toggle("perspective-mode", PERSPECTIVE_ZONE_ACTIVE);
     elements.mazeHud.classList.toggle("hidden", state.dimension !== "prism");
@@ -4680,75 +4845,14 @@
   }
 
   function prepareDialogMusic(source) {
-    if (loadedDialogMusicSource === source && dialogMusicBuffer) return Promise.resolve(dialogMusicBuffer);
-    if (pendingDialogMusicSource === source && dialogMusicBufferPromise) return dialogMusicBufferPromise;
-    const context = ensureAudio();
-    if (!context) return Promise.resolve(null);
-    pendingDialogMusicSource = source;
-    dialogMusicBufferPromise = fetch(source)
-      .then((response) => {
-        if (!response.ok) throw new Error(`No se pudo cargar el tema de diálogo: ${response.status}`);
-        return response.arrayBuffer();
-      })
-      .then((encodedAudio) => context.decodeAudioData(encodedAudio))
-      .then((decodedAudio) => {
-        if (pendingDialogMusicSource !== source) return null;
-        loadedDialogMusicSource = source;
-        dialogMusicBuffer = decodedAudio;
-        const samples = decodedAudio.getChannelData(0);
-        const sampleCount = Math.min(samples.length, Math.floor(decodedAudio.sampleRate * 5));
-        let peak = 0;
-        let squareSum = 0;
-        for (let index = 0; index < sampleCount; index += 1) {
-          const amplitude = Math.abs(samples[index]);
-          peak = Math.max(peak, amplitude);
-          squareSum += amplitude * amplitude;
-        }
-        document.documentElement.dataset.dialogMusicDuration = decodedAudio.duration.toFixed(1);
-        document.documentElement.dataset.dialogMusicPeak = peak.toFixed(3);
-        document.documentElement.dataset.dialogMusicRms = Math.sqrt(squareSum / Math.max(1, sampleCount)).toFixed(3);
-        document.documentElement.dataset.dialogMusic = activeDialogMusicSource ? "ready" : "primed";
-        return decodedAudio;
-      })
-      .catch((error) => {
-        if (pendingDialogMusicSource === source) {
-          document.documentElement.dataset.dialogMusic = "error";
-          document.documentElement.dataset.dialogMusicError = error?.name || "DecodeError";
-        }
-        return null;
-      });
-    return dialogMusicBufferPromise;
-  }
-
-  function playDialogMusicBuffer(source) {
-    prepareDialogMusic(source).then((buffer) => {
-      if (!buffer || activeDialogMusicSource !== source || !state.sound) return;
-      const context = ensureAudio();
-      if (!context) return;
-      const startBuffer = () => {
-        if (activeDialogMusicSource !== source || !state.sound) return;
-        if (dialogMusicSourceNode) {
-          try { dialogMusicSourceNode.stop(); } catch (error) { /* already stopped */ }
-          dialogMusicSourceNode.disconnect();
-        }
-        if (dialogMusicGainNode) dialogMusicGainNode.disconnect();
-        dialogMusicGainNode = context.createGain();
-        dialogMusicGainNode.gain.value = 3.2;
-        dialogMusicGainNode.connect(context.destination);
-        dialogMusicSourceNode = context.createBufferSource();
-        dialogMusicSourceNode.buffer = buffer;
-        dialogMusicSourceNode.loop = true;
-        dialogMusicSourceNode.connect(dialogMusicGainNode);
-        dialogMusicSourceNode.start(0);
-        dialogMusicAudio.pause();
-        try { dialogMusicAudio.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
-        document.documentElement.dataset.dialogMusic = "playing-buffer";
-        document.documentElement.dataset.dialogAudioContext = context.state;
-        delete document.documentElement.dataset.dialogMusicError;
-      };
-      if (context.state === "suspended") context.resume().then(startBuffer).catch(() => {});
-      else startBuffer();
-    });
+    if (typeof source !== "string" || !source) return Promise.resolve(false);
+    if (loadedDialogMusicMediaSource !== source) {
+      dialogMusicAudio.src = source;
+      dialogMusicAudio.load();
+      loadedDialogMusicMediaSource = source;
+    }
+    if (!activeDialogMusicSource) document.documentElement.dataset.dialogMusic = "primed-media";
+    return Promise.resolve(true);
   }
 
   function playDialogMusic(source) {
@@ -4759,16 +4863,11 @@
       document.documentElement.dataset.dialogMusic = "muted";
       return;
     }
-    if (loadedDialogMusicMediaSource !== source) {
-      dialogMusicAudio.src = source;
-      dialogMusicAudio.load();
-      loadedDialogMusicMediaSource = source;
-    }
+    prepareDialogMusic(source);
     dialogMusicAudio.muted = false;
     dialogMusicAudio.volume = .72;
     try { dialogMusicAudio.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
     document.documentElement.dataset.dialogMusic = "starting";
-    playDialogMusicBuffer(source);
     const playback = dialogMusicAudio.play();
     if (playback?.then) {
       playback.then(() => {
@@ -4777,28 +4876,14 @@
         delete document.documentElement.dataset.dialogMusicError;
       }).catch((error) => {
         if (activeDialogMusicSource !== source) return;
-        document.documentElement.dataset.dialogMusic = "fallback-buffer";
+        document.documentElement.dataset.dialogMusic = "blocked-media";
         document.documentElement.dataset.dialogMusicError = error?.name || "MediaPlaybackError";
       });
-    } else playDialogMusicBuffer(source);
+    }
   }
 
   function primeDialogMusic(source) {
     if (typeof source !== "string" || !source) return;
-    if (loadedDialogMusicMediaSource !== source) {
-      dialogMusicAudio.src = source;
-      dialogMusicAudio.load();
-      loadedDialogMusicMediaSource = source;
-    }
-    dialogMusicAudio.muted = false;
-    dialogMusicAudio.volume = 0;
-    try { dialogMusicAudio.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
-    const playback = dialogMusicAudio.play();
-    if (playback?.then) {
-      playback.then(() => {
-        if (!activeDialogMusicSource) document.documentElement.dataset.dialogMusic = "primed-media";
-      }).catch(() => {});
-    }
     prepareDialogMusic(source);
   }
 
@@ -4809,15 +4894,6 @@
     dialogMusicAudio.muted = false;
     dialogMusicAudio.volume = .72;
     try { dialogMusicAudio.currentTime = 0; } catch (error) { /* metadata is not ready yet */ }
-    if (dialogMusicSourceNode) {
-      try { dialogMusicSourceNode.stop(); } catch (error) { /* already stopped */ }
-      dialogMusicSourceNode.disconnect();
-      dialogMusicSourceNode = null;
-    }
-    if (dialogMusicGainNode) {
-      dialogMusicGainNode.disconnect();
-      dialogMusicGainNode = null;
-    }
     if (hadDialogMusic) document.documentElement.dataset.dialogMusic = "stopped";
     if (hadDialogMusic && resumeBackground && state.sound && state.started && !elements.worldScreen.classList.contains("hidden")) {
       startBackgroundMusic();
@@ -4984,6 +5060,17 @@
   function navigateToRegisteredMap(mapId, destination, direction) {
     const target = MAP_REGISTRY.get(mapId);
     if (!target) return false;
+    const previousLocation = {
+      mapId: state.mapId,
+      mapRevision: state.mapRevision,
+      dimension: state.dimension,
+      interior: state.interior,
+      interiorData: state.interiorData,
+      maintenanceReturn: state.maintenanceReturn,
+      worldX: state.worldX,
+      worldY: state.worldY,
+      direction: state.direction,
+    };
     state.mapId = target.id;
     state.mapRevision = Number(target.config.revision) || 1;
     state.dimension = "san_pablo";
@@ -5204,7 +5291,7 @@
   }
 
   function startDoctorPotatoIntro(onComplete = showOpeningTutorial) {
-    if (!state.doctorPotatoIntroPending || doctorPotatoScene) return false;
+    if (!DOCTOR_POTATO_ENABLED || MAP_OPENING?.skipDoctorPotato || !state.doctorPotatoIntroPending || doctorPotatoScene) return false;
     clearDirectionalInput();
     inputLocked = true;
     state.direction = "right";
@@ -5675,7 +5762,7 @@
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
     lastArea = "";
-    elements.buildingEditorButton.disabled = true;
+    setBuildingEditorDisabled(true);
     closeBuildingEditorPanel();
     playTone(330, .08, "square", .025);
     updateAreaLabel(); updateInteractPrompt(); saveGame();
@@ -5692,7 +5779,7 @@
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
     lastArea = "";
-    elements.buildingEditorButton.disabled = false;
+    setBuildingEditorDisabled(false);
     playTone(440, .08, "square", .025);
     updateAreaLabel(); updateInteractPrompt(); saveGame();
     showAreaToast("HAS VUELTO AL EXTERIOR");
@@ -5808,7 +5895,7 @@
       selectedEditorAssetId = null;
       editorOverlayDirty = true;
       lastArea = "";
-      elements.buildingEditorButton.disabled = type === "route";
+      setBuildingEditorDisabled(type === "route");
       closeBuildingEditorPanel();
     });
     inputLocked = false;
@@ -5836,7 +5923,7 @@
       selectedEditorAssetId = null;
       editorOverlayDirty = true;
       lastArea = "";
-      elements.buildingEditorButton.disabled = false;
+      setBuildingEditorDisabled(false);
     });
     inputLocked = false;
     document.dispatchEvent(new CustomEvent("map-editor-player-presence-change"));
@@ -6041,7 +6128,11 @@
     const itemName = endingId === "moldyBerry" ? "Baya Mohosa" : "Poción Caducada";
     const firstDiscovery = registerPrismEnding(endingId);
     if (firstDiscovery) state.inventory[inventoryKey] = (Number(state.inventory[inventoryKey]) || 0) + 1;
-    saveGame();
+    if (!saveGame()) {
+      Object.assign(state, previousLocation);
+      showDialog(["No se puede cambiar de mapa porque el navegador ha bloqueado el guardado."], "!");
+      return false;
+    }
     const discoveryLine = firstDiscovery
       ? `Dentro solo hay una ${itemName}. La guardas, aunque parece prácticamente inútil.`
       : `La misma ${itemName} te espera al otro lado. Esta vez no la tocas.`;
@@ -6053,6 +6144,7 @@
   }
 
   async function enterPrismDimension() {
+    loadPrismAssets();
     const noiseMode = await requestMicrophoneAccess();
     state.returnPosition = { x: state.worldX, y: state.worldY };
     state.dimension = "prism";
@@ -6068,7 +6160,7 @@
     }
     state.worldX = 1050; state.worldY = 1830; state.direction = "up";
     lastArea = "";
-    elements.buildingEditorButton.disabled = true;
+    setBuildingEditorDisabled(true);
     elements.worldScreen.classList.add("maze-mode");
     elements.mazeHud.classList.remove("hidden");
     if (elements.noiseLabel) elements.noiseLabel.textContent = noiseMode === "microphone" ? "MICRÓFONO" : "MOVIMIENTO";
@@ -6103,7 +6195,7 @@
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
     lastArea = "";
-    elements.buildingEditorButton.disabled = false;
+    setBuildingEditorDisabled(false);
     elements.worldScreen.classList.remove("maze-mode");
     elements.mazeHud.classList.add("hidden");
     elements.battleScreen.classList.remove("prism-exit-battle");
@@ -7576,12 +7668,11 @@
     const x = INDOOR_NPC.x; const y = INDOOR_NPC.y + bob;
     context.fillStyle = "rgba(20,40,30,.22)";
     context.beginPath(); context.ellipse(x, INDOOR_NPC.y + 27, 21, 7, 0, 0, Math.PI * 2); context.fill();
-    const rosterRecord = npcRosterSheets.get(npc.sprite);
+    const rosterRecord = ensureNpcRosterSprite(npc.sprite);
+    trimNpcRosterCache(new Set([npc.sprite]));
     if (rosterRecord?.ready) {
       context.drawImage(rosterRecord.image, 0, 0, SPRITE_CELL_SIZE, SPRITE_CELL_SIZE,
         Math.round(x) - 32, Math.round(y) - 40, 64, 64);
-    } else if (npcSheetReady && Number.isInteger(npc.spriteIndex)) {
-      context.drawImage(npcSheet, npc.spriteIndex * 32, 0, 32, 32, Math.round(x) - 32, Math.round(y) - 40, 64, 64);
     } else {
       context.fillStyle = color; context.fillRect(x - 12, y - 6, 24, 26);
       context.fillStyle = "#f0c099"; context.beginPath(); context.arc(x, y - 16, 12, 0, Math.PI * 2); context.fill();
@@ -7705,6 +7796,93 @@
     return dy < 0 ? "up" : "down";
   }
 
+  function activeMapOpeningThieves() {
+    return mapOpeningScene && Array.isArray(MAP_OPENING?.thieves) ? MAP_OPENING.thieves : [];
+  }
+
+  function mapOpeningThiefPosition(thief) {
+    const start = Array.isArray(thief.start) ? thief.start : [state.worldX, state.worldY];
+    const target = Array.isArray(thief.provisionalHide) ? thief.provisionalHide : start;
+    let x = Number(start[0]) || state.worldX;
+    let y = Number(start[1]) || state.worldY;
+    let jump = 0;
+    if (mapOpeningScene?.phase === "startled") {
+      const progress = clamp(
+        (mapOpeningScene.elapsed - mapOpeningScene.phaseStartedAt) / Math.max(1, mapOpeningTiming("startledMs", 560)),
+        0,
+        1,
+      );
+      jump = Math.sin(progress * Math.PI) * 18;
+    } else if (mapOpeningScene?.phase === "fleeing") {
+      const progress = clamp(
+        (mapOpeningScene.elapsed - mapOpeningScene.phaseStartedAt) / Math.max(1, mapOpeningTiming("fleeMs", 2100)),
+        0,
+        1,
+      );
+      const eased = 1 - Math.pow(1 - progress, 3);
+      x += ((Number(target[0]) || x) - x) * eased;
+      y += ((Number(target[1]) || y) - y) * eased;
+    }
+    return { x, y, jump };
+  }
+
+  function drawMapOpeningLabel(context, x, y, text, alert = false) {
+    context.save();
+    context.font = "900 10px Trebuchet MS";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    const width = Math.ceil(context.measureText(text).width) + 14;
+    context.fillStyle = alert ? "#fff0c7" : "rgba(20,26,31,.9)";
+    context.strokeStyle = alert ? "#b94b38" : "rgba(255,255,255,.82)";
+    context.lineWidth = 2;
+    context.fillRect(Math.round(x - width / 2), Math.round(y - 10), width, 20);
+    context.strokeRect(Math.round(x - width / 2) + .5, Math.round(y - 10) + .5, width - 1, 19);
+    context.fillStyle = alert ? "#7d281e" : "#fff8df";
+    context.fillText(text, Math.round(x), Math.round(y));
+    context.restore();
+  }
+
+  function drawMapOpeningThief(context, thief) {
+    const position = mapOpeningThiefPosition(thief);
+    const phase = mapOpeningScene?.phase || "fainted";
+    const direction = phase === "fleeing"
+      ? (thief.fleeDirection || "down")
+      : directionFromDelta(state.worldX - position.x, state.worldY - position.y, "down");
+    const moving = phase === "fleeing";
+    const frame = moving ? Math.floor(performance.now() / 95) % NPC_WALK_FRAME_COUNT : Math.floor(performance.now() / 360) % 2;
+    const drawY = position.y - position.jump;
+    context.save();
+    context.fillStyle = "rgba(22,43,34,.23)";
+    context.beginPath();
+    context.ellipse(Math.round(position.x), Math.round(position.y + 1), 16, 5, 0, 0, Math.PI * 2);
+    context.fill();
+    const rosterRecord = ensureNpcRosterSprite(thief.sprite);
+    if (rosterRecord?.ready) {
+      context.drawImage(
+        rosterRecord.image,
+        frame * SPRITE_CELL_SIZE,
+        (NPC_DIRECTION_ROWS[direction] || 0) * SPRITE_CELL_SIZE,
+        SPRITE_CELL_SIZE,
+        SPRITE_CELL_SIZE,
+        Math.round(position.x) - 32,
+        Math.round(drawY) - 60,
+        64,
+        64,
+      );
+    } else {
+      context.fillStyle = "#343b45";
+      context.fillRect(Math.round(position.x) - 13, Math.round(drawY) - 32, 26, 30);
+      context.fillStyle = "#c5916f";
+      context.fillRect(Math.round(position.x) - 10, Math.round(drawY) - 48, 20, 18);
+    }
+    if (phase === "fainted" || phase === "getting-up") {
+      drawMapOpeningLabel(context, position.x, drawY - 72, `ROBA: ${String(thief.item || "OBJETO")}`);
+    } else if (phase === "startled") {
+      drawMapOpeningLabel(context, position.x, drawY - 72, "¡SE HA DESPERTADO!", true);
+    }
+    context.restore();
+  }
+
   function drawWorldNpc(context, npc) {
     const position = mapNpcPosition(npc);
     const patrol = npcPatrolState(npc);
@@ -7715,8 +7893,8 @@
     context.save();
     context.fillStyle = "rgba(22,43,34,.23)";
     context.beginPath(); context.ellipse(Math.round(position.x), Math.round(position.y + 1), 16, 5, 0, 0, Math.PI * 2); context.fill();
-    const rosterRecord = npcRosterSheets.get(npc.sprite);
-    const spriteSheet = npc.sprite === "guide" && guideNpcSheetReady ? guideNpcSheet : (rosterRecord?.ready ? rosterRecord.image : null);
+    const rosterRecord = ensureNpcRosterSprite(npc.sprite);
+    const spriteSheet = rosterRecord?.ready ? rosterRecord.image : null;
     if (spriteSheet) {
       context.drawImage(spriteSheet, frame * SPRITE_CELL_SIZE, (NPC_DIRECTION_ROWS[direction] || 0) * SPRITE_CELL_SIZE,
         SPRITE_CELL_SIZE, SPRITE_CELL_SIZE, Math.round(position.x) - 32, Math.round(position.y) - 60, 64, 64);
@@ -7732,9 +7910,10 @@
   }
 
   function drawDoctorPotato(context) {
-    if (!doctorPotatoScene) return;
+    if (!DOCTOR_POTATO_ENABLED || !doctorPotatoScene) return;
     const scene = doctorPotatoScene;
-    const doctorPotatoSprite = npcRosterSheets.get("doctor-potato");
+    const doctorPotatoSprite = ensureNpcRosterSprite("doctor-potato");
+    trimNpcRosterCache(new Set(["doctor-potato"]));
     const doctorPotatoSheet = doctorPotatoSprite?.ready ? doctorPotatoSprite.image : null;
     const moving = scene.phase === "entering" || scene.phase === "exiting";
     const frameDuration = scene.phase === "exiting" ? 520 : 155;
@@ -7771,7 +7950,8 @@
   function drawVoiceNpc(context) {
     if (!VOICE_NPC_ENABLED) return;
     if (!state.started || state.dimension !== "san_pablo" || state.interior || doctorPotatoScene || !voiceNpc.positionReady) return;
-    const record = npcRosterSheets.get("doctor-potato");
+    const record = ensureNpcRosterSprite("doctor-potato");
+    trimNpcRosterCache(new Set(["doctor-potato"]));
     const sheet = record?.ready ? record.image : null;
     const frame = voiceNpc.moving ? Math.floor(voiceNpc.animationElapsed / 150) % NPC_WALK_FRAME_COUNT : 0;
     context.save();
@@ -7844,14 +8024,31 @@
       && bottom >= bounds.top - margin && top <= bounds.bottom + margin;
   }
 
-  function drawWorldAsset(context, asset) {
+  function worldAssetDepthSlices(asset) {
+    const requestedHeight = Number(asset?.depthSliceHeight);
+    const height = Number(asset?.h);
+    if (!Number.isFinite(requestedHeight) || requestedHeight <= 0 || !Number.isFinite(height) || height <= 0) return [];
+    const sliceHeight = Math.max(1, Math.round(requestedHeight));
+    const baseDepth = Number(asset.depthY ?? asset.y);
+    if (!Number.isFinite(baseDepth)) return [];
+    const slices = [];
+    for (let top = 0; top < height; top += sliceHeight) {
+      const bottom = Math.min(height, top + sliceHeight);
+      slices.push({ top, bottom, depthY: baseDepth - height + bottom });
+    }
+    return slices;
+  }
+
+  function drawWorldAsset(context, asset, { castShadow = true } = {}) {
     const record = cityWorldAssetImages.get(worldAssetSource(asset));
     if (!record?.ready) return;
     context.save();
     const pixelated = asset.kind === "furniture" || runtimeAssetPrototype(asset.sprite)?.pixelated;
     context.imageSmoothingEnabled = !pixelated;
     if (!pixelated) context.imageSmoothingQuality = "high";
-    if (asset.kind === "building") context.filter = "drop-shadow(0 3px 2px rgba(24, 45, 34, .28))";
+    if (asset.kind === "building" && asset.castShadow !== false && castShadow) {
+      context.filter = "drop-shadow(0 3px 2px rgba(24, 45, 34, .28))";
+    }
     const width = Number(asset.w); const height = Number(asset.h);
     const rotation = Number(asset.rotation) || 0;
     if (rotation || asset.flipX) {
@@ -7871,8 +8068,49 @@
     context.restore();
   }
 
+  function drawWorldAssetSlice(context, asset, slice) {
+    const width = Number(asset.w); const height = Number(asset.h);
+    const left = Math.round(Number(asset.x) - width / 2);
+    const top = Math.round(Number(asset.y) - height);
+    context.save();
+    context.beginPath();
+    context.rect(left, top + slice.top, width, slice.bottom - slice.top);
+    context.clip();
+    /* Se recorta la misma proyeccion completa en coordenadas del mundo. Asi no
+       aparecen lineas por redondeos distintos entre source/destination. */
+    drawWorldAsset(context, asset, { castShadow: false });
+    context.restore();
+  }
+
+  function worldAssetRenderEntities(context, asset) {
+    const slices = worldAssetDepthSlices(asset);
+    if (slices.length <= 1) {
+      return [{
+        y: Number(asset.depthY ?? asset.y),
+        priority: 0,
+        draw: () => drawWorldAsset(context, asset),
+      }];
+    }
+    const entities = [];
+    if (asset.kind === "building" && asset.castShadow !== false) {
+      /* La pasada completa queda detras de todas las franjas y aplica la sombra
+         una sola vez. Las franjas posteriores resuelven la oclusion sin filtros. */
+      entities.push({
+        y: slices[0].depthY,
+        priority: -1,
+        draw: () => drawWorldAsset(context, asset),
+      });
+    }
+    slices.forEach((slice) => entities.push({
+      y: slice.depthY,
+      priority: 0,
+      draw: () => drawWorldAssetSlice(context, asset, slice),
+    }));
+    return entities;
+  }
+
   function drawWorldAssetColliders(context, assets) {
-    if (!elements.buildingEditor.classList.contains("open") || !editorOverlays.collisions) return;
+    if (!isBuildingEditorOpen() || !editorOverlays.collisions) return;
     context.save();
     context.fillStyle = "rgba(234, 42, 127, .28)";
     context.strokeStyle = "rgba(255, 255, 255, .92)";
@@ -7992,11 +8230,8 @@
   function drawWorldEntities(context, encounterGrass = { tiles: [], now: performance.now() }) {
     const bounds = visibleBounds(96);
     const visibleAssets = cityWorldAssets.filter((asset) => !editorHiddenEntities.has(`asset:${asset.id}`) && worldAssetInView(asset, bounds));
-    const entities = visibleAssets.map((asset) => ({
-      y: Number(asset.depthY ?? asset.y),
-      priority: 0,
-      draw: () => drawWorldAsset(context, asset),
-    }));
+    visibleAssets.forEach(ensureCityWorldAssetImage);
+    const entities = visibleAssets.flatMap((asset) => worldAssetRenderEntities(context, asset));
     const portalDoor = currentPortalDoor();
     const portalPosition = portalDoor ? currentPortalPosition() : null;
     if (portalPosition && entityInView(portalPosition, bounds, 110)) {
@@ -8010,10 +8245,27 @@
     const perspectiveGateVisible = Boolean(perspectiveGatePosition
       && entityInView(perspectiveGatePosition, bounds, 150));
     setPerspectiveGateDiagnostic("wayfinder", perspectiveGateVisible ? "visible" : "culled");
-    activeSceneNpcs().filter((npc) => !editorHiddenEntities.has(`npc:${npc.id}`)).forEach((npc) => entities.push({
+    const visibleNpcs = activeSceneNpcs()
+      .filter((npc) => !editorHiddenEntities.has(`npc:${npc.id}`)
+        && entityInView(mapNpcPosition(npc), bounds, 80));
+    const visibleOpeningThieves = activeMapOpeningThieves()
+      .filter((thief) => entityInView(mapOpeningThiefPosition(thief), bounds, 80));
+    visibleNpcs.forEach((npc) => ensureNpcRosterSprite(npc.sprite));
+    trimNpcRosterCache(new Set(visibleNpcs.map((npc) => npc.sprite)));
+    visibleOpeningThieves.forEach((thief) => ensureNpcRosterSprite(thief.sprite));
+    trimNpcRosterCache(new Set([
+      ...visibleNpcs.map((npc) => npc.sprite),
+      ...visibleOpeningThieves.map((thief) => thief.sprite),
+    ]));
+    visibleNpcs.forEach((npc) => entities.push({
       y: mapNpcPosition(npc).y,
       priority: 1,
       draw: () => drawWorldNpc(context, npc),
+    }));
+    visibleOpeningThieves.forEach((thief) => entities.push({
+      y: mapOpeningThiefPosition(thief).y,
+      priority: 1,
+      draw: () => drawMapOpeningThief(context, thief),
     }));
     if (doctorPotatoScene) {
       entities.push({
@@ -8063,6 +8315,32 @@
     return visibleAssets;
   }
 
+  function mapOpeningPlayerFrame() {
+    if (!mapOpeningScene) return null;
+    if (mapOpeningScene.phase === "fainted") {
+      const frames = playerOpeningFrames.fainted;
+      if (!frames.length) return null;
+      const firstLyingFrame = Math.min(3, frames.length - 1);
+      const lyingFrames = frames.slice(firstLyingFrame);
+      const frame = lyingFrames[Math.floor(mapOpeningScene.elapsed / 420) % lyingFrames.length];
+      document.documentElement.dataset.playerOpeningFrame = String(frames.indexOf(frame));
+      return frame;
+    }
+    if (mapOpeningScene.phase === "getting-up") {
+      const frames = playerOpeningFrames.gettingUp;
+      if (!frames.length) return null;
+      const progress = clamp(
+        (mapOpeningScene.elapsed - mapOpeningScene.phaseStartedAt) / Math.max(1, mapOpeningTiming("gettingUpMs", 1600)),
+        0,
+        .9999,
+      );
+      const frameIndex = Math.min(frames.length - 1, Math.floor(progress * frames.length));
+      document.documentElement.dataset.playerOpeningFrame = String(frameIndex);
+      return frames[frameIndex];
+    }
+    return null;
+  }
+
   function playerSourceFrame() {
     const gait = playerRunning ? "run" : "walk";
     const requestedDirection = playerAnimationDirection || state.direction;
@@ -8081,8 +8359,12 @@
     const y = state.worldY;
     const moving = animationTime > 0;
     context.save();
+    const openingFrame = mapOpeningPlayerFrame();
+    const lyingDown = mapOpeningScene?.phase === "fainted";
     context.fillStyle = "rgba(28,52,42,.24)";
-    context.beginPath(); context.ellipse(Math.round(x), Math.round(y + 1), 15, 5, 0, 0, Math.PI * 2); context.fill();
+    context.beginPath();
+    context.ellipse(Math.round(x), Math.round(y + 1), lyingDown ? 22 : 15, lyingDown ? 7 : 5, 0, 0, Math.PI * 2);
+    context.fill();
     if (playerRunning && moving) {
       const back = { up: [0, 6], down: [0, 6], left: [10, 4], right: [-10, 4] }[state.direction] || [0, 6];
       const puff = 0.5 + Math.abs(Math.sin(performance.now() / 90));
@@ -8091,8 +8373,8 @@
       context.fillStyle = "rgba(220,210,180,.3)";
       context.beginPath(); context.ellipse(x + back[0] * 1.6, y + back[1] + 2, 6 * puff, 2.5 * puff, 0, 0, Math.PI * 2); context.fill();
     }
-    if (playerSheetReady) {
-      const frame = playerSourceFrame();
+    if (openingFrame || playerSheetReady) {
+      const frame = openingFrame || playerSourceFrame();
       /* Celda 64×64 con punto de apoyo fijo en y=60: no hay fondo ni temblor. */
       if (frame) context.drawImage(frame, Math.round(x) - 32, Math.round(y) - 60, 64, 64);
     } else {
@@ -8308,13 +8590,7 @@
   }
 
   function castMazeRay(originX, originY, angle, maxDistance = 24) {
-    const step = .025;
-    for (let distance = step; distance < maxDistance; distance += step) {
-      const x = originX + Math.cos(angle) * distance;
-      const y = originY + Math.sin(angle) * distance;
-      if (mazeDefinition.grid[Math.floor(y)]?.[Math.floor(x)] !== 0) return distance;
-    }
-    return maxDistance;
+    return window.MAZE_RAYCAST_CORE.castGridRay(mazeDefinition.grid, originX, originY, angle, maxDistance);
   }
 
   function drawMaze3D(context) {
@@ -8848,7 +9124,7 @@
   }
 
   function drawTileGrid(context) {
-    if (!elements.buildingEditor.classList.contains("open")) return;
+    if (!isBuildingEditorOpen()) return;
     if (editorOverlayDirty) rebuildEditorOverlayCache();
     else { editorOverlayCacheHits += 1; document.documentElement.dataset.editorOverlayCacheHits = String(editorOverlayCacheHits); }
     context.save(); context.drawImage(editorOverlayCanvas, 0, 0);
@@ -8880,10 +9156,80 @@
     drawEditorPresence(context); context.restore();
   }
 
+  function usesOutdoorDayNight() {
+    if (state.dimension !== "san_pablo" || state.dimension === "prism" || CITY_MAP.dayNight === false) return false;
+    if (state.interior === "route") return true;
+    if (state.interior) return false;
+    if (CITY_MAP.dayNight === true) return true;
+    return DAY_NIGHT_MAP_KINDS.has(CITY_MAP.kind);
+  }
+
+  function currentDayNightSnapshot(force = false) {
+    const now = Date.now();
+    if (force || !dayNightSnapshotCache || Math.abs(now - dayNightSnapshotAt) >= 1000) {
+      dayNightSnapshotCache = LOCAL_DEBUG_DAY_NIGHT_MINUTES === null
+        ? DAY_NIGHT_CYCLE.sample(new Date(now))
+        : DAY_NIGHT_CYCLE.sampleAtMinutes(LOCAL_DEBUG_DAY_NIGHT_MINUTES);
+      dayNightSnapshotAt = now;
+    }
+    return dayNightSnapshotCache;
+  }
+
+  function syncDayNightMusic(snapshot, active) {
+    if (!active) {
+      dayNightMusicPhase = null;
+      dayNightMusicSyncPending = false;
+      return;
+    }
+    if (dayNightMusicPhase === null) {
+      dayNightMusicPhase = snapshot.phase;
+      return;
+    }
+    if (dayNightMusicPhase !== snapshot.phase) {
+      dayNightMusicPhase = snapshot.phase;
+      dayNightMusicSyncPending = true;
+    }
+    if (!dayNightMusicSyncPending || !state.sound || !state.started || battle || musicPreviewTrackId
+      || activeDialogMusicSource || dialogPresentation || elements.worldScreen.classList.contains("hidden")) return;
+    const nextTrackId = automaticMusicTrackId();
+    dayNightMusicSyncPending = false;
+    if (backgroundMusic.currentTrack?.id !== nextTrackId) startBackgroundMusic();
+  }
+
+  function syncDayNightPresentation(snapshot, active = usesOutdoorDayNight()) {
+    syncDayNightMusic(snapshot, active);
+    const signature = `${active ? "on" : "off"}:${snapshot.phase}:${snapshot.clock}`;
+    if (signature === dayNightPresentationSignature) return;
+    dayNightPresentationSignature = signature;
+
+    document.documentElement.dataset.dayPhase = snapshot.phase;
+    document.documentElement.dataset.dayNightActive = String(active);
+    document.documentElement.dataset.dayNightStrength = active ? snapshot.strength.toFixed(3) : "0.000";
+    document.documentElement.dataset.localGameTime = snapshot.clock;
+    if (!elements.dayNightStatus) return;
+
+    elements.dayNightStatus.classList.toggle("hidden", !active);
+    elements.dayNightStatus.setAttribute("aria-label", `${snapshot.label.toLowerCase()}, hora local ${snapshot.clock}`);
+    elements.dayNightStatus.title = LOCAL_DEBUG_DAY_NIGHT_MINUTES === null
+      ? "Iluminación sincronizada con la hora de este dispositivo"
+      : `Vista de prueba local · ${snapshot.clock}`;
+    if (elements.dayNightIcon) elements.dayNightIcon.textContent = snapshot.icon;
+    if (elements.dayNightLabel) elements.dayNightLabel.textContent = snapshot.label;
+    if (elements.dayNightClock) {
+      elements.dayNightClock.textContent = snapshot.clock;
+      elements.dayNightClock.setAttribute("datetime", snapshot.clock);
+    }
+  }
+
+  function drawDayNightLighting(context, snapshot = currentDayNightSnapshot()) {
+    if (!usesOutdoorDayNight()) return false;
+    return DAY_NIGHT_CYCLE.paint(context, VIEW_WIDTH, VIEW_HEIGHT, snapshot);
+  }
+
   function syncWorldCanvasResolution() {
     const rect = elements.canvas.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return { scaleX: 1, scaleY: 1 };
-    VIEW_HEIGHT = BASE_VIEW_HEIGHT / (elements.buildingEditor.classList.contains("open") ? editorZoom : 1);
+    VIEW_HEIGHT = BASE_VIEW_HEIGHT / (isBuildingEditorOpen() ? editorZoom : 1);
     VIEW_WIDTH = Math.max(1, Math.round(BASE_VIEW_HEIGHT * rect.width / rect.height));
     const deviceRatio = Math.max(1, Number(window.devicePixelRatio) || 1);
     const fourKCap = Math.min(MAX_RENDER_WIDTH / rect.width, MAX_RENDER_HEIGHT / rect.height);
@@ -8903,6 +9249,8 @@
     context.setTransform(renderScale.scaleX, 0, 0, renderScale.scaleY, 0, 0);
     context.imageSmoothingEnabled = false;
     context.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    const dayNightSnapshot = currentDayNightSnapshot();
+    syncDayNightPresentation(dayNightSnapshot);
     if (PERSPECTIVE_ZONE_ACTIVE) {
       ensurePerspectiveZoneRuntime()?.render(context, VIEW_WIDTH, VIEW_HEIGHT);
       return;
@@ -8929,6 +9277,7 @@
       drawInterior(context);
       if (state.interior === "route") drawPlayer(context);
       context.restore();
+      if (state.interior === "route") drawDayNightLighting(context, dayNightSnapshot);
       return;
     }
 
@@ -8944,6 +9293,7 @@
     drawTileGrid(context);
     drawWorldAssetColliders(context, visibleAssets);
     context.restore();
+    drawDayNightLighting(context, dayNightSnapshot);
   }
 
   function drawMiniMap() {
@@ -9066,7 +9416,7 @@
   function updateCamera(deltaSeconds) {
     if (PERSPECTIVE_ZONE_ACTIVE) return;
     if (state.dimension === "prism" || state.interior) return;
-    if (elements.buildingEditor.classList.contains("open") && editorCameraActive) {
+    if (isBuildingEditorOpen() && editorCameraActive) {
       camera.x = clamp(camera.x, 0, Math.max(0, currentWorldWidth() - VIEW_WIDTH));
       camera.y = clamp(camera.y, 0, Math.max(0, currentWorldHeight() - VIEW_HEIGHT));
       return;
@@ -9083,6 +9433,7 @@
     lastFrameTime = timestamp;
     if (!elements.worldScreen.classList.contains("hidden")) {
       updateDoctorPotatoCutscene(deltaSeconds);
+      updateMapOpeningSequence(deltaSeconds);
       updateVoiceNpc(deltaSeconds);
       updateMovement(deltaSeconds);
       updateNpcPatrols(deltaSeconds);
@@ -9330,7 +9681,7 @@
   function attackEffectForMove(move) {
     const safeMove = move && typeof move === "object" ? move : { type: String(move || "Normal") };
     return ATTACK_EFFECTS.normalizeProfile(
-      safeMove.id && Object.hasOwn(attackEffectOverrides, safeMove.id) ? attackEffectOverrides[safeMove.id] : {},
+      safeMove.id && owns(attackEffectOverrides, safeMove.id) ? attackEffectOverrides[safeMove.id] : {},
       safeMove.type,
     );
   }
@@ -9470,7 +9821,7 @@
     const effect = attackEffectForMove(safeMove);
     const pokemonId = Number(attacker.dataset.pokemonId);
     const profile = customPokemonAttack(pokemonId);
-    const attackVariant = moveDelivery(safeMove);
+    const attackVariant = moveAnimationKind(safeMove);
     const showsTravelEffect = safeMove.delivery !== "melee";
     const isBraspinQuillVolley = pokemonId === 4 && safeMove.id === "ember";
     const pixelEffect = effect.enabled ? movePixelEffect(safeMove) : null;
@@ -9776,7 +10127,7 @@
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
     lastArea = "";
-    elements.buildingEditorButton.disabled = false;
+    setBuildingEditorDisabled(false);
     updateAreaLabel(); updateInteractPrompt();
     finishBattle();
     showDialog([
@@ -9797,7 +10148,7 @@
     state.worldX = healthReturn.x; state.worldY = healthReturn.y; state.direction = "down";
     camera.x = clamp(state.worldX - VIEW_WIDTH / 2, 0, WORLD_WIDTH - VIEW_WIDTH);
     camera.y = clamp(state.worldY - VIEW_HEIGHT / 2, 0, WORLD_HEIGHT - VIEW_HEIGHT);
-    elements.buildingEditorButton.disabled = false;
+    setBuildingEditorDisabled(false);
     updateAreaLabel(); updateInteractPrompt();
     finishBattle(); showDialog([lostAtPrismExit
       ? "Enfermera: Os encontramos junto al portal. Ese Pokémon débil también era una salida, aunque no una amable."
@@ -9925,7 +10276,7 @@
     elements.attackDexCount.textContent = `${moves.length} ${moves.length === 1 ? "ataque" : "ataques"}`;
     elements.attackDexList.innerHTML = moves.length ? moves.map(([id, move]) => {
       const selected = id === selectedAttackMoveId;
-      const customized = Object.hasOwn(attackEffectOverrides, id);
+      const customized = owns(attackEffectOverrides, id);
       return `<button type="button" class="attack-dex-entry ${selected ? "selected" : ""}" data-attack-move-id="${id}" role="option" aria-selected="${selected}">
         <i class="attack-dex-entry-dot" style="--type-color:${TYPE_COLORS[move.type] || TYPE_COLORS.Normal}"></i>
         <span><strong>${move.name}</strong><small>${move.type} · Pot. ${move.power} · ${move.accuracy}%</small></span>
@@ -10033,7 +10384,7 @@
   }
 
   function selectAttackMove(id, focusSelected = false) {
-    if (!Object.hasOwn(MOVES, id)) return;
+    if (!owns(MOVES, id)) return;
     selectedAttackMoveId = id;
     clearAttackDexPreview();
     renderAttackDexCatalog();
@@ -10160,7 +10511,7 @@
     const animatedBack = Boolean(customPokemonFrameAsset(selectedSanpledexId, "idle", "back"));
     const seenAttackVariants = new Set();
     const frameAttackOptions = species.moves.map((move) => {
-      const variant = moveDelivery(move);
+      const variant = moveAnimationKind(move);
       if (seenAttackVariants.has(variant)) return null;
       seenAttackVariants.add(variant);
       const front = customPokemonFrameAsset(selectedSanpledexId, "attack", "front", variant);
@@ -10180,7 +10531,7 @@
     const attackDurationLabel = `${Math.max(.1, Math.round(attackDuration / 100) / 10)} s`;
     const attackButtons = frameAttackOptions.length
       ? frameAttackOptions.map(({ move, variant, duration }) => {
-        const delivery = variant === "ranged" ? "DISTANCIA" : "MELEE";
+        const delivery = variant === "special" ? "ESPECIAL" : "FÍSICO";
         const label = `▶ ${move.name} · ${delivery} · ${Math.max(.1, Math.round(duration / 100) / 10)} s`;
         return `<button type="button" class="sanpledex-attack-button" data-sanpledex-attack="${move.id}" data-attack-label="${label}" aria-pressed="false">${label}</button>`;
       }).join("")
@@ -10250,7 +10601,7 @@
     const previewId = preview.dataset.pokemonId;
     const species = POKEMON[Number(previewId)];
     const move = species?.moves.find((entry) => entry.id === moveId) || species?.moves[0] || null;
-    const attackVariant = moveDelivery(move);
+    const attackVariant = moveAnimationKind(move);
     const attackAnimation = customPokemonAttackAnimation(previewId, attackVariant) || customPokemonAnimation(previewId);
     const attackSources = sprites.map((image) => customPokemonFrameAsset(previewId, "attack", image.dataset.view, attackVariant));
     const canPlayFrames = attackSources.every(Boolean)
@@ -10404,8 +10755,7 @@
     if (CITY_MAP.music && MUSIC_LIBRARY.trackById(CITY_MAP.music)) return CITY_MAP.music;
     if (ACTIVE_MAP_ID === "ciudad-azahar") return "city-azahar";
     if (CITY_MAP.kind === "route" || ACTIVE_MAP_ID.includes("route")) return "route-first";
-    const hour = new Date().getHours();
-    return hour >= 21 || hour < 6 ? "city-night" : "city-san-pablo";
+    return usesOutdoorDayNight() && currentDayNightSnapshot().isNight ? "city-night" : "city-san-pablo";
   }
 
   function selectedMusicTrackId() {
@@ -10599,7 +10949,7 @@
       if (event.key === "Escape") closeMusicLibrary();
       return;
     }
-    if (elements.buildingEditor.classList.contains("open")) {
+    if (isBuildingEditorOpen()) {
       if (event.key === "Escape") {
         event.preventDefault();
         const cancelRequest = new CustomEvent("map-editor-cancel-request", { cancelable: true });
@@ -10838,13 +11188,13 @@
     elements.inventoryButton.addEventListener("click", () => openInventory(false));
     elements.closeInventory.addEventListener("click", closeInventoryPanel);
     elements.inventoryScrim.addEventListener("click", closeInventoryPanel);
-    elements.buildingEditorButton.addEventListener("click", openBuildingEditor);
-    elements.closeBuildingEditor.addEventListener("click", closeBuildingEditorPanel);
-    elements.editorScrim.addEventListener("click", closeBuildingEditorPanel);
+    elements.buildingEditorButton?.addEventListener("click", openBuildingEditor);
+    elements.closeBuildingEditor?.addEventListener("click", closeBuildingEditorPanel);
+    elements.editorScrim?.addEventListener("click", closeBuildingEditorPanel);
     $$('[data-tile-type]').forEach((button) => button.addEventListener("click", () => {
       selectedTileType = button.dataset.tileType; updateTileEditorInfo();
     }));
-    elements.copyTileButton.addEventListener("click", async () => {
+    elements.copyTileButton?.addEventListener("click", async () => {
       if (!selectedMapTile) return;
       const centerX = selectedMapTile.col * CITY_MAP.tileSize + CITY_MAP.tileSize / 2;
       const centerY = selectedMapTile.row * CITY_MAP.tileSize + CITY_MAP.tileSize / 2;
@@ -10852,13 +11202,13 @@
       try { await navigator.clipboard.writeText(text); elements.tileEditorHint.textContent = `Copiado: ${text}`; }
       catch (error) { elements.tileEditorHint.textContent = text; }
     });
-    elements.copyNpcButton.addEventListener("click", async () => {
+    elements.copyNpcButton?.addEventListener("click", async () => {
       if (!selectedMapTile) return;
       const text = `{ id: "nuevo-npc", col: ${selectedMapTile.col}, row: ${selectedMapTile.row}, direction: "down", name: "Nombre", sprite: "nino-sol", lines: ["Diálogo"] }`;
       try { await navigator.clipboard.writeText(text); elements.tileEditorHint.textContent = `NPC copiado para C${selectedMapTile.col}, F${selectedMapTile.row}`; }
       catch (error) { elements.tileEditorHint.textContent = text; }
     });
-    elements.resetTileMap.addEventListener("click", () => {
+    elements.resetTileMap?.addEventListener("click", () => {
       if (!window.confirm("¿Restaurar todas las casillas al mapa inicial?")) return;
       tileOverrides.clear(); saveMapTiles(); selectedMapTile = null; updateTileEditorInfo();
     });
@@ -11338,21 +11688,24 @@
 
   window.__pokemonMapEditorBridge = Object.freeze({
     enable() {
+      if (!hasBuildingEditor()) return false;
       developerEditorEnabled = true;
       elements.buildingEditorButton.hidden = false;
       document.documentElement.dataset.mapEditor = "available";
+      return true;
     },
     disable() {
       developerEditorEnabled = false;
-      elements.buildingEditorButton.hidden = true;
+      if (elements.buildingEditorButton) elements.buildingEditorButton.hidden = true;
       selectedEditorEntity = null;
       collaboratorCursors = [];
       closeBuildingEditorPanel();
       document.documentElement.dataset.mapEditor = "disabled";
+      return true;
     },
     open: openBuildingEditor,
     close: closeBuildingEditorPanel,
-    isOpen: () => elements.buildingEditor.classList.contains("open"),
+    isOpen: isBuildingEditorOpen,
     assets: () => activeEditorAssets(),
     entities: runtimeEntities,
     isBaseEntity: (kind, id) => normalizedEditorEntityKind(kind) === "entrance" && baseCityEntranceIds.has(String(id || "")),
@@ -11371,7 +11724,7 @@
     }),
     assetCatalog: () => Object.fromEntries(Object.entries(window.CITY_MAP_LAYOUT?.assetCatalog || {})
       .filter(([, prototype]) => currentInteriorSceneId() ? prototype?.interior === true : prototype?.interior !== true)),
-    npcSpriteUrl: (sprite) => sprite === "guide" ? GUIDE_NPC_SHEET_URL : (NPC_ROSTER_SHEET_URLS[sprite] || ""),
+    npcSpriteUrl: (sprite) => resolveNpcAssetUrl(sprite),
     canvasToWorld(clientX, clientY) {
       const rect = elements.canvas.getBoundingClientRect();
       return {
@@ -11558,7 +11911,7 @@
     } catch { /* sessionStorage es opcional. */ }
     mazeDefinition = generateMaze();
     initializeMapTiles(); renderStarters(); loadAttackEffectOverrides(); bindEvents(); loadAssets();
-    document.documentElement.dataset.doctorPotatoScene = "idle";
+    document.documentElement.dataset.doctorPotatoScene = DOCTOR_POTATO_ENABLED ? "idle" : "disabled";
     document.documentElement.dataset.fragmentCinematic = "idle";
     document.documentElement.dataset.cityMapReady = "loading";
     const hasSave = loadGame();
@@ -11585,7 +11938,20 @@
       window.setTimeout(startNewGame, 0);
     } else if (resumeMapId === ACTIVE_MAP_ID && hasSave) {
       showWorld();
-      showAreaToast((CITY_MAP.name || ACTIVE_MAP_ID).toUpperCase());
+      if (MAP_OPENING) beginWorldEvents(() => showAreaToast((CITY_MAP.name || ACTIVE_MAP_ID).toUpperCase()));
+      else showAreaToast((CITY_MAP.name || ACTIVE_MAP_ID).toUpperCase());
+    } else if (LOCAL_DEBUG_MAP_OPENING && MAP_OPENING) {
+      if (!hasSave) {
+        state = defaultState();
+        state.started = true;
+        state.starterChosen = true;
+        state.team = [createPokemon(PETRILLO_ID, 5)];
+        state.caught = [PETRILLO_ID];
+        state.seen = [PETRILLO_ID];
+      }
+      state.mapId = ACTIVE_MAP_ID;
+      showWorld();
+      window.setTimeout(() => startMapOpeningSequence(() => showAreaToast("DISTRITO ADA-EFESO")), 0);
     } else if (PERSPECTIVE_ZONE_ACTIVE && LOCAL_DEBUG_PERSPECTIVE) {
       if (!hasSave) {
         state = defaultState();
@@ -11623,6 +11989,34 @@
       attackEffects: () => ({ selected: selectedAttackMoveId, customized: JSON.parse(JSON.stringify(attackEffectOverrides)) }),
       openAttackDex: () => { openAttackDex(); return true; },
       activeMap: () => ({ id: ACTIVE_MAP_ID, name: CITY_MAP.name || ACTIVE_MAP_ID, registered: MAP_REGISTRY.list().map((map) => map.id) }),
+      dayNight: () => ({
+        ...currentDayNightSnapshot(true),
+        active: usesOutdoorDayNight(),
+        source: LOCAL_DEBUG_DAY_NIGHT_MINUTES === null ? "local-device" : "debugTime",
+      }),
+      mapOpening: () => ({
+        configured: Boolean(MAP_OPENING),
+        id: MAP_OPENING?.id || null,
+        direction: MAP_OPENING?.player?.faintedDirection || null,
+        phase: mapOpeningScene?.phase || document.documentElement.dataset.mapOpeningScene || "idle",
+        elapsed: mapOpeningScene?.elapsed || 0,
+        thieves: activeMapOpeningThieves().map((thief) => ({
+          id: thief.id,
+          item: thief.item,
+          ...mapOpeningThiefPosition(thief),
+          provisionalHide: Array.isArray(thief.provisionalHide) ? [...thief.provisionalHide] : null,
+        })),
+      }),
+      advanceMapOpening: (milliseconds = 50) => {
+        if (!LOCAL_DEBUG_MAP_OPENING || !mapOpeningScene) return false;
+        let remaining = clamp(Number(milliseconds) || 50, 1, 10000);
+        while (remaining > 0 && mapOpeningScene) {
+          const step = Math.min(50, remaining);
+          updateMapOpeningSequence(step / 1000);
+          remaining -= step;
+        }
+        return mapOpeningScene?.phase || "complete";
+      },
       tileType: (col, row) => mapTileType(Number(col), Number(row)),
       canOccupy: (x, y) => cityMapCanOccupy(Number(x), Number(y)),
       worldAssets: () => cityWorldAssets.map((asset) => ({
@@ -11723,6 +12117,7 @@
         return startFragmentCinematicDebugSession();
       },
       doctorPotato: () => ({
+        enabled: DOCTOR_POTATO_ENABLED,
         pending: Boolean(state.doctorPotatoIntroPending),
         seen: Boolean(state.doctorPotatoIntroSeen),
         spriteReady: Boolean(npcRosterSheets.get("doctor-potato")?.ready),

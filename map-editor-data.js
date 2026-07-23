@@ -2206,19 +2206,6 @@ window.CITY_MAP_EDITOR_DATA = {
       "scene": "interior:entrance-3ad84f-d931f444:7wx2im",
       "id": "editor-interiorBookshelfSide-da90f5-2a4335e8",
       "sprite": "interiorBookshelfSide"
-    },
-    {
-      "x": 2112,
-      "y": 2272,
-      "scale": 1,
-      "rotation": 0,
-      "solid": true,
-      "depthY": 2270,
-      "flipX": false,
-      "label": "Banco de parque",
-      "scene": "world",
-      "id": "editor-bench-e0cf04-dd5f1f8f",
-      "sprite": "bench"
     }
   ],
   "hiddenAssets": [

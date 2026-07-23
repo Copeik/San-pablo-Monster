@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-18-cyclist",
+  "spriteId": "npc-18-cyclist",
+  "displayName": "Ciclista Toni",
+  "entitySlug": "ciclista-toni",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "947528bda975eea64e6fe4f55a34677183d799a72b49d1d458bf8d343587161c",
+  "sourceAssetId": "npc-18-cyclist-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-18-cyclist-walk.png",
+  "credits": "credits.txt"
+}

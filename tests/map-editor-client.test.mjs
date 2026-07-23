@@ -88,8 +88,10 @@ test("el juego conserva un arranque clásico compatible con abrir index.html dir
   assert.match(html, /<script src="map-bootstrap\.js\?v=1"><\/script>/);
   assert.match(html, /<script src="player-movement\.js\?v=\d+"><\/script>/);
   assert.match(html, /<script src="script\.js\?v=\d+"><\/script>/);
-  assert.match(html, /<script src="map-editor-standalone\.js\?v=\d+"><\/script>/);
+  assert.match(html, /<script data-role="map-editor-loader">[\s\S]*?script\.src = "map-editor-standalone\.js\?v=\d+";[\s\S]*?<\/script>/);
+  assert.doesNotMatch(html, /<script src="map-editor-standalone\.js\?v=\d+"><\/script>/);
   assert.ok(html.indexOf("player-movement.js") < html.indexOf("script.js"));
+  assert.ok(html.indexOf("script.js") < html.indexOf('data-role="map-editor-loader"'));
   assert.doesNotMatch(html, /type="module" src="script\.js/);
   assert.doesNotMatch(html, /type="module" src="map-editor\.js/);
   assert.doesNotMatch(runtime, /^\s*import\s/m);
@@ -101,9 +103,9 @@ test("file:// activa un modo solo persistente sin degradar errores HTTP a datos 
   assert.match(client, /const soloMode = window\.location\.protocol === "file:"/);
   assert.match(client, /pokemon-map-editor-solo-v1/);
   assert.match(client, /if \(soloMode\) \{[\s\S]*?readSoloSnapshot\(\)[\s\S]*?bridge\.enable\(\)/);
-  assert.match(client, /if \(soloMode\) return;[\s\S]*?eventSource\?\.close/);
+  assert.match(client, /if \(!realtimeLifecycleActive\(\) \|\| soloMode\) \{[\s\S]*?stopRealtimeLifecycle\(\)/);
   const httpBranch = client.slice(client.indexOf("const [result, recovered] = await Promise.all([fetchSnapshot()"));
-  assert.match(httpBranch, /catch \(error\) \{\s*enabled = false; bridge\.disable\(\)/);
+  assert.match(httpBranch, /catch \(error\) \{\s*enabled = false; stopRealtimeLifecycle\(\); bridge\.disable\(\)/);
   assert.doesNotMatch(httpBranch, /readSoloSnapshot\(/);
 });
 
@@ -577,7 +579,8 @@ test("el escaneo diagnostica entidades, limites, duplicados, dialogo, vinculos y
 
   const schedule = functionSource(client, "scheduleMapDiagnostics");
   assert.match(schedule, /window\.clearTimeout\(diagnosticsTimer\)/);
-  assert.match(schedule, /window\.setTimeout\(renderMapDiagnostics, delay\)/);
+  assert.match(schedule, /if \(!realtimeLifecycleActive\(\)\) return/);
+  assert.match(schedule, /window\.setTimeout\(\(\) => \{[\s\S]*?renderMapDiagnostics\(\);[\s\S]*?\}, delay\)/);
   assert.match(functionSource(client, "renderOutliner"), /scheduleMapDiagnostics\(\)/);
 
   const bindings = functionSource(client, "bindUi");

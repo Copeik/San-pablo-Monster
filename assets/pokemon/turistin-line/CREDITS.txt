@@ -1,6 +1,0 @@
-Línea Turistín
-
-Concepto, nombres y ficha original: material proporcionado por el usuario.
-Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: turistin-front.png, turistin-back.png, turistardo-front.png, turistardo-back.png, turistimo-front.png, turistimo-back.png.

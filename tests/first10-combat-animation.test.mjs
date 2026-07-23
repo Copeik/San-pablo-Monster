@@ -7,8 +7,6 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const species = [
-  { id: 5, slug: "ascuero", line: "braspy-line" },
-  { id: 6, slug: "volcazote", line: "braspy-line" },
   { id: 9001, slug: "petrillo", line: "petrillo-line" },
   { id: 9002, slug: "musgolem", line: "petrillo-line" },
   { id: 9003, slug: "terravordeo", line: "petrillo-line" },
@@ -51,56 +49,40 @@ function assertAnimatedWebp(asset, frameMs, loop) {
 }
 
 for (const entry of species) {
-  test(`${entry.slug} has only the six required PixelLab combat animations and four attack poses`, async () => {
-    const lineRoot = path.join(root, "assets", "pokemon", entry.line);
+  test(`${entry.slug} conserva solo seis animaciones canónicas`, async () => {
+    const lineRoot = path.join(root, "assets", "pokemon", entry.line, entry.slug);
     const animationFiles = [
-      [`${entry.slug}-idle-front-pixellab.webp`, 120, 0],
-      [`${entry.slug}-idle-back-pixellab.webp`, 120, 0],
-      [`${entry.slug}-attack-melee-front-pixellab.webp`, 90, 1],
-      [`${entry.slug}-attack-melee-back-pixellab.webp`, 90, 1],
-      [`${entry.slug}-attack-ranged-front-pixellab.webp`, 90, 1],
-      [`${entry.slug}-attack-ranged-back-pixellab.webp`, 90, 1],
+      ["idle-front.webp", 120, 0],
+      ["idle-back.webp", 120, 0],
+      ["attack-physical-front.webp", 90, 1],
+      ["attack-physical-back.webp", 90, 1],
+      ["attack-special-front.webp", 90, 1],
+      ["attack-special-back.webp", 90, 1],
     ];
+    assert.deepEqual((await readdir(lineRoot)).sort(), animationFiles.map(([file]) => file).sort());
     const animations = await Promise.all(animationFiles.map(([file]) => readFile(path.join(lineRoot, file))));
     animations.forEach((asset, index) => assertAnimatedWebp(asset, animationFiles[index][1], animationFiles[index][2]));
-
-    const poses = await Promise.all(["melee-front", "melee-back", "ranged-front", "ranged-back"].map((variant) => (
-      readFile(path.join(lineRoot, `${entry.slug}-attack-${variant}-pixellab.png`))
-    )));
-    for (const pose of poses) {
-      assert.deepEqual([...pose.subarray(1, 4)], [...Buffer.from("PNG")]);
-      assert.equal(pose.readUInt32BE(16), 384);
-      assert.equal(pose.readUInt32BE(20), 384);
-      assert.equal(pose[25], 6, "pose must be RGBA");
-    }
-
-    const acceptedRoot = path.join(lineRoot, "pixellab-hq", entry.slug, "accepted-frames");
-    const sourceSequences = [
-      ["idle", "front"], ["idle", "back"],
-      ["attack", "melee", "front"], ["attack", "melee", "back"],
-      ["attack", "ranged", "front"], ["attack", "ranged", "back"],
-    ];
-    for (const sequence of sourceSequences) {
-      const files = await readdir(path.join(acceptedRoot, ...sequence));
-      assert.equal(files.filter((file) => /^frame-\d\d\.png$/.test(file)).length, 8);
-    }
+    assert.ok(animations.reduce((total, asset) => total + asset.length, 0) < 1_000_000);
   });
 }
 
-test("the first ten combat packs are registered with distinct melee and ranged assets", async () => {
+test("los primeros packs usan physical y special sin poses ni fallbacks estáticos", async () => {
   const source = await readFile(path.join(root, "sanpledex-animation-data.js"), "utf8");
   const context = { globalThis: {} };
   vm.runInNewContext(source, context);
   for (const entry of species) {
     const record = context.globalThis.SANPLEDEX_ANIMATION_ASSETS[entry.id];
     assert.equal(record.frameCount, 8);
+    assert.equal(record.profile, "pokemon-animation-only-v1");
+    assert.equal(record.animationOnly, true);
     assert.equal(record.idleFrameMs, 120);
     assert.equal(record.attackFrameMs, 90);
-    assert.match(record.idle.front, new RegExp(`${entry.slug}-idle-front-pixellab\\.webp$`));
-    assert.match(record.attacks.melee.front, new RegExp(`${entry.slug}-attack-melee-front-pixellab\\.webp$`));
-    assert.match(record.attacks.ranged.front, new RegExp(`${entry.slug}-attack-ranged-front-pixellab\\.webp$`));
-    assert.notEqual(record.attacks.melee.front, record.attacks.ranged.front);
-    assert.equal(record.attack.front, record.attacks.melee.front);
+    assert.match(record.idle.front, new RegExp(`/${entry.line}/${entry.slug}/idle-front\\.webp$`));
+    assert.match(record.attacks.physical.front, new RegExp(`/${entry.line}/${entry.slug}/attack-physical-front\\.webp$`));
+    assert.match(record.attacks.special.front, new RegExp(`/${entry.line}/${entry.slug}/attack-special-front\\.webp$`));
+    assert.notEqual(record.attacks.physical.front, record.attacks.special.front);
+    assert.equal("attack" in record, false);
+    assert.equal("pose" in record, false);
   }
 });
 

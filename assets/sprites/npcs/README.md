@@ -1,54 +1,51 @@
 # NPC overworld sprites
 
-All NPC artwork is organized below this directory. The game loads only the
-normalized sheets in `overworld/`.
+The 48 runtime NPC sprites are stored as individual, named packs. Runtime code
+resolves stable sprite IDs and aliases through `catalog.js`; it never builds a
+filename from an ID.
 
 ## Folder layout
 
-- `overworld/` — 48 runtime-ready, individual NPC sheets.
-- `legacy-4x4/` — the original 256x256 sheets kept as lossless rebuild inputs.
-- `source/` — supplied source art, including the roster sheets, rival, Doctor
-  Potato and the HGSS fallback source.
-- `npc-walk-contract.json` — the shared runtime composition.
-- `overworld-manifest.json` — the complete generated asset inventory.
-- `previews/` and `metadata/` — created by the specialist import tools when
-  previews or reports are rebuilt.
+- `overworld/{entity-slug}/` — one character pack containing exactly
+  `overworld.png`, `manifest.json` and `credits.txt`.
+- `legacy-4x4/` — declared historical sources. These are not runtime assets and
+  are not treated as the canonical pixels for the 6x8 sheets.
+- `source/` — supplied source art and historical atlases.
+- `npc-walk-contract.json` — the shared movement composition.
+- `overworld-manifest.json` — the exact 48-pack inventory.
+- `catalog.js` — deterministic `globalThis.NPC_ASSET_CATALOG` mapping stable
+  IDs and aliases to pack URLs.
 
-## Shared movement composition
+Folder names come from the character's readable `displayName`, not from a
+technical sprite ID. For example, `npc-11-athlete` is preserved as the
+`spriteId` but lives in `overworld/deportista-max/`; the runtime alias `guide`
+resolves to the `npc-guide` pack in `overworld/guia-de-san-pablo/`.
 
-Every file in `overworld/` follows the same layout as the protagonist:
+## npc-overworld-v1
 
-- PNG RGBA sheet: `384x512`;
-- cell: `64x64` pixels;
-- columns: 6 walk frames;
-- rows: `down`, `down-right`, `right`, `up-right`, `up`, `up-left`, `left`,
+Every `overworld.png` is the approved canonical sheet and has:
+
+- PNG RGBA, non-interlaced, `384x512`;
+- a `6x8` grid of `64x64` cells;
+- rows `down`, `down-right`, `right`, `up-right`, `up`, `up-left`, `left`,
   `down-left`;
-- nearest-neighbour rendering with no smoothing.
+- 48 visible cells and nearest-neighbour runtime rendering.
 
-The existing NPC designs have four authored directions and four authored walk
-frames. Normalization preserves those pixels exactly. The six-frame cycle is
-derived with source order `0, 1, 2, 3, 2, 1`; diagonal rows reuse the matching
-left or right authored view. This gives every NPC one stable 6x8 runtime
-contract without regenerating or changing its design.
+Validation checks geometry, PNG encoding, visible cells, manifest SHA-256,
+declared legacy-source existence, the exact three-file pack topology, the root
+inventory and runtime catalog usage. It intentionally does not compare the
+approved sheet with the historical 4x4 source.
 
-## Sprite IDs
+## Metadata refresh
 
-The manifest is the canonical inventory. It contains the 30 numbered NPCs,
-the 15 imported aliases, `rival`, `doctor-potato`, and `npc-guide`.
-
-Use an ID as the `sprite` value of an NPC in map data. The guide remains the
-special `guide` runtime alias, which resolves to `npc-guide-walk.png` in the
-same `overworld/` folder.
-
-## Rebuilding
-
-Specialist importers first rebuild a source sheet in `legacy-4x4/`. After any
-legacy source changes, normalize the complete roster:
+After moving an already-approved sheet without altering it, rebuild the pack
+manifests, root inventory and catalog:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/normalize-npc-walk-sheets.ps1
+node tools/build-npc-asset-catalog.mjs
+node tools/validate-npc-walk-sheets.mjs
 ```
 
-The command rewrites all individual files in `overworld/` and refreshes
-`overworld-manifest.json`. It is deterministic and does not call an image
-generation service.
+The former 4x4 normalizer now stops with instructions because rebuilding from
+legacy sources could overwrite approved canonical pixels. Any artistic change
+must follow the repository's PixelLab MCP workflow.

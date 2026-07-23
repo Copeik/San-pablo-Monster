@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1024" viewBox="0 0 1280 1024" shape-rendering="crispEdges">
+  <defs>
+    <pattern id="parking-floor" width="64" height="64" patternUnits="userSpaceOnUse">
+      <rect width="64" height="64" fill="#3d4244"/>
+      <path d="M0 0H64V64H0Z" fill="none" stroke="#303537" stroke-width="2"/>
+      <path d="M8 17h5m23 31h9M54 9h3M19 55h4" stroke="#555b5d" stroke-width="2"/>
+      <path d="M3 37h8m25-18h4" stroke="#292e30" stroke-width="3" opacity=".7"/>
+    </pattern>
+    <pattern id="wall" width="16" height="16" patternUnits="userSpaceOnUse">
+      <rect width="16" height="16" fill="#74797a"/>
+      <path d="M0 8H16M8 0V16" stroke="#565c5e" stroke-width="2"/>
+      <path d="M2 2H7V7H2Z" fill="#8d9190" opacity=".45"/>
+    </pattern>
+    <radialGradient id="light-pool">
+      <stop offset="0" stop-color="#d7d0a0" stop-opacity=".42"/>
+      <stop offset=".55" stop-color="#8e8b6e" stop-opacity=".17"/>
+      <stop offset="1" stop-color="#171b1d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="1024" fill="#14191b"/>
+  <rect x="32" y="32" width="1216" height="960" fill="url(#parking-floor)" stroke="#090d0e" stroke-width="10"/>
+
+  <!-- Rampa y carril de maniobra. -->
+  <path d="M560 32H720V272H560Z" fill="#303638" stroke="#7b7f7c" stroke-width="8"/>
+  <path d="M640 64V256" stroke="#b29d3e" stroke-width="4" stroke-dasharray="20 16"/>
+  <path d="M560 288H720" stroke="#d7d0a6" stroke-width="4"/>
+
+  <!-- Plazas de aparcamiento desgastadas. -->
+  <g fill="none" stroke="#b9b58f" stroke-width="3" opacity=".58">
+    <path d="M64 64H160V224H64M160 64H256V224M256 64H352V224M928 64H1024V224M1024 64H1120V224M1120 64H1216V224"/>
+    <path d="M64 800H176V960M176 800H288V960M288 800H400V960M880 800H992V960M992 800H1104V960M1104 800H1216V960"/>
+  </g>
+  <g fill="#b9b58f" opacity=".33">
+    <text x="102" y="150" font-family="monospace" font-size="32">01</text>
+    <text x="1090" y="150" font-family="monospace" font-size="32">06</text>
+    <text x="96" y="900" font-family="monospace" font-size="32">18</text>
+    <text x="1090" y="900" font-family="monospace" font-size="32">24</text>
+  </g>
+
+  <!-- Tabiques de hormigón: su misma geometría se declara como blockedRects. -->
+  <g fill="url(#wall)" stroke="#24292b" stroke-width="5">
+    <rect x="160" y="128" width="64" height="288"/>
+    <rect x="160" y="512" width="64" height="384"/>
+    <rect x="352" y="256" width="64" height="448"/>
+    <rect x="352" y="800" width="64" height="160"/>
+    <rect x="512" y="128" width="64" height="224"/>
+    <rect x="736" y="128" width="64" height="288"/>
+    <rect x="736" y="640" width="64" height="288"/>
+    <rect x="928" y="224" width="64" height="416"/>
+    <rect x="928" y="736" width="64" height="224"/>
+    <rect x="1120" y="128" width="64" height="352"/>
+    <rect x="1120" y="576" width="64" height="320"/>
+    <rect x="192" y="384" width="192" height="64"/>
+    <rect x="384" y="672" width="192" height="64"/>
+    <rect x="544" y="320" width="256" height="64"/>
+    <rect x="768" y="608" width="224" height="64"/>
+    <rect x="960" y="448" width="224" height="64"/>
+    <rect x="192" y="864" width="224" height="64"/>
+  </g>
+
+  <!-- Pozo de luz central. -->
+  <circle cx="640" cy="544" r="190" fill="url(#light-pool)"/>
+  <circle cx="640" cy="544" r="94" fill="#202629" stroke="#858b87" stroke-width="12"/>
+  <circle cx="640" cy="544" r="64" fill="#a9a276" opacity=".26"/>
+
+  <!-- Telarañas integradas en esquinas y pasos estrechos. -->
+  <g fill="none" stroke="#d5d7d2" stroke-width="2" opacity=".62">
+    <path d="M40 40h88M40 40v88M40 40l88 88M40 72c36 0 56 20 56 56M40 96c16 0 32 16 32 32"/>
+    <path d="M1240 984h-96M1240 984v-96M1240 984l-96-96M1240 952c-40 0-64-24-64-64M1240 928c-18 0-40-18-40-40"/>
+    <path d="M416 704h96M416 704v96M416 704l96 96M416 736c34 0 64 30 64 64"/>
+    <path d="M992 224h96M992 224v96M992 224l96 96M992 256c34 0 64 30 64 64"/>
+  </g>
+
+  <!-- Aceite, humedad y flechas que ayudan a leer el pequeño laberinto. -->
+  <g fill="#202527" opacity=".7">
+    <ellipse cx="292" cy="556" rx="46" ry="18"/>
+    <ellipse cx="888" cy="404" rx="58" ry="22"/>
+    <ellipse cx="678" cy="890" rx="52" ry="16"/>
+  </g>
+  <g fill="#c3ad48" opacity=".74">
+    <path d="M480 480l28 18-28 18v-10h-48v-16h48z"/>
+    <path d="M846 746l-28-18 28-18v10h48v16h-48z"/>
+  </g>
+  <path d="M32 32H1248V992H32Z" fill="none" stroke="#090d0e" stroke-width="10"/>
+</svg>

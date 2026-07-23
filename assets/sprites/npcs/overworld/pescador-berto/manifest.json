@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-06-fisher",
+  "spriteId": "npc-06-fisher",
+  "displayName": "Pescador Berto",
+  "entitySlug": "pescador-berto",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "bf0b40da6123b40d65c0641900419f291926821709faa598dd8704d8e97e3a01",
+  "sourceAssetId": "npc-06-fisher-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-06-fisher-walk.png",
+  "credits": "credits.txt"
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-27-librarian",
+  "spriteId": "npc-27-librarian",
+  "displayName": "Bibliotecaria Maribel",
+  "entitySlug": "bibliotecaria-maribel",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "1ac2bd6b6aba9e4075b8edcc92d7b0e1c9fb99dc05b6d35227490d48afa6243c",
+  "sourceAssetId": "npc-27-librarian-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-27-librarian-walk.png",
+  "credits": "credits.txt"
+}

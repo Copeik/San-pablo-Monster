@@ -1,6 +1,8 @@
 .worktrees/
 .pnpm-store/
 node_modules/
+dist/
+coverage/
 .superpowers/
 .codex-*.log
 __pycache__/
@@ -15,3 +17,5 @@ assets/maps/*-reference-comparison.png
 assets/maps/trainer-bedroom-preview.*
 assets/sprites/npcs/*preview*.png
 assets/sprites/npcs/*report*.json
+.DS_Store
+Thumbs.db

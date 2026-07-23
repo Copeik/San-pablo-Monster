@@ -1,26 +1,47 @@
 # Plaza de la Farmacia
 
-Mapa exterior independiente de 40×30 casillas (1280×960 px), inspirado en el
-entorno de Calle Jerusalén 35 de San Pablo C. La composición está pensada como
-una entrada desde la carretera:
+Mapa exterior independiente de 40×56 casillas (1280×1792 px).
 
-1. calzada y paso de peatones en el borde inferior;
-2. plaza pavimentada con árboles, bancos y terrazas en el centro;
-3. bares, farmacia, banco y tienda cerrando el fondo superior;
-4. bloques residenciales como segunda línea urbana.
+## Referencia maestra
 
-La distribución es una síntesis jugable basada en fotografías y cartografía;
-no afirma el orden exacto de cada negocio real.
+La revisión 14 usa como arte definitivo la imagen aprobada por el usuario:
 
-## Conexión
+`assets/references/plaza-farmacia-final-authoritative.png`
 
-- `plaza-farmacia-access`, en San Pablo, es un evento de interacción que carga
-  este paquete y coloca al jugador abajo mirando hacia la plaza.
-- `plaza-farmacia-return-san-pablo`, al pisar el umbral inferior, devuelve al
-  jugador a Calle Jerusalén.
+El script `tools/remove-plaza-pharmacy-side-door-v14.ps1` elimina el antiguo
+saliente lateral de la farmacia mediante una continuación exacta de la acera.
+Después, `tools/build-plaza-farmacia-v14.ps1` amplía la referencia de 1060×1484 a
+1280×1792 mediante vecino más próximo, sin recortar ni cambiar su proporción
+5:7. El resultado se guarda en `base-v14.png`.
 
-Los dos sentidos usan transición con fundido y guardan el mapa y la posición.
-El mapa aparece como `Plaza de la Farmacia` en el selector del editor; objetos,
-NPC, entradas y eventos se guardan en `editor-data.js` sin mezclarse con San
-Pablo.
+La referencia ya contiene edificios, fachadas, mobiliario, rampa, carretera y
+ruinas. Por eso el mapa no añade `worldAssets` encima: hacerlo duplicaría el
+arte y volvería a producir el efecto de fachadas pegadas.
 
+## Distribución
+
+- Los comercios forman un único edificio blanco de una planta en U invertida,
+  abierto hacia la carretera.
+- Tramo norte, de oeste a este: **KEBAB**, **LOCAL CERRADO** y **BAR**.
+- Ala oeste, de norte a sur: **CHINO**, **LOCAL CERRADO** y
+  **MAR DE GAMBAS**; sus fachadas miran al este, hacia la plaza.
+- Ala este, de norte a sur: **FRUTERÍA**, **LOCAL CERRADO** y
+  **FARMACIA**; sus fachadas miran al oeste, hacia la plaza.
+- La farmacia conserva la cristalera sur; su lateral este queda limpio y
+  alineado con la acera, sin el antiguo saliente azul y beige.
+- El hueco circular queda en el centro y la rampa de dos carriles continúa
+  hasta la carretera.
+- El paso de peatones está alineado con la rampa.
+- Al sur hay dos grandes alas del centro comercial derruido, separadas por un
+  eje central y unas puertas de cristal rotas.
+
+## Juego y colisiones
+
+La arquitectura y los obstáculos del dibujo se reproducen con
+`buildingFootprints` y `blockedRects` invisibles. La rampa conecta con
+`parking-plaza-farmacia`, cuyo regreso desemboca en `(640, 944)`. Las aceras
+laterales siguen conectando con Calle Jerusalén.
+
+El parking mantiene su propia imagen, sus telarañas y su trazado laberíntico.
+Los cambios del editor se guardan por separado en los archivos
+`editor-data.js` de ambos mapas.

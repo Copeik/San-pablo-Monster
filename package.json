@@ -5,11 +5,23 @@
   "scripts": {
     "start": "node server.mjs",
     "start:collab": "node server.mjs --collab",
+    "start:prod": "node server.mjs --production --profile standard",
+    "start:legacy": "node server.mjs --production --profile legacy",
+    "start:legacy-dev": "node server.mjs --production --profile legacy-dev",
     "editor:bundle": "node tools/build-map-editor-bundle.mjs",
     "map:new": "node tools/create-map.mjs",
+    "assets:audit": "node tools/assets/audit-assets.mjs && node tools/assets/check-standard-assets.mjs",
+    "assets:check": "node tools/assets/audit-assets.mjs --check && node tools/assets/check-standard-assets.mjs --check",
+    "build": "pnpm run build:legacy",
+    "build:legacy": "pnpm run assets:check && node tools/build-production.mjs --profile legacy",
+    "build:legacy-dev": "pnpm run assets:check && node tools/build-production.mjs --profile legacy-dev",
+    "build:standard": "pnpm run assets:check && node tools/build-production.mjs --profile standard",
     "test": "node --test tests/*.test.mjs && node tools/validate-voice-npc.mjs && node tools/validate-prism-minigame.mjs && node tools/validate-perspective-minigame.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
   }
 }

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-04-grandmother",
+  "spriteId": "npc-04-grandmother",
+  "displayName": "Abuela Lola",
+  "entitySlug": "abuela-lola",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "d638c1f37a2397186f48fa1c7ef27d8303172957894a2472205ac10cb26fc32a",
+  "sourceAssetId": "npc-04-grandmother-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-04-grandmother-walk.png",
+  "credits": "credits.txt"
+}

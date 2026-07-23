@@ -1,6 +1,0 @@
-Línea Gazpinito
-
-Concepto, nombres y ficha original: material proporcionado por el usuario.
-Sprites: vistas frontales y traseras pixel-art extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: gazpinito-front.png, gazpinito-back.png, gazpalado-front.png, gazpalado-back.png.

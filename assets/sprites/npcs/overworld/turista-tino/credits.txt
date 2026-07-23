@@ -1,0 +1,10 @@
+Turista Tino
+============
+
+NPC overworld asset for pokemon-adventure.
+
+Immediate declared source: assets/sprites/npcs/legacy-4x4/npc-28-tourist-walk.png
+Runtime asset: overworld.png
+
+The canonical 384x512 sheet was moved into this individual pack byte-for-byte; no pixels were regenerated or edited.
+See assets/sprites/CREDITS.txt for the project-level artwork provenance and attribution notes.

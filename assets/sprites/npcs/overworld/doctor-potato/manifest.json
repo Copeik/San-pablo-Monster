@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "doctor-potato",
+  "spriteId": "doctor-potato",
+  "displayName": "Doctor Potato",
+  "entitySlug": "doctor-potato",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "115458e3a85dae65b7f4772c8c65247e9449283f7aa1401796be67c6f9a4464d",
+  "sourceAssetId": "doctor-potato-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/doctor-potato-walk.png",
+  "credits": "credits.txt"
+}

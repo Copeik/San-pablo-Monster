@@ -1,6 +1,0 @@
-Familia Culebrín
-
-Concepto, nombres y ficha original: material proporcionado por el usuario.
-Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: culebrin-front.png, culebrin-back.png, maldrina-front.png, maldrina-back.png, lumibrina-front.png, lumibrina-back.png.

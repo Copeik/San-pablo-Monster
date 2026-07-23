@@ -2,8 +2,11 @@
   "use strict";
 
   const SCHEMA_VERSION = 1;
+  const PACK_KIND = "pokemon-city-attack-effects";
   const STORAGE_KEY = "pokemon-city-attack-effects-v1";
-  const MOVE_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
+  const MOVE_ID_PATTERN = /^[a-z][A-Za-z0-9_-]{0,63}$/;
+  const UNSAFE_OBJECT_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+  const owns = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 
   const PRESETS = Object.freeze({
     normal: Object.freeze({ name: "Impacto", color: "#f4f7f2", width: 28, height: 28 }),
@@ -94,7 +97,7 @@
   function normalizeProfile(value = {}, type = "Normal") {
     const base = defaultProfile(type);
     const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    const preset = Object.hasOwn(PRESETS, source.preset) ? source.preset : base.preset;
+    const preset = owns(PRESETS, source.preset) ? source.preset : base.preset;
     const presetDesign = PRESETS[preset];
     const presetChanged = preset !== base.preset;
     const widthFallback = presetChanged ? presetDesign.width : base.width;
@@ -112,7 +115,7 @@
       particles: clampNumber(source.particles, base.particles, LIMITS.particles, true),
       rings: clampNumber(source.rings, base.rings, LIMITS.rings, true),
       shake: clampNumber(source.shake, base.shake, LIMITS.shake),
-      impact: Object.hasOwn(IMPACTS, source.impact) ? source.impact : base.impact,
+      impact: owns(IMPACTS, source.impact) ? source.impact : base.impact,
       impactScale: clampNumber(source.impactScale, base.impactScale, LIMITS.impactScale),
       trail: typeof source.trail === "boolean" ? source.trail : base.trail,
     };
@@ -125,24 +128,76 @@
     return profile.duration + Math.max(lastProjectileDelay, lastRingDelay);
   }
 
+  function isRecord(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function safeJsonClone(value, seen = new WeakSet(), depth = 0) {
+    if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (!value || typeof value !== "object" || depth >= 32 || seen.has(value)) return undefined;
+
+    seen.add(value);
+    if (Array.isArray(value)) {
+      const result = value.map((item) => {
+        const cloned = safeJsonClone(item, seen, depth + 1);
+        return cloned === undefined ? null : cloned;
+      });
+      seen.delete(value);
+      return result;
+    }
+
+    const result = Object.create(null);
+    for (const [key, item] of Object.entries(value)) {
+      if (UNSAFE_OBJECT_KEYS.has(key)) continue;
+      const cloned = safeJsonClone(item, seen, depth + 1);
+      if (cloned !== undefined) result[key] = cloned;
+    }
+    seen.delete(value);
+    return result;
+  }
+
   function normalizePack(value, moveTypes = {}) {
-    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    const rawEffects = source.effects && typeof source.effects === "object" && !Array.isArray(source.effects)
-      ? source.effects
-      : source;
-    const allowedMoveIds = Object.keys(moveTypes);
+    const source = isRecord(value) ? value : {};
+    const hasEnvelope = owns(source, "effects");
+    const rawEffects = hasEnvelope ? (isRecord(source.effects) ? source.effects : {}) : source;
+    const carriedUnknownEffects = isRecord(source.unknownEffects) ? source.unknownEffects : {};
+    const allowedMoveIds = isRecord(moveTypes) ? Object.keys(moveTypes) : [];
     const restrictIds = allowedMoveIds.length > 0;
     const effects = Object.create(null);
-    const ignored = [];
+    const unknownEffects = Object.create(null);
+    const ignored = new Set();
 
-    for (const [moveId, profile] of Object.entries(rawEffects)) {
-      if (!MOVE_ID_PATTERN.test(moveId) || (restrictIds && !Object.hasOwn(moveTypes, moveId))) {
-        ignored.push(moveId);
+    for (const [moveId, profile] of Object.entries(carriedUnknownEffects)) {
+      if (!MOVE_ID_PATTERN.test(moveId)) {
+        ignored.add(moveId);
         continue;
       }
+      if (restrictIds && owns(moveTypes, moveId)) {
+        effects[moveId] = normalizeProfile(profile, moveTypes[moveId] || "Normal");
+      } else {
+        ignored.add(moveId);
+        const safeProfile = safeJsonClone(profile);
+        if (safeProfile !== undefined) unknownEffects[moveId] = safeProfile;
+      }
+    }
+
+    for (const [moveId, profile] of Object.entries(rawEffects)) {
+      if (!MOVE_ID_PATTERN.test(moveId)) {
+        ignored.add(moveId);
+        continue;
+      }
+      if (restrictIds && !owns(moveTypes, moveId)) {
+        ignored.add(moveId);
+        const safeProfile = safeJsonClone(profile);
+        if (safeProfile !== undefined) unknownEffects[moveId] = safeProfile;
+        continue;
+      }
+      ignored.delete(moveId);
+      delete unknownEffects[moveId];
       effects[moveId] = normalizeProfile(profile, moveTypes[moveId] || "Normal");
     }
-    return { effects, ignored };
+    return { effects, ignored: [...ignored], unknownEffects };
   }
 
   function parsePack(text, moveTypes = {}) {
@@ -155,24 +210,43 @@
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("El paquete de efectos debe ser un objeto JSON.");
     }
-    if (Number(parsed.schemaVersion || SCHEMA_VERSION) > SCHEMA_VERSION) {
+    if (parsed.kind !== PACK_KIND) {
+      throw new Error(`El kind del paquete debe ser "${PACK_KIND}".`);
+    }
+    if (typeof parsed.schemaVersion !== "number" || !Number.isInteger(parsed.schemaVersion)) {
+      throw new Error("schemaVersion debe ser un número entero.");
+    }
+    if (parsed.schemaVersion > SCHEMA_VERSION) {
       throw new Error(`Este paquete usa una versión más nueva (${parsed.schemaVersion}).`);
+    }
+    if (parsed.schemaVersion !== SCHEMA_VERSION) {
+      throw new Error(`schemaVersion no compatible (${parsed.schemaVersion}).`);
+    }
+    if (!isRecord(parsed.effects)) {
+      throw new Error("La propiedad effects debe ser un objeto JSON.");
     }
     return normalizePack(parsed, moveTypes);
   }
 
   function serializePack(effects, moveTypes = {}) {
-    const normalized = normalizePack({ effects }, moveTypes);
+    const source = isRecord(effects) && isRecord(effects.effects) ? effects : { effects };
+    const normalized = normalizePack(source, moveTypes);
+    const serializedEffects = Object.assign(
+      Object.create(null),
+      normalized.unknownEffects,
+      normalized.effects,
+    );
     return JSON.stringify({
       schemaVersion: SCHEMA_VERSION,
-      kind: "pokemon-city-attack-effects",
+      kind: PACK_KIND,
       exportedAt: new Date().toISOString(),
-      effects: normalized.effects,
+      effects: serializedEffects,
     }, null, 2);
   }
 
   root.AttackEffects = Object.freeze({
     SCHEMA_VERSION,
+    PACK_KIND,
     STORAGE_KEY,
     PRESETS,
     IMPACTS,

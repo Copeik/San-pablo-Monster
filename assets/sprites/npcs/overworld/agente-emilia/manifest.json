@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-14-officer",
+  "spriteId": "npc-14-officer",
+  "displayName": "Agente Emilia",
+  "entitySlug": "agente-emilia",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "439d71720553e34a01b90241256a4c214c86ce86bb42548b6f3de749d8c815a5",
+  "sourceAssetId": "npc-14-officer-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-14-officer-walk.png",
+  "credits": "credits.txt"
+}

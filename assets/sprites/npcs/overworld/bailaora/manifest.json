@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "bailaora",
+  "spriteId": "bailaora",
+  "displayName": "Bailaora",
+  "entitySlug": "bailaora",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "6d03417b628acd332c4e32ef241fe7af90964013afc5af07bb9b5420ac648465",
+  "sourceAssetId": "bailaora-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/bailaora-walk.png",
+  "credits": "credits.txt"
+}

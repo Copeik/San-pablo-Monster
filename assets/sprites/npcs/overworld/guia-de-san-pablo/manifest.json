@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-guide",
+  "spriteId": "npc-guide",
+  "displayName": "Guía de San Pablo",
+  "entitySlug": "guia-de-san-pablo",
+  "aliases": [
+    "guide"
+  ],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "103a997d98b3211d82b1e036cab7948995cc92abf497ae653331429803268ed3",
+  "sourceAssetId": "npc-guide-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-guide-walk.png",
+  "credits": "credits.txt"
+}

@@ -1,6 +1,15 @@
 {
-  "version": 1,
+  "schemaVersion": 1,
+  "version": 2,
+  "kind": "npc-overworld-contract",
   "name": "npc-walk-6x8",
+  "profile": "npc-overworld-v1",
+  "slot": "overworld",
+  "path": "overworld/{entitySlug}/overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
   "cellSize": 64,
   "grid": {
     "columns": 6,
@@ -16,12 +25,10 @@
     "left",
     "down-left"
   ],
-  "frameOrderFromLegacy4x4": [0, 1, 2, 3, 2, 1],
-  "derivedDirections": {
-    "down-right": "right",
-    "up-right": "right",
-    "up-left": "left",
-    "down-left": "left"
+  "sourcePolicy": {
+    "canonicalPixels": "overworld.png",
+    "legacyRequirement": "declared-path-exists-only",
+    "compareWithLegacy": false
   },
   "rendering": {
     "imageSmoothingEnabled": false,

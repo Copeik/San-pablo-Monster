@@ -42,6 +42,13 @@ def validate_frame_count(frame_count: int) -> None:
         raise ValueError("frame_count must be greater than zero")
 
 
+def validate_pixellab_frame(image: Image.Image, name: str) -> None:
+    """Accept the square canvases returned by current PixelLab character models."""
+    width, height = image.size
+    if width != height or not 64 <= width <= 512 or image.mode not in {"RGBA", "P"}:
+        raise ValueError(f"unexpected PixelLab frame format: {name}")
+
+
 def visible_bbox(image: Image.Image) -> tuple[int, int, int, int]:
     bbox = image.getchannel("A").getbbox()
     if bbox is None:
@@ -135,8 +142,7 @@ def import_archive(archive: Path, frame_root: Path, frame_count: int) -> list[Pa
                     output = destination / f"frame-{index:02d}.png"
                     output.write_bytes(bundle.read(name))
                     with Image.open(output) as image:
-                        if image.size != (256, 256) or image.mode not in {"RGBA", "P"}:
-                            raise ValueError(f"unexpected PixelLab frame format: {name}")
+                        validate_pixellab_frame(image, name)
                     outputs.append(output)
     return outputs
 
@@ -205,8 +211,7 @@ def import_combat_archive(
                 output = destination / f"frame-{index:02d}.png"
                 output.write_bytes(bundle.read(name))
                 with Image.open(output) as image:
-                    if image.size != (256, 256) or image.mode not in {"RGBA", "P"}:
-                        raise ValueError(f"unexpected PixelLab frame format: {name}")
+                    validate_pixellab_frame(image, name)
                 outputs.append(output)
     return outputs
 

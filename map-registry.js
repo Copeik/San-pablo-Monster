@@ -3,6 +3,7 @@
 
   if (root.GAME_MAP_REGISTRY?.version === 1) return;
 
+  const DEFAULT_MAP_ID = "ada-efeso";
   const maps = new Map();
   const aliases = new Map();
   const normalizeId = (value) => String(value || "").trim().toLowerCase().replace(/_/g, "-");
@@ -28,7 +29,7 @@
 
   function resolve(value, currentId = root.ACTIVE_GAME_MAP_ID) {
     const requested = normalizeId(value);
-    if (!requested || requested === "current") return normalizeId(currentId) || "san-pablo";
+    if (!requested || requested === "current") return normalizeId(currentId) || DEFAULT_MAP_ID;
     return aliases.get(requested) || requested;
   }
 
@@ -37,7 +38,7 @@
   }
 
   function activate(value) {
-    const record = get(value) || maps.get("san-pablo") || maps.values().next().value;
+    const record = get(value) || maps.get(DEFAULT_MAP_ID) || maps.get("san-pablo") || maps.values().next().value;
     if (!record) throw new Error("No hay mapas registrados.");
     root.ACTIVE_GAME_MAP_ID = record.id;
     root.ACTIVE_GAME_MAP = record;
@@ -49,7 +50,7 @@
 
   root.GAME_MAP_REGISTRY = Object.freeze({
     version: 1,
-    defaultMapId: "san-pablo",
+    defaultMapId: DEFAULT_MAP_ID,
     normalizeId,
     register,
     resolve,

@@ -1,6 +1,0 @@
-Línea Lincacho
-
-Concepto, nombres y ficha original: material proporcionado por el usuario.
-Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: lincacho-front.png, lincacho-back.png, lincebrio-front.png, lincebrio-back.png.

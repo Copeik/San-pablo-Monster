@@ -338,7 +338,7 @@ test("el HUD v2.1 presenta misión, Flujo y cuatro insignias sin mezclar el aria
   assert.match(styles, /\.perspective-challenges\s*\{[^}]*grid-template-columns:\s*repeat\(4,/i);
   assert.match(html, /perspective-zone\.css\?v=13/i);
   assert.match(html, /perspective-zone-core\.js\?v=12/i);
-  assert.match(html, /script\.js\?v=128/i);
+  assert.match(html, /script\.js\?v=135/i);
 });
 
 test("la barra usa missionProgress normalizado y solo divide el fallback bruto", () => {

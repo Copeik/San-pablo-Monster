@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-09-merchant",
+  "spriteId": "npc-09-merchant",
+  "displayName": "Comerciante Poli",
+  "entitySlug": "comerciante-poli",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "2d8aa5a107620e7782b82fe7d1dd6f244adf0054498b4f924d608256d59bb916",
+  "sourceAssetId": "npc-09-merchant-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-09-merchant-walk.png",
+  "credits": "credits.txt"
+}

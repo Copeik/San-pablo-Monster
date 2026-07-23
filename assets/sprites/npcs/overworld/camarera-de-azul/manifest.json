@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "camarera-azul",
+  "spriteId": "camarera-azul",
+  "displayName": "Camarera de azul",
+  "entitySlug": "camarera-de-azul",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "98fa48b2747819206cace78c76484d0169341ead9008b27b96d58a68db1e905b",
+  "sourceAssetId": "camarera-azul-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/camarera-azul-walk.png",
+  "credits": "credits.txt"
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-25-doctor",
+  "spriteId": "npc-25-doctor",
+  "displayName": "Doctor Mateo",
+  "entitySlug": "doctor-mateo",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "07bd2cea08ced462ce77433b52d67b62b65672959815b6e8d5863ad315c5dc4a",
+  "sourceAssetId": "npc-25-doctor-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-25-doctor-walk.png",
+  "credits": "credits.txt"
+}

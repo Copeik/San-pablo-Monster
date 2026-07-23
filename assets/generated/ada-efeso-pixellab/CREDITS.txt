@@ -1,0 +1,13 @@
+Distrito Ada-Efeso — recursos de mapa
+
+Generador: PixelLab MCP (https://pixellab.ai/)
+Fecha de generación: 2026-07-20
+
+Trabajos:
+- fefe1d2c-e71b-4600-af96-d9bb92a2113f — bloque residencial blanco/amarillo
+- 46e625ea-0590-4612-890e-49d5bcd6c07e — edificio universitario blanco
+- fe9df507-f0de-4b48-9e92-37f1de7de4e3 — parque infantil
+
+Los PNG son resultados originales de PixelLab recuperados mediante las URLs
+entregadas por get_object. La colocación, escala y geometría del mapa se
+componen localmente para pokemon-adventure.

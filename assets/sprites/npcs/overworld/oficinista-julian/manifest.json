@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-20-office-worker",
+  "spriteId": "npc-20-office-worker",
+  "displayName": "Oficinista Julián",
+  "entitySlug": "oficinista-julian",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "5cecdd6eaae12fa836fb2bc39947361fa64a3c33b3758ed9f1d6b3f6bafff958",
+  "sourceAssetId": "npc-20-office-worker-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-20-office-worker-walk.png",
+  "credits": "credits.txt"
+}

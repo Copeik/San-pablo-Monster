@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-29-dancer",
+  "spriteId": "npc-29-dancer",
+  "displayName": "Bailarina Lola",
+  "entitySlug": "bailarina-lola",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "c4757788e683fa0456be8f710db8d70fc1fc97d62c3d1b743f736e024b7714d4",
+  "sourceAssetId": "npc-29-dancer-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-29-dancer-walk.png",
+  "credits": "credits.txt"
+}

@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "recordedAt": "2026-07-20",
+  "generator": "PixelLab MCP",
+  "generationCost": 205,
+  "jobs": [
+    {
+      "id": "fefe1d2c-e71b-4600-af96-d9bb92a2113f",
+      "tool": "pixellab.create_8_direction_object",
+      "status": "completed",
+      "cost": 40,
+      "size": { "width": 151, "height": 151 },
+      "view": "low top-down",
+      "description": "Modular four-storey Mediterranean residential apartment block, clean white stucco facade, strong warm yellow balcony bands and yellow stairwell accents, flat pale roof, repeating dark blue windows, compact urban massing, no shop, no text, no sign, no people, transparent background, crisp orthogonal Pokemon DS pixel art",
+      "files": {
+        "south": "building-apartment-south.png",
+        "north": "building-apartment-north.png"
+      }
+    },
+    {
+      "id": "46e625ea-0590-4612-890e-49d5bcd6c07e",
+      "tool": "pixellab.create_8_direction_object",
+      "status": "completed",
+      "cost": 40,
+      "size": { "width": 151, "height": 151 },
+      "view": "low top-down",
+      "description": "Modern public university teaching building, white stucco and concrete, pale warm yellow accent panels, broad glass entrance, flat roof with small vents, institutional but welcoming, no text, no logo, no people, transparent background, crisp orthogonal Pokemon DS pixel art",
+      "files": { "south": "building-university-south.png" }
+    },
+    {
+      "id": "fe9df507-f0de-4b48-9e92-37f1de7de4e3",
+      "tool": "pixellab.create_1_direction_object",
+      "status": "completed",
+      "cost": 20,
+      "size": { "width": 256, "height": 256 },
+      "view": "top-down",
+      "description": "Compact Mediterranean neighborhood children's playground set for a top-down RPG map: yellow slide, red climbing frame, blue swings, rubber safety floor hints, no children, no text, transparent background, crisp colorful Pokemon DS pixel art",
+      "files": { "unknown": "prop-playground.png" }
+    },
+    {
+      "id": "0bfd2ba8-ecd1-40d4-82ce-931b808db19f",
+      "tool": "pixellab.create_tiles_pro",
+      "status": "completed",
+      "cost": 20,
+      "seed": 72620,
+      "size": { "width": 32, "height": 32 },
+      "view": "top-down",
+      "description": "Coherent 16-tile orthogonal urban RPG terrain pack: grass, asphalt, sidewalk, pedestrian pavers, campus courtyard, playground floor, parking lines, lane markings, zebra crossing, curb, planted medians and hedge border",
+      "files": [
+        "terrain/tile-00.png", "terrain/tile-01.png", "terrain/tile-02.png", "terrain/tile-03.png",
+        "terrain/tile-04.png", "terrain/tile-05.png", "terrain/tile-06.png", "terrain/tile-07.png",
+        "terrain/tile-08.png", "terrain/tile-09.png", "terrain/tile-10.png", "terrain/tile-11.png",
+        "terrain/tile-12.png", "terrain/tile-13.png", "terrain/tile-14.png", "terrain/tile-15.png"
+      ]
+    },
+    {
+      "id": "975dc6a3-7bc4-4fb9-8f1d-982a6bc5f8e2",
+      "tool": "pixellab.create_1_direction_object",
+      "status": "completed",
+      "cost": 20,
+      "size": { "width": 64, "height": 64 },
+      "view": "top-down",
+      "description": "Transparent urban prop collection for Ada-Efeso: trees, benches, streetlamps, four cars, campus fences, planters, bollards, parking median, campus sign, flowers, waste bin and fountain",
+      "selectedObjects": {
+        "55fbe9cf-4924-4de4-902e-24e56000da22": "props/tree.png",
+        "fe853964-9492-4b98-9ded-d9c0fb0c6a6a": "props/bench.png",
+        "42d51a92-734d-4271-87da-7bafab19df70": "props/streetlamp.png",
+        "85206c57-d9ca-43ec-9f5e-8136a295e0c4": "props/car-red.png",
+        "3c7b3081-1acf-46c0-ad86-e63b978a6555": "props/car-blue.png",
+        "4fc3eb84-cfde-41aa-aa59-e465af5489a1": "props/car-white.png",
+        "9566081f-130c-4db7-a563-92dca309b36b": "props/car-yellow.png",
+        "02304162-5757-4a84-b409-55a949f7e9fb": "props/fence-horizontal.png",
+        "e1e5264b-1e34-4a6b-8696-9e0e2bed738d": "props/fence-vertical.png",
+        "9c7e644b-93f8-4a54-a1c2-9f1b0b34369b": "props/planter.png",
+        "80b8740b-8481-48d5-837f-b6f5a6812d15": "props/bollard.png",
+        "c1c3c3e8-130b-4b8d-acd0-75a9958c4847": "props/parking-median.png",
+        "51ee3073-d747-4c2c-94fc-ca2b5e6bf261": "props/campus-sign.png",
+        "80afdcaa-b745-4d16-851f-225af3450b29": "props/flower-bed.png",
+        "95d94a64-9a48-41de-82ec-11bd1565c0d2": "props/waste-bin.png",
+        "78205c25-ee84-4899-9842-10c30441cf19": "props/fountain.png"
+      }
+    },
+    {
+      "id": "0450063c-d397-4712-9b4f-8b2b4266940a",
+      "tool": "pixellab.create_1_direction_object",
+      "status": "completed",
+      "cost": 25,
+      "size": { "width": 151, "height": 151 },
+      "view": "top-down",
+      "description": "South-row white and yellow four-floor apartment whose only entrance is on the north pedestrian-plaza side; the south facade facing parking has windows but absolutely no doors",
+      "selectedObject": "778df223-aba4-42c0-abb9-b5678254daf3",
+      "files": { "unknown": "building-apartment-parking-rear.png" }
+    },
+    {
+      "id": "c887083b-e2f9-4185-bf0a-2e16cba95de3",
+      "tool": "pixellab.create_tiles_pro",
+      "status": "completed",
+      "cost": 20,
+      "seed": 92713,
+      "outlineMode": "segmentation",
+      "size": { "width": 32, "height": 32 },
+      "view": "top-down",
+      "description": "Replacement 16-tile urban terrain pack with seamless edge pixels and no black perimeter outlines, generated in segmentation mode",
+      "files": [
+        "terrain-borderless/tile-00.png", "terrain-borderless/tile-01.png", "terrain-borderless/tile-02.png", "terrain-borderless/tile-03.png",
+        "terrain-borderless/tile-04.png", "terrain-borderless/tile-05.png", "terrain-borderless/tile-06.png", "terrain-borderless/tile-07.png",
+        "terrain-borderless/tile-08.png", "terrain-borderless/tile-09.png", "terrain-borderless/tile-10.png", "terrain-borderless/tile-11.png",
+        "terrain-borderless/tile-12.png", "terrain-borderless/tile-13.png", "terrain-borderless/tile-14.png", "terrain-borderless/tile-15.png"
+      ]
+    },
+    {
+      "id": "89f363f8-0d3f-4f49-9a4c-b68154d46f12",
+      "tool": "pixellab.create_1_direction_object",
+      "status": "completed",
+      "cost": 20,
+      "size": { "width": 64, "height": 64 },
+      "view": "top-down",
+      "description": "True overhead white campus fence modules with visible upper rail and dedicated horizontal and vertical orientations",
+      "selectedObjects": {
+        "316d49ff-d170-485e-9db2-e5bdc12604b0": "props/fence-topdown-horizontal.png",
+        "76443645-f32e-4aac-bb15-a440d0036f6e": "props/fence-topdown-vertical.png"
+      }
+    }
+  ]
+}

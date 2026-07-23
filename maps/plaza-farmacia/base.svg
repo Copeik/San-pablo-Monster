@@ -1,76 +1,112 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="960" viewBox="0 0 1280 960">
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1792" viewBox="0 0 1280 1792" shape-rendering="crispEdges">
   <defs>
-    <pattern id="plaza-pavers" width="32" height="32" patternUnits="userSpaceOnUse">
-      <rect width="32" height="32" fill="#c9bea7"/>
-      <path d="M0 0H32V32H0Z" fill="none" stroke="#aa9d86" stroke-width="2"/>
-      <path d="M4 8H28M4 24H28" stroke="#d9cfbb" stroke-width="1" opacity=".65"/>
+    <pattern id="gray-pavers" width="32" height="32" patternUnits="userSpaceOnUse">
+      <rect width="32" height="32" fill="#aeb1ad"/>
+      <path d="M0 0H32V32H0Z" fill="none" stroke="#858b89" stroke-width="2"/>
+      <path d="M4 8H28M4 24H28" stroke="#c7c9c5" stroke-width="1" opacity=".72"/>
+      <path d="M2 30h4M24 2h3" stroke="#777d7b" stroke-width="1" opacity=".55"/>
     </pattern>
     <pattern id="sidewalk" width="32" height="32" patternUnits="userSpaceOnUse">
-      <rect width="32" height="32" fill="#b8b3a8"/>
-      <path d="M0 16H32M16 0V32" stroke="#99958c" stroke-width="2"/>
-      <path d="M2 2H14V14H2Z" fill="#c7c2b7" opacity=".7"/>
+      <rect width="32" height="32" fill="#c7c5bd"/>
+      <path d="M0 16H32M16 0V32" stroke="#9d9e99" stroke-width="2"/>
+      <path d="M2 2H14V14H2Z" fill="#d8d6ce" opacity=".65"/>
     </pattern>
     <pattern id="asphalt" width="32" height="32" patternUnits="userSpaceOnUse">
-      <rect width="32" height="32" fill="#4b5356"/>
-      <path d="M6 8h2m12 13h3M27 6h1M12 28h2" stroke="#687174" stroke-width="2"/>
-      <path d="M2 18h2m12-7h2M25 27h2" stroke="#343c3f" stroke-width="2"/>
+      <rect width="32" height="32" fill="#454b4d"/>
+      <path d="M5 8h3m12 13h4M27 6h2M12 28h2" stroke="#60676a" stroke-width="2"/>
+      <path d="M2 18h2m12-7h2M25 27h2" stroke="#303638" stroke-width="2"/>
     </pattern>
-    <pattern id="roof-zone" width="24" height="24" patternUnits="userSpaceOnUse">
-      <rect width="24" height="24" fill="#8e9b82"/>
-      <path d="M0 12H24M12 0V24" stroke="#78866d" stroke-width="2"/>
+    <pattern id="unfinished-concrete" width="48" height="48" patternUnits="userSpaceOnUse">
+      <rect width="48" height="48" fill="#737977"/>
+      <path d="M0 0H48V48H0Z" fill="none" stroke="#555b59" stroke-width="2"/>
+      <path d="M7 12h3m24 21h5M17 40h3M41 8h2" stroke="#969b96" stroke-width="2"/>
+      <path d="M2 31h7m13-17h5" stroke="#5f6562" stroke-width="2"/>
     </pattern>
+    <radialGradient id="lightwell-shadow">
+      <stop offset="0" stop-color="#182023" stop-opacity=".72"/>
+      <stop offset=".65" stop-color="#30383a" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#30383a" stop-opacity="0"/>
+    </radialGradient>
   </defs>
 
-  <!-- Borde cerrado y trasera residencial. -->
-  <rect width="1280" height="960" fill="#283e35"/>
-  <rect x="32" y="32" width="1216" height="896" fill="#5d7c63" stroke="#172d25" stroke-width="8"/>
-  <rect x="32" y="32" width="1216" height="256" fill="url(#roof-zone)"/>
-  <path d="M32 288H1248" stroke="#665f54" stroke-width="10"/>
+  <rect width="1280" height="1792" fill="#263732"/>
+  <rect x="32" y="32" width="1216" height="1728" fill="#475b50" stroke="#162823" stroke-width="8"/>
 
-  <!-- Explanada peatonal que se abre frente al jugador. -->
-  <rect x="32" y="288" width="1216" height="480" fill="url(#plaza-pavers)"/>
-  <path d="M64 352H1216M64 736H1216" stroke="#8f846f" stroke-width="4" opacity=".55"/>
-  <path d="M640 320V752" stroke="#e5dcc7" stroke-width="96" opacity=".26"/>
+  <!-- Plaza gris y aceras laterales. -->
+  <rect x="64" y="64" width="1152" height="784" fill="url(#gray-pavers)"/>
+  <rect x="32" y="64" width="64" height="1056" fill="url(#sidewalk)"/>
+  <rect x="1184" y="64" width="64" height="1056" fill="url(#sidewalk)"/>
+  <path d="M96 64V848M1184 64V848" stroke="#777d7b" stroke-width="5"/>
 
-  <!-- Alcorques sobrios, como en la explanada real. -->
-  <g fill="#6d6758" stroke="#e0d4ba" stroke-width="5">
-    <rect x="374" y="412" width="128" height="104" rx="8"/>
-    <rect x="1002" y="446" width="112" height="96" rx="8"/>
-  </g>
-  <g fill="#7b925b" opacity=".95">
-    <rect x="386" y="424" width="104" height="80" rx="4"/>
-    <rect x="1014" y="458" width="88" height="72" rx="4"/>
-  </g>
+  <!-- Sombra guia de la estructura unica, centrada respecto a rampa y carretera. -->
+  <path d="M352 800V320H928V800H1184V640H1120V128H160V800Z" fill="#20302d" opacity=".2"/>
 
-  <!-- Bordillo y Calle Jerusalén en primer plano. -->
-  <rect x="32" y="752" width="1216" height="24" fill="#e4ddd0"/>
-  <rect x="32" y="776" width="1216" height="152" fill="url(#asphalt)"/>
-  <path d="M48 850H1232" stroke="#d8d1b5" stroke-width="4" stroke-dasharray="48 38" opacity=".75"/>
-
-  <!-- Paso de peatones: eje visual de entrada a la plaza. -->
-  <g fill="#eee9dc">
-    <rect x="564" y="784" width="152" height="14"/>
-    <rect x="564" y="810" width="152" height="14"/>
-    <rect x="564" y="836" width="152" height="14"/>
-    <rect x="564" y="862" width="152" height="14"/>
-    <rect x="564" y="888" width="152" height="14"/>
-  </g>
-  <rect x="544" y="752" width="192" height="24" fill="url(#sidewalk)"/>
-
-  <!-- Bolardos que delimitan la zona peatonal sin cerrar el acceso central. -->
-  <g fill="#3d4748" stroke="#222c2d" stroke-width="2">
-    <rect x="92" y="735" width="10" height="33" rx="3"/>
-    <rect x="174" y="735" width="10" height="33" rx="3"/>
-    <rect x="256" y="735" width="10" height="33" rx="3"/>
-    <rect x="338" y="735" width="10" height="33" rx="3"/>
-    <rect x="420" y="735" width="10" height="33" rx="3"/>
-    <rect x="850" y="735" width="10" height="33" rx="3"/>
-    <rect x="932" y="735" width="10" height="33" rx="3"/>
-    <rect x="1014" y="735" width="10" height="33" rx="3"/>
-    <rect x="1096" y="735" width="10" height="33" rx="3"/>
-    <rect x="1178" y="735" width="10" height="33" rx="3"/>
+  <!-- Reserva del hueco de luz y terrazas dentro del patio. -->
+  <circle cx="640" cy="440" r="124" fill="url(#lightwell-shadow)"/>
+  <g fill="none" stroke="#868c89" stroke-width="3" stroke-dasharray="8 8" opacity=".62">
+    <rect x="338" y="374" width="154" height="134"/>
+    <rect x="788" y="374" width="154" height="134"/>
+    <rect x="338" y="594" width="176" height="152"/>
+    <rect x="766" y="594" width="176" height="152"/>
   </g>
 
-  <!-- Marco exterior, deliberadamente oscuro para dejar clara la zona jugable. -->
-  <path d="M32 32H1248V928H32Z" fill="none" stroke="#172d25" stroke-width="8"/>
+  <!-- Rampa de dos carriles: su boca ocupa siete baldosas y toca el asfalto. -->
+  <path d="M552 560H728L752 848H528Z" fill="#303638" stroke="#777d7c" stroke-width="10"/>
+  <path d="M576 566L592 840M704 566L688 840" stroke="#d5d6d0" stroke-width="6"/>
+  <path d="M640 584V840" stroke="#bca943" stroke-width="5" stroke-dasharray="24 18"/>
+  <path d="M600 688l24-34 24 34h-14v52h-20v-52z" fill="#e6c943"/>
+  <path d="M680 760l-24 34-24-34h14v-52h20v52z" fill="#e6c943"/>
+  <rect x="520" y="824" width="240" height="24" fill="#363c3e" stroke="#777d7c" stroke-width="6"/>
+
+  <!-- Carretera de dos carriles frente a la plaza. -->
+  <rect x="32" y="800" width="1216" height="48" fill="url(#sidewalk)"/>
+  <rect x="32" y="848" width="1216" height="208" fill="url(#asphalt)"/>
+  <rect x="32" y="1056" width="1216" height="64" fill="url(#sidewalk)"/>
+  <path d="M48 952H1232" stroke="#d5cfaa" stroke-width="6" stroke-dasharray="58 38"/>
+  <path d="M48 866H1232M48 1038H1232" stroke="#e4e1d1" stroke-width="4" opacity=".82"/>
+  <g fill="#ece8d6" opacity=".92">
+    <path d="M222 900l42 24-42 24v-14h-72v-20h72z"/>
+    <path d="M1058 1002l-42-24 42-24v14h72v20h-72z"/>
+  </g>
+
+  <!-- Paso de peatones a la izquierda, sin invadir la boca del garaje. -->
+  <g fill="#f1eee1">
+    <rect x="296" y="856" width="112" height="20"/>
+    <rect x="296" y="888" width="112" height="20"/>
+    <rect x="296" y="920" width="112" height="20"/>
+    <rect x="296" y="952" width="112" height="20"/>
+    <rect x="296" y="984" width="112" height="20"/>
+    <rect x="296" y="1016" width="112" height="20"/>
+    <rect x="296" y="1060" width="112" height="16"/>
+    <rect x="296" y="1088" width="112" height="16"/>
+  </g>
+
+  <!-- Solar abandonado al otro lado de la carretera. -->
+  <rect x="32" y="1120" width="1216" height="640" fill="url(#unfinished-concrete)"/>
+  <rect x="64" y="1280" width="1152" height="480" fill="#3d4243" stroke="#292f30" stroke-width="8"/>
+  <path d="M72 1322l148-42 126 34 162-28 150 46 174-48 174 42 134-38 72 22v450H72Z" fill="#4d5352" opacity=".82"/>
+  <g fill="#5c6260" stroke="#383e3d" stroke-width="4">
+    <path d="M84 1694h154l-28 66H62z"/>
+    <path d="M1042 1680h164l28 80h-210z"/>
+    <path d="M330 1708h108l-20 52H300z"/>
+    <path d="M812 1694h124l24 66H786z"/>
+  </g>
+  <g fill="#536e50" opacity=".9">
+    <path d="M48 1708h150l-16 52H38z"/>
+    <path d="M1068 1694h154l18 66h-190z"/>
+    <path d="M250 1218h78l-10 34h-88z"/>
+    <path d="M926 1214h86l14 40h-112z"/>
+  </g>
+
+  <!-- Laterales del vallado; las cuatro piezas PixelLab forman el frente. -->
+  <g fill="none" stroke="#8a9190" stroke-width="10">
+    <path d="M40 1160V1760"/>
+    <path d="M1240 1160V1760"/>
+  </g>
+  <g stroke="#bec3c2" stroke-width="2" opacity=".75">
+    <path d="M32 1176l16 16-16 16 16 16-16 16 16 16-16 16 16 16-16 16 16 16-16 16 16 16-16 16 16 16"/>
+    <path d="M1232 1176l16 16-16 16 16 16-16 16 16 16-16 16 16 16-16 16 16 16-16 16 16 16-16 16 16 16"/>
+  </g>
+
+  <path d="M32 32H1248V1760H32Z" fill="none" stroke="#162823" stroke-width="8"/>
 </svg>

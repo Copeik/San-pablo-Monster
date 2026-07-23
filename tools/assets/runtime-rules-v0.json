@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 0,
+  "assetRoots": [
+    "assets",
+    "maps"
+  ],
+  "entrypoints": [
+    "index.html"
+  ],
+  "dynamicIncludes": [
+    {
+      "pattern": "assets/sprites/npcs/overworld/*/overworld.png",
+      "reason": "El catálogo NPC resuelve cada identificador y alias a su pack individual.",
+      "referencedBy": "assets/sprites/npcs/catalog.js"
+    },
+    {
+      "pattern": "assets/pokemon/*/*/idle-front.webp",
+      "reason": "Vista frontal de reposo del contrato pokemon-animation-only-v1.",
+      "referencedBy": "sanpledex-animation-data.js"
+    },
+    {
+      "pattern": "assets/pokemon/*/*/idle-back.webp",
+      "reason": "Vista trasera de reposo del contrato pokemon-animation-only-v1.",
+      "referencedBy": "sanpledex-animation-data.js"
+    },
+    {
+      "pattern": "assets/pokemon/*/*/attack-physical-front.webp",
+      "reason": "Ataque fisico frontal del contrato pokemon-animation-only-v1.",
+      "referencedBy": "sanpledex-animation-data.js"
+    },
+    {
+      "pattern": "assets/pokemon/*/*/attack-physical-back.webp",
+      "reason": "Ataque fisico trasero del contrato pokemon-animation-only-v1.",
+      "referencedBy": "sanpledex-animation-data.js"
+    },
+    {
+      "pattern": "assets/pokemon/*/*/attack-special-front.webp",
+      "reason": "Ataque especial frontal del contrato pokemon-animation-only-v1.",
+      "referencedBy": "sanpledex-animation-data.js"
+    },
+    {
+      "pattern": "assets/pokemon/*/*/attack-special-back.webp",
+      "reason": "Ataque especial trasero del contrato pokemon-animation-only-v1.",
+      "referencedBy": "sanpledex-animation-data.js"
+    }
+  ]
+}

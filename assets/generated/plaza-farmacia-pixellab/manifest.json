@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "package": "plaza-farmacia-pixellab",
+  "generatedAt": "2026-07-22",
+  "provider": "PixelLab MCP",
+  "terms": "https://pixellab.ai/termsofservice",
+  "jobs": [
+    {
+      "id": "e95ba896-4054-4c9a-bc81-8be4f13b69f4",
+      "tool": "pixellab.create_building_kit",
+      "status": "completed",
+      "seed": 27421,
+      "kind": "building",
+      "logicalTileSize": { "width": 32, "height": 32 },
+      "actualCanvas": { "width": 52, "height": 91 },
+      "variations": 56,
+      "parameters": {
+        "floor_description": "clean light gray commercial plaza paving, subtle square stone texture",
+        "floor2_description": "flat pale gray rooftop of a modern single-storey shopping arcade",
+        "wall_description": "continuous clean white plaster walls of a modern Spanish one-storey commercial arcade, dark gray base trim, matching square corners, storefront-ready wall sections",
+        "layout": "materials",
+        "outline_mode": "outline",
+        "tile_size": 32,
+        "tile_type": "square_topdown",
+        "wall_tiles": 2,
+        "wall_angle": 55
+      },
+      "placementRules": {
+        "ruleType": "composed",
+        "arity": 8,
+        "connectivity": "same",
+        "terrains": ["wall", "empty"],
+        "maskPlaceable": false
+      },
+      "archive": "assets/generated/plaza-farmacia-pixellab/archives/building-kit-e95ba896.zip",
+      "originals": "assets/generated/plaza-farmacia-pixellab/originals/building-kit-e95ba896"
+    },
+    {
+      "id": "f352b2ac-03dd-4be2-a02a-f6ac46e0a8cd",
+      "tool": "pixellab.create_tiles_pro",
+      "status": "completed",
+      "seed": 27421,
+      "kind": "tiles",
+      "logicalTileSize": { "width": 64, "height": 64 },
+      "actualCanvas": { "width": 64, "height": 64 },
+      "variations": 16,
+      "view": "low top-down",
+      "description": "Matched modular storefront pieces for one continuous modern Spanish white plaster shopping arcade: BAR, closed shop, kebab, Chinese bazaar, Mar de Gambas, fruit shop, pharmacy glass wall and pharmacy outer side door; edge-to-edge inserts with transparent background and no separate roof.",
+      "archive": "assets/generated/plaza-farmacia-pixellab/archives/storefront-kit-f352b2ac.zip",
+      "originals": "assets/generated/plaza-farmacia-pixellab/originals/storefront-kit-f352b2ac"
+    }
+  ],
+  "runtime": {
+    "id": "plazaUContinuous",
+    "path": "assets/generated/plaza-farmacia-pixellab/runtime/buildings/building-u-continuous-v7.png",
+    "dimensions": { "width": 1088, "height": 672 },
+    "anchor": "bottom-center",
+    "worldBounds": { "left": 96, "top": 128, "right": 1184, "bottom": 800 },
+    "selectedStorefrontTiles": {
+      "bar": 0,
+      "fruitShop": 2,
+      "pharmacyGlass": 4,
+      "pharmacyOuterDoor": 7,
+      "closedShutter": 9,
+      "kebab": 10,
+      "chineseBazaar": 12,
+      "marDeGambas": 14
+    },
+    "buildingRoofTile": 39,
+    "compositionScript": "tools/build-plaza-pharmacy-u.ps1",
+    "operations": [
+      "native-resolution placement",
+      "90-degree module rotation for side façades",
+      "roof-texture tiling",
+      "single transparent-canvas composition",
+      "integrated labels"
+    ],
+    "scaling": false,
+    "recoloring": false
+  },
+  "sha256": {
+    "archives/building-kit-e95ba896.zip": "E49F431A4F8E74C180586A27371DF220C8DD7F19287E13193282058FEE492EB9",
+    "archives/storefront-kit-f352b2ac.zip": "D5D01F05A7CFA0E8DB23A3250E8B8598870AE7DB2FF0C4A1C7541A30E3B20D55",
+    "runtime/buildings/building-u-continuous-v7.png": "CAD8E7BCB2BDE1A6655DDA0342C0B8FE8FBAFA5FC09A0AAE504D3D6E856AC4A0"
+  }
+}

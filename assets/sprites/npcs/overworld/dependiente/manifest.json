@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-02-shopkeeper",
+  "spriteId": "npc-02-shopkeeper",
+  "displayName": "Dependiente",
+  "entitySlug": "dependiente",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "1d01df509d46d70368140ad877dcb5cfeb3a497f1a419d0a1f2acbfc946d2d54",
+  "sourceAssetId": "npc-02-shopkeeper-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-02-shopkeeper-walk.png",
+  "credits": "credits.txt"
+}

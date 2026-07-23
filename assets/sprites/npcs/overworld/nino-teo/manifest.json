@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-05-child",
+  "spriteId": "npc-05-child",
+  "displayName": "Niño Teo",
+  "entitySlug": "nino-teo",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "4b313b1504690033715f2115645122bcc13a80686f3f96935df3560c8c150131",
+  "sourceAssetId": "npc-05-child-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-05-child-walk.png",
+  "credits": "credits.txt"
+}

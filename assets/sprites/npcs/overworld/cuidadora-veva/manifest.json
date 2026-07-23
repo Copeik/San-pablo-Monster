@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-12-caretaker",
+  "spriteId": "npc-12-caretaker",
+  "displayName": "Cuidadora Veva",
+  "entitySlug": "cuidadora-veva",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "5f90e9f383e719f9111e8aa74ca7e335e97aefa0192b2f776f6ad6eea8f99b37",
+  "sourceAssetId": "npc-12-caretaker-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-12-caretaker-walk.png",
+  "credits": "credits.txt"
+}

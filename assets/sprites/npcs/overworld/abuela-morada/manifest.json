@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "abuela-morada",
+  "spriteId": "abuela-morada",
+  "displayName": "Abuela morada",
+  "entitySlug": "abuela-morada",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "91e585b3ab0cecdec9e7595e3f48b8a639e76032cf5e8b39d2f8a717c9a2d474",
+  "sourceAssetId": "abuela-morada-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/abuela-morada-walk.png",
+  "credits": "credits.txt"
+}

@@ -1,0 +1,11 @@
+Protagonista: introduccion de Ada-Efeso
+======================================
+
+Generador: PixelLab MCP
+Personaje PixelLab: b96197cb-8527-4fdf-bd6d-d48c01c41804
+Direccion: south-west
+
+Los PNG de esta carpeta son tiras transparentes compuestas exclusivamente con
+los fotogramas devueltos por PixelLab. No contienen fondos, suelo ni objetos.
+Los identificadores exactos de las animaciones y las huellas SHA-256 estan en
+manifest.json.

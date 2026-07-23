@@ -1,6 +1,0 @@
-Línea Freskito
-
-Concepto, nombres y ficha original: material proporcionado por el usuario.
-Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: freskito-front.png, freskito-back.png, freskon-front.png, freskon-back.png, freskeaire-front.png, freskeaire-back.png.

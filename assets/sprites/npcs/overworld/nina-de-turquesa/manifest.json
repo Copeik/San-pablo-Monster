@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "nina-turquesa",
+  "spriteId": "nina-turquesa",
+  "displayName": "Niña de turquesa",
+  "entitySlug": "nina-de-turquesa",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "3d68eb4a38bdd41bf6a7d3a16a2b52a3470ed4ee7d983b9f52f27a3e215db610",
+  "sourceAssetId": "nina-turquesa-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/nina-turquesa-walk.png",
+  "credits": "credits.txt"
+}

@@ -4,200 +4,66 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-
 Add-Type -AssemblyName System.Drawing
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$resolvedOutput = if ([System.IO.Path]::IsPathRooted($OutputPath)) {
-  $OutputPath
-} else {
-  Join-Path $projectRoot $OutputPath
-}
-
-$outputDirectory = Split-Path -Parent $resolvedOutput
-if (-not (Test-Path -LiteralPath $outputDirectory)) {
-  New-Item -ItemType Directory -Path $outputDirectory | Out-Null
-}
+$resolvedOutput = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path $projectRoot $OutputPath }
 
 function New-Color {
-  param(
-    [Parameter(Mandatory = $true)][string]$Hex,
-    [int]$Alpha = 255
-  )
-
+  param([string]$Hex, [int]$Alpha = 255)
   $clean = $Hex.TrimStart("#")
-  return [System.Drawing.Color]::FromArgb(
-    $Alpha,
-    [Convert]::ToInt32($clean.Substring(0, 2), 16),
-    [Convert]::ToInt32($clean.Substring(2, 2), 16),
-    [Convert]::ToInt32($clean.Substring(4, 2), 16)
-  )
-}
-
-function Use-Brush {
-  param(
-    [Parameter(Mandatory = $true)][System.Drawing.Color]$Color,
-    [Parameter(Mandatory = $true)][scriptblock]$Action
-  )
-
-  $brush = New-Object System.Drawing.SolidBrush($Color)
-  try { & $Action $brush } finally { $brush.Dispose() }
-}
-
-function Use-Pen {
-  param(
-    [Parameter(Mandatory = $true)][System.Drawing.Color]$Color,
-    [Parameter(Mandatory = $true)][float]$Width,
-    [Parameter(Mandatory = $true)][scriptblock]$Action
-  )
-
-  $pen = New-Object System.Drawing.Pen($Color, $Width)
-  try { & $Action $pen } finally { $pen.Dispose() }
+  [System.Drawing.Color]::FromArgb($Alpha, [Convert]::ToInt32($clean.Substring(0, 2), 16), [Convert]::ToInt32($clean.Substring(2, 2), 16), [Convert]::ToInt32($clean.Substring(4, 2), 16))
 }
 
 function Fill-Rectangle {
-  param(
-    [Parameter(Mandatory = $true)][System.Drawing.Graphics]$Graphics,
-    [Parameter(Mandatory = $true)][string]$Color,
-    [Parameter(Mandatory = $true)][float]$X,
-    [Parameter(Mandatory = $true)][float]$Y,
-    [Parameter(Mandatory = $true)][float]$Width,
-    [Parameter(Mandatory = $true)][float]$Height,
-    [int]$Alpha = 255
-  )
+  param([System.Drawing.Graphics]$Graphics, [string]$Color, [float]$X, [float]$Y, [float]$Width, [float]$Height, [int]$Alpha = 255)
+  $brush = New-Object System.Drawing.SolidBrush((New-Color $Color $Alpha))
+  try { $Graphics.FillRectangle($brush, $X, $Y, $Width, $Height) } finally { $brush.Dispose() }
+}
 
-  Use-Brush -Color (New-Color $Color $Alpha) -Action {
-    param($brush)
-    $Graphics.FillRectangle($brush, $X, $Y, $Width, $Height)
-  }
+function Draw-Rectangle {
+  param([System.Drawing.Graphics]$Graphics, [string]$Fill, [string]$Stroke, [float]$StrokeWidth, [float]$X, [float]$Y, [float]$Width, [float]$Height)
+  Fill-Rectangle $Graphics $Fill $X $Y $Width $Height
+  $pen = New-Object System.Drawing.Pen((New-Color $Stroke), $StrokeWidth)
+  try { $Graphics.DrawRectangle($pen, $X, $Y, $Width, $Height) } finally { $pen.Dispose() }
 }
 
 function Draw-Line {
-  param(
-    [Parameter(Mandatory = $true)][System.Drawing.Graphics]$Graphics,
-    [Parameter(Mandatory = $true)][string]$Color,
-    [Parameter(Mandatory = $true)][float]$Width,
-    [Parameter(Mandatory = $true)][float]$X1,
-    [Parameter(Mandatory = $true)][float]$Y1,
-    [Parameter(Mandatory = $true)][float]$X2,
-    [Parameter(Mandatory = $true)][float]$Y2,
-    [int]$Alpha = 255
-  )
-
-  Use-Pen -Color (New-Color $Color $Alpha) -Width $Width -Action {
-    param($pen)
-    $Graphics.DrawLine($pen, $X1, $Y1, $X2, $Y2)
-  }
+  param([System.Drawing.Graphics]$Graphics, [string]$Color, [float]$Width, [float]$X1, [float]$Y1, [float]$X2, [float]$Y2, [int]$Alpha = 255)
+  $pen = New-Object System.Drawing.Pen((New-Color $Color $Alpha), $Width)
+  try { $Graphics.DrawLine($pen, $X1, $Y1, $X2, $Y2) } finally { $pen.Dispose() }
 }
 
-function Draw-PlazaBase {
-  param([Parameter(Mandatory = $true)][System.Drawing.Graphics]$Graphics)
+function Draw-Ellipse {
+  param([System.Drawing.Graphics]$Graphics, [string]$Fill, [string]$Stroke, [float]$StrokeWidth, [float]$X, [float]$Y, [float]$Width, [float]$Height)
+  $brush = New-Object System.Drawing.SolidBrush((New-Color $Fill))
+  $pen = New-Object System.Drawing.Pen((New-Color $Stroke), $StrokeWidth)
+  try { $Graphics.FillEllipse($brush, $X, $Y, $Width, $Height); $Graphics.DrawEllipse($pen, $X, $Y, $Width, $Height) } finally { $brush.Dispose(); $pen.Dispose() }
+}
 
-  Fill-Rectangle $Graphics "#283e35" 0 0 1280 960
-  Fill-Rectangle $Graphics "#5d7c63" 32 32 1216 896
-
-  # Zona residencial del fondo.
-  Fill-Rectangle $Graphics "#8e9b82" 32 32 1216 256
-  for ($x = 32; $x -le 1248; $x += 24) {
-    Draw-Line $Graphics "#78866d" 2 $x 32 $x 288
-  }
-  for ($y = 32; $y -le 288; $y += 24) {
-    Draw-Line $Graphics "#78866d" 2 32 $y 1248 $y
-  }
-  Draw-Line $Graphics "#665f54" 10 32 288 1248 288
-
-  # Explanada peatonal y patrón de adoquines.
-  Fill-Rectangle $Graphics "#c9bea7" 32 288 1216 480
-  for ($x = 32; $x -le 1248; $x += 32) {
-    Draw-Line $Graphics "#aa9d86" 2 $x 288 $x 768
-  }
-  for ($y = 288; $y -le 768; $y += 32) {
-    Draw-Line $Graphics "#aa9d86" 2 32 $y 1248 $y
-    Draw-Line $Graphics "#d9cfbb" 1 32 ($y + 8) 1248 ($y + 8) 166
-    Draw-Line $Graphics "#d9cfbb" 1 32 ($y + 24) 1248 ($y + 24) 166
-  }
-  Draw-Line $Graphics "#8f846f" 4 64 352 1216 352 140
-  Draw-Line $Graphics "#8f846f" 4 64 736 1216 736 140
-  Fill-Rectangle $Graphics "#e5dcc7" 592 320 96 432 66
-
-  # Alcorques.
-  Fill-Rectangle $Graphics "#6d6758" 374 412 128 104
-  Use-Pen -Color (New-Color "#e0d4ba") -Width 5 -Action {
-    param($pen)
-    $Graphics.DrawRectangle($pen, 374, 412, 128, 104)
-    $Graphics.DrawRectangle($pen, 1002, 446, 112, 96)
-  }
-  Fill-Rectangle $Graphics "#6d6758" 1002 446 112 96
-  Fill-Rectangle $Graphics "#7b925b" 386 424 104 80 242
-  Fill-Rectangle $Graphics "#7b925b" 1014 458 88 72 242
-
-  # Calle Jerusalén y paso de peatones.
-  Fill-Rectangle $Graphics "#e4ddd0" 32 752 1216 24
-  Fill-Rectangle $Graphics "#4b5356" 32 776 1216 152
-  for ($x = 32; $x -lt 1248; $x += 32) {
-    for ($y = 776; $y -lt 928; $y += 32) {
-      Draw-Line $Graphics "#687174" 2 ($x + 6) ($y + 8) ($x + 8) ($y + 8)
-      Draw-Line $Graphics "#687174" 2 ($x + 20) ($y + 21) ($x + 23) ($y + 21)
-      Draw-Line $Graphics "#343c3f" 2 ($x + 12) ($y + 28) ($x + 14) ($y + 28)
-    }
-  }
-  for ($x = 48; $x -lt 1232; $x += 86) {
-    Draw-Line $Graphics "#d8d1b5" 4 $x 850 ([Math]::Min($x + 48, 1232)) 850 191
-  }
-  for ($y = 784; $y -le 888; $y += 26) {
-    Fill-Rectangle $Graphics "#eee9dc" 564 $y 152 14
-  }
-  Fill-Rectangle $Graphics "#b8b3a8" 544 752 192 24
-  for ($x = 544; $x -le 736; $x += 16) {
-    Draw-Line $Graphics "#99958c" 2 $x 752 $x 776
-  }
-  Draw-Line $Graphics "#99958c" 2 544 768 736 768
-
-  # Bolardos.
-  foreach ($x in @(92, 174, 256, 338, 420, 850, 932, 1014, 1096, 1178)) {
-    Fill-Rectangle $Graphics "#3d4748" $x 735 10 33
-    Use-Pen -Color (New-Color "#222c2d") -Width 2 -Action {
-      param($pen)
-      $Graphics.DrawRectangle($pen, $x, 735, 10, 33)
-    }
-  }
-
-  Use-Pen -Color (New-Color "#172d25") -Width 8 -Action {
-    param($pen)
-    $Graphics.DrawRectangle($pen, 32, 32, 1216, 896)
-  }
+function Draw-Label {
+  param([System.Drawing.Graphics]$Graphics, [string]$Text, [float]$X, [float]$Y, [float]$Width, [float]$Height, [float]$FontSize = 15)
+  Draw-Rectangle $Graphics "#243035" "#f0ead9" 3 $X $Y $Width $Height
+  $font = New-Object System.Drawing.Font("Consolas", $FontSize, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+  $brush = New-Object System.Drawing.SolidBrush((New-Color "#fffbed"))
+  $format = New-Object System.Drawing.StringFormat
+  $format.Alignment = [System.Drawing.StringAlignment]::Center
+  $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+  try { $Graphics.DrawString($Text, $font, $brush, [System.Drawing.RectangleF]::new($X, $Y, $Width, $Height), $format) } finally { $format.Dispose(); $brush.Dispose(); $font.Dispose() }
 }
 
 function Draw-MapSprite {
-  param(
-    [Parameter(Mandatory = $true)][System.Drawing.Graphics]$Graphics,
-    [Parameter(Mandatory = $true)][string]$RelativePath,
-    [Parameter(Mandatory = $true)][float]$AnchorX,
-    [Parameter(Mandatory = $true)][float]$AnchorY,
-    [Parameter(Mandatory = $true)][int]$Width,
-    [Parameter(Mandatory = $true)][int]$Height,
-    [switch]$FlipX
-  )
-
+  param([System.Drawing.Graphics]$Graphics, [string]$RelativePath, [float]$AnchorX, [float]$AnchorY, [int]$Width, [int]$Height, [switch]$FlipX)
   $sourcePath = Join-Path $projectRoot $RelativePath
   $image = [System.Drawing.Bitmap]::FromFile($sourcePath)
   try {
-    if ($FlipX) {
-      $image.RotateFlip([System.Drawing.RotateFlipType]::RotateNoneFlipX)
-    }
-    $destination = New-Object System.Drawing.Rectangle(
-      [int][Math]::Round($AnchorX - ($Width / 2)),
-      [int][Math]::Round($AnchorY - $Height),
-      $Width,
-      $Height
-    )
+    if ($FlipX) { $image.RotateFlip([System.Drawing.RotateFlipType]::RotateNoneFlipX) }
+    $destination = [System.Drawing.Rectangle]::new([int][Math]::Round($AnchorX - ($Width / 2)), [int][Math]::Round($AnchorY - $Height), $Width, $Height)
     $Graphics.DrawImage($image, $destination, 0, 0, $image.Width, $image.Height, [System.Drawing.GraphicsUnit]::Pixel)
-  } finally {
-    $image.Dispose()
-  }
+  } finally { $image.Dispose() }
 }
 
-$bitmap = New-Object System.Drawing.Bitmap(1280, 960, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$bitmap = New-Object System.Drawing.Bitmap(1280, 1792, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 try {
   $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
@@ -206,25 +72,71 @@ try {
   $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
   $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::None
 
-  Draw-PlazaBase $graphics
+  Fill-Rectangle $graphics "#263732" 0 0 1280 1792
+  Draw-Rectangle $graphics "#475b50" "#162823" 8 32 32 1216 1728
 
-  # Mismo anclaje (centro inferior) y mismo orden de profundidad que el runtime.
-  Draw-MapSprite $graphics "assets/generated/san-pablo-rebuilt/runtime/building-rowhouse-tan.png" 252 176 400 188
-  Draw-MapSprite $graphics "assets/generated/san-pablo-rebuilt/runtime/building-rowhouse-tan.png" 1018 176 400 188 -FlipX
-  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/building-bars-strip.png" 224 330 358 109
-  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/building-pharmacy-san-pablo.png" 592 330 283 132
-  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/building-bank-neighborhood.png" 890 330 230 140
-  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/building-shop-neighborhood.png" 1144 330 202 156
-  Draw-MapSprite $graphics "assets/generated/san-pablo-rebuilt/runtime/tree-deciduous.png" 438 478 116 142
-  Draw-MapSprite $graphics "assets/generated/san-pablo-rebuilt/runtime/tree-deciduous.png" 1058 502 96 118
-  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-cafe-terrace.png" 190 535 161 107
-  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-cafe-terrace.png" 715 530 161 107 -FlipX
-  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-cafe-terrace.png" 930 565 144 96
-  Draw-MapSprite $graphics "assets/generated/san-pablo-derived/runtime/prop-park-bench.png" 390 636 76 44
-  Draw-MapSprite $graphics "assets/generated/san-pablo-derived/runtime/prop-park-bench.png" 890 650 76 44 -FlipX
-  Draw-MapSprite $graphics "assets/generated/san-pablo-derived/runtime/prop-streetlamp.png" 315 690 28 72
-  Draw-MapSprite $graphics "assets/generated/san-pablo-derived/runtime/prop-streetlamp.png" 965 690 28 72
+  # Plaza gris y cuadrícula de baldosas.
+  Fill-Rectangle $graphics "#aeb1ad" 64 64 1152 784
+  for ($x = 64; $x -le 1216; $x += 32) { Draw-Line $graphics "#858b89" 2 $x 64 $x 848 }
+  for ($y = 64; $y -le 848; $y += 32) { Draw-Line $graphics "#858b89" 2 64 $y 1216 $y }
+  Fill-Rectangle $graphics "#c7c5bd" 32 64 64 1056
+  Fill-Rectangle $graphics "#c7c5bd" 1184 64 64 1056
 
+  # Calzada y paso de peatones, apartado de la rampa.
+  Fill-Rectangle $graphics "#c7c5bd" 32 800 1216 48
+  Fill-Rectangle $graphics "#454b4d" 32 848 1216 208
+  Fill-Rectangle $graphics "#c7c5bd" 32 1056 1216 64
+  for ($x = 48; $x -lt 1232; $x += 96) { Draw-Line $graphics "#d5cfaa" 6 $x 952 ([Math]::Min($x + 58, 1232)) 952 }
+  Draw-Line $graphics "#e4e1d1" 4 48 866 1232 866
+  Draw-Line $graphics "#e4e1d1" 4 48 1038 1232 1038
+  for ($y = 856; $y -le 1016; $y += 32) { Fill-Rectangle $graphics "#f1eee1" 296 $y 112 20 }
+  Fill-Rectangle $graphics "#f1eee1" 296 1060 112 16
+  Fill-Rectangle $graphics "#f1eee1" 296 1088 112 16
+
+  # Solar y gran masa oscura del edificio derruido.
+  Fill-Rectangle $graphics "#737977" 32 1120 1216 640
+  for ($x = 32; $x -le 1248; $x += 48) { Draw-Line $graphics "#555b59" 2 $x 1120 $x 1760 }
+  for ($y = 1120; $y -le 1760; $y += 48) { Draw-Line $graphics "#555b59" 2 32 $y 1248 $y }
+  Draw-Rectangle $graphics "#3d4243" "#292f30" 8 64 1280 1152 480
+  Fill-Rectangle $graphics "#4c5352" 432 1128 416 28
+
+  # El megacentro ocupa casi todo el ancho y queda detrás de la valla.
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/building-abandoned-megamall-ruin.png" 640 1760 1152 480
+
+  # Un unico edificio PixelLab a escala nativa: cubierta, esquinas y fachadas comparten silueta.
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/runtime/buildings/building-u-continuous-v7.png" 640 800 1088 672
+
+  # Hueco circular y rampa unida directamente al asfalto.
+  Draw-Ellipse $graphics "#343a3c" "#777d7d" 12 542 342 196 196
+  Draw-Ellipse $graphics "#151b1e" "#aeb4b1" 7 568 368 144 144
+  $rampBrush = New-Object System.Drawing.SolidBrush((New-Color "#303638"))
+  $rampPen = New-Object System.Drawing.Pen((New-Color "#777d7c"), 10)
+  $rampPoints = [System.Drawing.PointF[]]@([System.Drawing.PointF]::new(552,560), [System.Drawing.PointF]::new(728,560), [System.Drawing.PointF]::new(752,848), [System.Drawing.PointF]::new(528,848))
+  try { $graphics.FillPolygon($rampBrush, $rampPoints); $graphics.DrawPolygon($rampPen, $rampPoints) } finally { $rampPen.Dispose(); $rampBrush.Dispose() }
+  Draw-Line $graphics "#bca943" 5 640 584 640 916
+  Fill-Rectangle $graphics "#3c4244" 510 848 260 70
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-parking-lightwell.png" 640 540 208 208
+  $rampAsset = if (Test-Path (Join-Path $projectRoot "assets/generated/plaza-farmacia-pixellab/prop-parking-ramp-roadwide.png")) { "assets/generated/plaza-farmacia-pixellab/prop-parking-ramp-roadwide.png" } else { "assets/generated/plaza-farmacia-pixellab/prop-parking-ramp.png" }
+  Draw-MapSprite $graphics $rampAsset 640 848 224 288
+
+  # Terrazas y mobiliario.
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-cafe-terrace.png" 470 486 120 80
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-cafe-terrace.png" 850 486 150 100 -FlipX
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-cafe-terrace.png" 470 718 120 80
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-cafe-terrace.png" 850 718 150 100 -FlipX
+  Draw-MapSprite $graphics "assets/generated/san-pablo-derived/runtime/prop-park-bench.png" 470 790 76 44
+  Draw-MapSprite $graphics "assets/generated/san-pablo-derived/runtime/prop-park-bench.png" 850 790 76 44 -FlipX
+  Draw-MapSprite $graphics "assets/generated/san-pablo-derived/runtime/prop-streetlamp.png" 460 820 28 72
+  Draw-MapSprite $graphics "assets/generated/san-pablo-derived/runtime/prop-streetlamp.png" 980 820 28 72
+
+  # Frente continuo de la valla, delante del edificio gigante.
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-gray-metal-fence.png" 160 1216 320 96
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-gray-metal-fence.png" 480 1216 320 96
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-gray-metal-fence.png" 800 1216 320 96
+  Draw-MapSprite $graphics "assets/generated/plaza-farmacia-pixellab/prop-gray-metal-fence.png" 1120 1216 320 96
+
+  $framePen = New-Object System.Drawing.Pen((New-Color "#162823"), 8)
+  try { $graphics.DrawRectangle($framePen, 32, 32, 1216, 1728) } finally { $framePen.Dispose() }
   $bitmap.Save($resolvedOutput, [System.Drawing.Imaging.ImageFormat]::Png)
 } finally {
   $graphics.Dispose()

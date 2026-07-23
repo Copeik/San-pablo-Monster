@@ -64,6 +64,7 @@ test("effect pack import accepts known moves, ignores unknown entries and reject
   const effects = await loadAttackEffects();
   const moveTypes = { ember: "Fuego", waterGun: "Agua" };
   const imported = effects.parsePack(JSON.stringify({
+    kind: "pokemon-city-attack-effects",
     schemaVersion: 1,
     effects: {
       ember: { preset: "electric", color: "#123456", width: 44 },
@@ -78,7 +79,7 @@ test("effect pack import accepts known moves, ignores unknown entries and reject
   assert.equal(imported.effects.ember.width, 44);
   assert.deepEqual([...imported.ignored].sort(), ["../unsafe", "unknownMove"]);
   assert.throws(
-    () => effects.parsePack('{"schemaVersion":2,"effects":{}}', moveTypes),
+    () => effects.parsePack('{"kind":"pokemon-city-attack-effects","schemaVersion":2,"effects":{}}', moveTypes),
     /versión más nueva/,
   );
 });

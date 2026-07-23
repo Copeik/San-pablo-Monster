@@ -339,42 +339,129 @@ async function askMiniMax(message, history, env = process.env) {
   throw Object.assign(new Error("MiniMax devolvió una respuesta incompleta o fuera del personaje"), { statusCode: 502 });
 }
 
-function safeStaticPath(urlPath) {
+function safeStaticPath(urlPath, staticRoot = ROOT) {
   let decoded;
   try { decoded = decodeURIComponent(urlPath); } catch { return null; }
   const relative = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
   if (!relative || relative.split(/[\\/]/).every((part) => !part.startsWith(".")) === false) return null;
   if (["server.mjs", "package.json"].includes(relative) || relative.startsWith("tests/")) return null;
-  const target = path.resolve(ROOT, relative);
-  return target.startsWith(`${ROOT}${path.sep}`) ? target : null;
+  const resolvedRoot = path.resolve(staticRoot);
+  const target = path.resolve(resolvedRoot, relative);
+  return target.startsWith(`${resolvedRoot}${path.sep}`) ? target : null;
 }
 
-async function serveStatic(request, response, pathname) {
-  const target = safeStaticPath(pathname);
+function acceptsEncoding(header, encoding) {
+  return String(header || "").split(",").some((entry) => {
+    const [name, ...parameters] = entry.trim().toLowerCase().split(";");
+    if (name !== encoding && name !== "*") return false;
+    const quality = parameters.find((parameter) => parameter.trim().startsWith("q="));
+    return !quality || Number(quality.trim().slice(2)) > 0;
+  });
+}
+
+function parseByteRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(String(header || "").trim());
+  if (!match || (!match[1] && !match[2]) || size <= 0) return null;
+  let start;
+  let end;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return null;
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : size - 1;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) return null;
+    if (start >= size || end < start) return null;
+    end = Math.min(end, size - 1);
+  }
+  return { start, end };
+}
+
+function staticCacheControl(target, env) {
+  const filename = path.basename(target);
+  if (filename === "index.html" || target.endsWith("map-editor-data.js") || target.endsWith("editor-data.js")) return "no-cache";
+  if (/\.[a-f0-9]{8,}\./i.test(filename)) return "public, max-age=31536000, immutable";
+  return env.NODE_ENV === "production" ? "public, max-age=86400" : "public, max-age=3600";
+}
+
+async function serveStatic(request, response, pathname, staticRoot, env) {
+  const target = safeStaticPath(pathname, staticRoot);
   if (!target) { json(response, 404, { error: "No encontrado" }); return; }
   let info;
   try { info = await stat(target); } catch { json(response, 404, { error: "No encontrado" }); return; }
   if (!info.isFile()) { json(response, 404, { error: "No encontrado" }); return; }
-  const liveDevelopmentData = target.endsWith("map-editor-data.js") || target.endsWith("editor-data.js");
   const contentType = MIME_TYPES.get(path.extname(target).toLowerCase()) || "application/octet-stream";
   const compressible = /^(?:text\/|application\/(?:javascript|json)|image\/svg\+xml)/.test(contentType);
-  const acceptsGzip = compressible && info.size >= 1024 && /(?:^|,)\s*gzip(?:\s*;|\s*,|\s*$)/i.test(String(request.headers["accept-encoding"] || ""));
+  const etag = `W/"${info.size.toString(16)}-${Math.trunc(info.mtimeMs).toString(16)}"`;
+  const lastModified = info.mtime.toUTCString();
   const headers = {
     "Content-Type": contentType,
-    "Cache-Control": target.endsWith("index.html") || liveDevelopmentData ? "no-cache" : "public, max-age=3600",
+    "Cache-Control": staticCacheControl(target, env),
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",
-    "Vary": "Accept-Encoding",
+    "Accept-Ranges": "bytes",
+    "ETag": etag,
+    "Last-Modified": lastModified,
   };
-  if (acceptsGzip) headers["Content-Encoding"] = "gzip";
-  else headers["Content-Length"] = info.size;
+
+  const ifNoneMatch = String(request.headers["if-none-match"] || "");
+  const ifModifiedSince = Date.parse(String(request.headers["if-modified-since"] || ""));
+  if (ifNoneMatch.split(",").map((value) => value.trim()).includes(etag)
+      || (!ifNoneMatch && Number.isFinite(ifModifiedSince) && info.mtimeMs <= ifModifiedSince + 999)) {
+    response.writeHead(304, headers);
+    response.end();
+    return;
+  }
+
+  if (request.headers.range) {
+    const range = parseByteRange(request.headers.range, info.size);
+    if (!range) {
+      response.writeHead(416, { ...headers, "Content-Range": `bytes */${info.size}`, "Content-Length": 0 });
+      response.end();
+      return;
+    }
+    const contentLength = range.end - range.start + 1;
+    response.writeHead(206, {
+      ...headers,
+      "Content-Range": `bytes ${range.start}-${range.end}/${info.size}`,
+      "Content-Length": contentLength,
+    });
+    if (request.method === "HEAD") response.end();
+    else createReadStream(target, { start: range.start, end: range.end }).pipe(response);
+    return;
+  }
+
+  let encodedTarget = target;
+  let encodedInfo = info;
+  let contentEncoding = "";
+  let dynamicGzip = false;
+  const acceptEncoding = request.headers["accept-encoding"];
+  if (compressible && info.size >= 1024 && acceptsEncoding(acceptEncoding, "br") && existsSync(`${target}.br`)) {
+    encodedTarget = `${target}.br`;
+    encodedInfo = await stat(encodedTarget);
+    contentEncoding = "br";
+  } else if (compressible && info.size >= 1024 && acceptsEncoding(acceptEncoding, "gzip") && existsSync(`${target}.gz`)) {
+    encodedTarget = `${target}.gz`;
+    encodedInfo = await stat(encodedTarget);
+    contentEncoding = "gzip";
+  } else if (compressible && info.size >= 1024 && acceptsEncoding(acceptEncoding, "gzip")) {
+    contentEncoding = "gzip";
+    dynamicGzip = true;
+  }
+
+  if (compressible) headers.Vary = "Accept-Encoding";
+  if (contentEncoding) headers["Content-Encoding"] = contentEncoding;
+  if (!dynamicGzip) headers["Content-Length"] = encodedInfo.size;
   response.writeHead(200, headers);
   if (request.method === "HEAD") response.end();
-  else if (acceptsGzip) createReadStream(target).pipe(createGzip()).pipe(response);
-  else createReadStream(target).pipe(response);
+  else if (dynamicGzip) createReadStream(target).pipe(createGzip()).pipe(response);
+  else createReadStream(encodedTarget).pipe(response);
 }
 
-export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR_DATA_PATH, editorDataPaths = null, editorPersist } = {}) {
+export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR_DATA_PATH, editorDataPaths = null, editorPersist, staticRoot = null } = {}) {
+  const appStaticRoot = path.resolve(staticRoot || (env.NODE_ENV === "production" ? path.join(ROOT, "dist", "standard") : ROOT));
   const collaborationEnabled = editorCollaborationEnabled(env);
   const collaborationToken = String(env.GAME_EDITOR_TOKEN || env.EDITOR_TOKEN || "").trim()
     || (collaborationEnabled ? randomBytes(24).toString("base64url") : "");
@@ -481,7 +568,7 @@ export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR
         return;
       }
       if ((request.method === "GET" || request.method === "HEAD") && !url.pathname.startsWith("/api/")) {
-        await serveStatic(request, response, url.pathname);
+        await serveStatic(request, response, url.pathname, appStaticRoot, env);
         return;
       }
       json(response, 404, { error: "No encontrado" });
@@ -500,6 +587,7 @@ export function createAppServer({ env = process.env, editorDataPath = MAP_EDITOR
     return result;
   };
   Object.defineProperty(server, "editorCollaborationToken", { value: collaborationToken });
+  Object.defineProperty(server, "staticRoot", { value: appStaticRoot });
   return server;
 }
 
@@ -507,12 +595,20 @@ const isEntryPoint = process.argv[1] && pathToFileURL(path.resolve(process.argv[
 if (isEntryPoint) {
   const runtimeEnv = { ...process.env };
   if (process.argv.includes("--collab")) runtimeEnv.GAME_EDITOR_COLLAB = "1";
+  if (process.argv.includes("--production")) runtimeEnv.NODE_ENV = "production";
+  const profileIndex = process.argv.findIndex((argument) => argument === "--profile");
+  const inlineProfile = process.argv.find((argument) => argument.startsWith("--profile="))?.slice("--profile=".length);
+  const staticProfile = inlineProfile || (profileIndex >= 0 ? process.argv[profileIndex + 1] : "standard");
+  if (runtimeEnv.NODE_ENV === "production" && !["standard", "legacy", "legacy-dev"].includes(staticProfile)) {
+    throw new Error(`Perfil de publicación no válido: ${staticProfile}`);
+  }
   const collaborationEnabled = editorCollaborationEnabled(runtimeEnv);
   if (collaborationEnabled && !runtimeEnv.GAME_EDITOR_TOKEN) runtimeEnv.GAME_EDITOR_TOKEN = randomBytes(24).toString("base64url");
   const port = Number(runtimeEnv.PORT) || DEFAULT_PORT;
   const host = collaborationEnabled ? runtimeEnv.HOST || "0.0.0.0" : "127.0.0.1";
   const editorDataPath = runtimeEnv.GAME_EDITOR_DATA_PATH ? path.resolve(runtimeEnv.GAME_EDITOR_DATA_PATH) : MAP_EDITOR_DATA_PATH;
-  const server = createAppServer({ env: runtimeEnv, editorDataPath });
+  const staticRoot = runtimeEnv.NODE_ENV === "production" ? path.join(ROOT, "dist", staticProfile) : ROOT;
+  const server = createAppServer({ env: runtimeEnv, editorDataPath, staticRoot });
   server.listen(port, host, () => {
     if (collaborationEnabled) {
       privateIpv4Addresses().forEach((address) => {

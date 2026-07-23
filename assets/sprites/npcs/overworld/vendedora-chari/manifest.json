@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-26-vendor",
+  "spriteId": "npc-26-vendor",
+  "displayName": "Vendedora Chari",
+  "entitySlug": "vendedora-chari",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "5fb33984fa89a07ab5d04a421e81c623bfe9e51b740057e07a51a53a789789e9",
+  "sourceAssetId": "npc-26-vendor-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-26-vendor-walk.png",
+  "credits": "credits.txt"
+}

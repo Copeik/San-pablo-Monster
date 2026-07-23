@@ -1,8 +1,0 @@
-Origen: ficha conceptual aportada por el usuario (codex-clipboard-31f43d89-5d78-444f-93d5-5f0d009205fe.png).
-Proceso: recorte de las vistas dibujadas y eliminación del fondo de pergamino; no se generaron perspectivas nuevas.
-
-Archivos extraídos:
-- rebehielo-front.png
-- rebehielo-back.png
-- picorneo-front.png
-- picorneo-back.png

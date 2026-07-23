@@ -1,6 +1,0 @@
-Currasma
-
-Concepto, nombre y ficha original: material proporcionado por el usuario.
-Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: currasma-front.png, currasma-back.png.

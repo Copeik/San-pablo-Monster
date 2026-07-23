@@ -1,6 +1,0 @@
-Línea Tortihuevo
-
-Concepto, nombres y ficha original: material proporcionado por el usuario.
-Sprites: vistas frontal y trasera extraídas de la ficha original y limpiadas a fondo transparente.
-
-Archivos: tortihuevo-front.png, tortihuevo-back.png, patatorti-front.png, patatorti-back.png, tortilloro-front.png, tortilloro-back.png.

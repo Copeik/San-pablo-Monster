@@ -24,10 +24,10 @@ function webpChunks(buffer) {
 const animations = [
   { state: "idle", view: "front", loop: 0, duration: 120 },
   { state: "idle", view: "back", loop: 0, duration: 120 },
-  { state: "attack", variant: "melee", view: "front", loop: 1, duration: 90 },
-  { state: "attack", variant: "melee", view: "back", loop: 1, duration: 90 },
-  { state: "attack", variant: "ranged", view: "front", loop: 1, duration: 90 },
-  { state: "attack", variant: "ranged", view: "back", loop: 1, duration: 90 },
+  { state: "attack", variant: "physical", view: "front", loop: 1, duration: 90 },
+  { state: "attack", variant: "physical", view: "back", loop: 1, duration: 90 },
+  { state: "attack", variant: "special", view: "front", loop: 1, duration: 90 },
+  { state: "attack", variant: "special", view: "back", loop: 1, duration: 90 },
 ];
 
 function animationPath({ state, variant, view }) {
@@ -37,7 +37,8 @@ function animationPath({ state, variant, view }) {
     "assets",
     "pokemon",
     "peyote-line",
-    `peyote-${action}-${view}-pixellab.webp`,
+    "peyote",
+    `${action}-${view}.webp`,
   );
 }
 
@@ -67,25 +68,28 @@ for (const animation of animations) {
   });
 }
 
-test("all six Peyote combat animations stay within 7.2 MB", async () => {
+test("las seis animaciones de Peyote pesan menos de 1 MB", async () => {
   const assets = await Promise.all(animations.map((animation) => readFile(animationPath(animation))));
-  assert.ok(assets.reduce((total, asset) => total + asset.length, 0) < 7_200_000);
+  assert.ok(assets.reduce((total, asset) => total + asset.length, 0) < 1_000_000);
 });
 
-test("Peyote uses frame animation only in battle views with static and reduced-motion fallbacks", async () => {
+test("Peyote usa el perfil animation-only y los helpers compartidos", async () => {
   const [script, styles, registry] = await Promise.all([
     readFile(path.join(root, "script.js"), "utf8"),
     readFile(path.join(root, "styles.css"), "utf8"),
     readFile(path.join(root, "sanpledex-animation-data.js"), "utf8"),
   ]);
 
-  assert.match(registry, /9101: combatPack\("peyote-line", "peyote"\)/);
+  assert.match(registry, /9101: animationOnlyPack\("peyote-line", "peyote"\)/);
   assert.match(script, /const SANPLEDEX_ANIMATION_ASSETS = globalThis\.SANPLEDEX_ANIMATION_ASSETS/);
-  assert.match(script, /function customPokemonAttackAnimation\(id, variant = "melee"\)/);
-  assert.match(script, /function customPokemonFrameAsset[\s\S]*?if \(prefersReducedMotion\(\)\) return null;/);
+  assert.match(script, /function customPokemonAttackAnimation\(id, variant = "physical"\)/);
+  assert.match(script, /const legacyVariant = variant === "special" \? "ranged" : "melee";/);
+  assert.match(script, /function customPokemonFrameAsset[\s\S]*?if \(prefersReducedMotion\(\) && !animation\?\.animationOnly\) return null;/);
   assert.match(script, /REDUCED_MOTION_QUERY\.addEventListener\("change", refreshVisiblePokemonFrameAssets\)/);
-  assert.match(script, /function artworkUrl\(id\) \{ return customPokemonAsset\(id\)/);
-  assert.match(script, /function frontSpriteUrl\(id\) \{ return customPokemonFrameAsset\(id\) \|\| customPokemonAsset\(id\)/);
+  assert.match(script, /function pokemonIdleAsset\(id, view = "front"\)/);
+  assert.match(script, /function artworkUrl\(id\) \{ return pokemonIdleAsset\(id\)/);
+  assert.match(script, /function frontSpriteUrl\(id\) \{ return pokemonIdleAsset\(id, "front"\); \}/);
+  assert.match(script, /function backSpriteUrl\(id\) \{ return pokemonIdleAsset\(id, "back"\); \}/);
   assert.match(script, /image\.classList\.remove\("frame-animated"\);[\s\S]*?image\.src = fallbackAsset;/);
   assert.match(styles, /\.enemy-pokemon\.frame-animated \{ animation: wild-enter 550ms ease-out both; \}/);
   assert.match(styles, /\.player-pokemon\.frame-animated \{ animation: partner-enter 550ms ease-out both; \}/);

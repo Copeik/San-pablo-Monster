@@ -1295,37 +1295,83 @@ class PresenceGate {
       .map((user) => ({ ...user, id: user.actorId, cursor: user.cursor ? { worldX: user.cursor.x, worldY: user.cursor.y } : null })));
   }
 
-  function openEventStream() {
-    if (soloMode) return;
+  function realtimeLifecycleActive() {
+    return enabled && bridge.isOpen() && document.visibilityState !== "hidden";
+  }
+
+  function stopRealtimeLifecycle() {
     eventSource?.close();
+    eventSource = null;
     window.clearTimeout(reconnectTimer);
+    reconnectTimer = 0;
+    window.clearTimeout(presenceTimer);
+    presenceTimer = 0;
+    window.clearInterval(presenceMovementTimer);
+    presenceMovementTimer = 0;
+    window.clearInterval(presenceHeartbeatTimer);
+    presenceHeartbeatTimer = 0;
+    window.clearTimeout(diagnosticsTimer);
+    diagnosticsTimer = 0;
+    presenceSendQueued = false;
+  }
+
+  function startRealtimeLifecycle() {
+    if (!realtimeLifecycleActive() || soloMode) {
+      stopRealtimeLifecycle();
+      return;
+    }
+    if (!eventSource) openEventStream();
+    startPresenceHeartbeat();
+    sendPresence(presenceCursor);
+  }
+
+  function openEventStream() {
+    if (soloMode || !realtimeLifecycleActive()) return;
+    eventSource?.close();
+    eventSource = null;
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = 0;
     const url = apiUrl("/api/dev/map-editor/events");
     url.searchParams.set("actorId", actorId);
     url.searchParams.set("name", editorName);
     url.searchParams.set("color", color);
     url.searchParams.set("mode", mode);
-    eventSource = new EventSource(url);
-    eventSource.onopen = () => { reconnectAttempt = 0; pollingOnline = false; setConnection("online", "En directo"); };
-    eventSource.onerror = () => {
-      eventSource?.close();
+    const source = new EventSource(url);
+    eventSource = source;
+    source.onopen = () => {
+      if (source !== eventSource || !realtimeLifecycleActive()) return;
+      reconnectAttempt = 0; pollingOnline = false; setConnection("online", "En directo");
+    };
+    source.onerror = () => {
+      if (source !== eventSource || !realtimeLifecycleActive()) return;
+      source.close();
+      eventSource = null;
       setConnection("reconnecting", "Reconectando…");
       scheduleReconnect();
     };
-    eventSource.addEventListener("snapshot", (event) => {
+    source.addEventListener("snapshot", (event) => {
+      if (source !== eventSource || !realtimeLifecycleActive()) return;
       const snapshot = JSON.parse(event.data);
       applySnapshot(snapshot, { preservePending: pendingBatches.length > 0 });
       setConnection("online", "En directo");
     });
-    eventSource.addEventListener("operations", (event) => applyRemoteOperations(JSON.parse(event.data)));
-    eventSource.addEventListener("presence", (event) => renderPresence(JSON.parse(event.data).users));
+    source.addEventListener("operations", (event) => {
+      if (source === eventSource && realtimeLifecycleActive()) applyRemoteOperations(JSON.parse(event.data));
+    });
+    source.addEventListener("presence", (event) => {
+      if (source === eventSource && realtimeLifecycleActive()) renderPresence(JSON.parse(event.data).users);
+    });
   }
 
   function scheduleReconnect() {
-    if (soloMode || !enabled || reconnectTimer) return;
+    if (soloMode || !realtimeLifecycleActive() || eventSource || reconnectTimer) return;
     const base = Math.min(MAP_EDITOR_RULES.timing.reconnectMaximumMs, 700 * (2 ** reconnectAttempt));
     const delay = base + Math.floor(Math.random() * Math.max(250, base * .35));
     reconnectAttempt += 1;
-    reconnectTimer = window.setTimeout(() => { reconnectTimer = 0; openEventStream(); }, delay);
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = 0;
+      if (realtimeLifecycleActive()) openEventStream();
+    }, delay);
   }
 
   function presencePayload(cursor = presenceCursor) {
@@ -1338,7 +1384,7 @@ class PresenceGate {
   }
 
   async function publishPresence(cursor = presenceCursor, { heartbeat = false } = {}) {
-    if (soloMode) return { send: false, wait: 0, changed: false };
+    if (soloMode || !realtimeLifecycleActive()) return { send: false, wait: 0, changed: false };
     if (presenceRequestsInFlight >= 3) {
       presenceSendQueued = true;
       return { send: false, wait: MAP_EDITOR_RULES.timing.presenceMovementMs, changed: true };
@@ -1358,7 +1404,7 @@ class PresenceGate {
       renderPresence(result.users);
     } finally {
       presenceRequestsInFlight = Math.max(0, presenceRequestsInFlight - 1);
-      if (presenceSendQueued && enabled) {
+      if (presenceSendQueued && realtimeLifecycleActive()) {
         presenceSendQueued = false;
         sendPresence(presenceCursor);
       }
@@ -1366,15 +1412,15 @@ class PresenceGate {
   }
 
   function sendPresence(cursor = null) {
-    if (soloMode) return;
     presenceCursor = cursor;
+    if (soloMode || !realtimeLifecycleActive()) return;
     if (presenceTimer) return;
     const publishLatest = async () => {
       presenceTimer = 0;
-      if (!enabled) return;
+      if (!realtimeLifecycleActive()) return;
       try {
         const decision = await publishPresence(presenceCursor);
-        if (decision && !decision.send && decision.changed && decision.wait > 0) {
+        if (realtimeLifecycleActive() && decision && !decision.send && decision.changed && decision.wait > 0) {
           presenceTimer = window.setTimeout(publishLatest, decision.wait);
         }
       } catch { /* EventSource reconnection exposes the connection state. */ }
@@ -1383,14 +1429,14 @@ class PresenceGate {
   }
 
   function startPresenceHeartbeat() {
-    if (soloMode) return;
+    if (soloMode || !realtimeLifecycleActive()) return;
     window.clearInterval(presenceMovementTimer);
     window.clearInterval(presenceHeartbeatTimer);
     presenceMovementTimer = window.setInterval(() => {
-      if (enabled) sendPresence(presenceCursor);
+      if (realtimeLifecycleActive()) sendPresence(presenceCursor);
     }, MAP_EDITOR_RULES.timing.presenceMovementMs);
     presenceHeartbeatTimer = window.setInterval(() => {
-      if (!enabled) return;
+      if (!realtimeLifecycleActive()) return;
       void publishPresence(presenceCursor, { heartbeat: true }).catch(() => {});
     }, MAP_EDITOR_RULES.timing.presenceHeartbeatMs);
   }
@@ -1588,7 +1634,12 @@ class PresenceGate {
   function scheduleMapDiagnostics(delay = 220) {
     if (!$("#mapEditorDiagnosticsList")) return;
     window.clearTimeout(diagnosticsTimer);
-    diagnosticsTimer = window.setTimeout(renderMapDiagnostics, delay);
+    diagnosticsTimer = 0;
+    if (!realtimeLifecycleActive()) return;
+    diagnosticsTimer = window.setTimeout(() => {
+      diagnosticsTimer = 0;
+      if (realtimeLifecycleActive()) renderMapDiagnostics();
+    }, delay);
   }
 
   function setInfo(selector, primary, secondary) {
@@ -3117,8 +3168,16 @@ class PresenceGate {
       const grid = bridge.grid();
       bridge.centerAt?.((event.clientX - rect.left) / rect.width * grid.cols * grid.tileSize, (event.clientY - rect.top) / rect.height * grid.rows * grid.tileSize);
     });
-    document.addEventListener("map-editor-open", prepareOpenEditor);
-    document.addEventListener("map-editor-close", commitTransientTransactions);
+    document.addEventListener("map-editor-open", () => {
+      prepareOpenEditor();
+      startRealtimeLifecycle();
+      scheduleMapDiagnostics();
+    });
+    document.addEventListener("map-editor-close", () => {
+      commitTransientTransactions();
+      stopRealtimeLifecycle();
+      if (pendingBatches.length) void flushOperations();
+    });
     document.addEventListener("map-editor-cancel-request", (event) => {
       if (bridge.isOpen() && cancelCurrentAction()) event.preventDefault();
     });
@@ -3172,10 +3231,7 @@ class PresenceGate {
     });
     window.addEventListener("pagehide", () => {
       commitTransientTransactions();
-      eventSource?.close();
-      window.clearInterval(presenceMovementTimer);
-      window.clearInterval(presenceHeartbeatTimer);
-      window.clearTimeout(reconnectTimer);
+      stopRealtimeLifecycle();
       if (pendingBatches.length) {
         void persistPendingBatches();
         void flushOperations({ keepalive: true });
@@ -3187,20 +3243,24 @@ class PresenceGate {
       event.preventDefault(); event.returnValue = "";
     });
     document.addEventListener("visibilitychange", () => {
-      if (soloMode) {
-        if (document.visibilityState === "hidden") {
-          commitTransientTransactions();
-          if (pendingBatches.length) void flushOperations();
-        }
-        return;
-      }
       if (document.visibilityState === "hidden") {
         commitTransientTransactions();
-        if (pendingBatches.length) void flushOperations({ keepalive: true });
+        stopRealtimeLifecycle();
+        if (pendingBatches.length) void flushOperations({ keepalive: !soloMode });
         return;
       }
-      void fetchSnapshot().then((snapshot) => applySnapshot(snapshot, { preservePending: pendingBatches.length > 0 })).catch(() => scheduleReconnect());
-      if (eventSource?.readyState !== EventSource.OPEN) scheduleReconnect();
+      if (!bridge.isOpen()) {
+        stopRealtimeLifecycle();
+        return;
+      }
+      if (soloMode) {
+        scheduleMapDiagnostics();
+        return;
+      }
+      startRealtimeLifecycle();
+      void fetchSnapshot().then((snapshot) => {
+        if (realtimeLifecycleActive()) applySnapshot(snapshot, { preservePending: pendingBatches.length > 0 });
+      }).catch(() => scheduleReconnect());
     });
     window.addEventListener("online", () => { if (!soloMode) { setConnection("reconnecting", "Recuperando conexión…"); void flushOperations(); scheduleReconnect(); } });
     window.addEventListener("offline", () => { if (!soloMode) setSaveStatus("offline", "Sin conexión; los cambios están protegidos localmente."); });
@@ -3254,14 +3314,14 @@ class PresenceGate {
       setRevision(result.revision);
       bridge.enable(); populatePrototypes(); populateNpcSprites(); bindUi(); applyWorkspacePreferences(); applySnapshot(result, { preservePending: pendingBatches.length > 0 }); setMode(mode);
       if (bridge.isOpen()) prepareOpenEditor();
-      openEventStream(); startPresenceHeartbeat(); sendPresence();
+      startRealtimeLifecycle();
       renderOutliner();
       if (pendingBatches.length) {
         setSaveStatus("pending", `Recuperados ${pendingOperationCount()} cambios del cierre anterior.`);
         void flushOperations();
       } else setSaveStatus("saved", `Conectado a ${result.mapId || activeMapId} · los cambios se escriben en ${result.file}`);
     } catch (error) {
-      enabled = false; bridge.disable(); setConnection("offline", "Solo disponible en desarrollo");
+      enabled = false; stopRealtimeLifecycle(); bridge.disable(); setConnection("offline", "Solo disponible en desarrollo");
     }
   }
 

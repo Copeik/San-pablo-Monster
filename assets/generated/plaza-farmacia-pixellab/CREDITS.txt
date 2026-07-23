@@ -1,0 +1,18 @@
+Plaza de la Farmacia · recursos PixelLab
+
+Proveedor: PixelLab MCP
+Fecha de generación: 2026-07-22
+Términos: https://pixellab.ai/termsofservice
+
+Kit arquitectónico:
+- PixelLab ID: e95ba896-4054-4c9a-bc81-8be4f13b69f4
+- Herramienta: pixellab.create_building_kit
+- Semilla: 27421
+
+Módulos de escaparate:
+- PixelLab ID: f352b2ac-03dd-4be2-a02a-f6ac46e0a8cd
+- Herramienta: pixellab.create_tiles_pro
+- Semilla: 27421
+
+El edificio runtime se ensambló mecánicamente con los PNG originales mediante
+tools/build-plaza-pharmacy-u.ps1. No se empleó otro generador de imágenes.

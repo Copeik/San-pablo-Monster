@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-03-professor",
+  "spriteId": "npc-03-professor",
+  "displayName": "Investigador",
+  "entitySlug": "investigador",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "d1ea30e1c468c7b1b91d211c96850e3559d8e9d72eba3469122875b3e6d135e3",
+  "sourceAssetId": "npc-03-professor-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-03-professor-walk.png",
+  "credits": "credits.txt"
+}

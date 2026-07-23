@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-15-chef",
+  "spriteId": "npc-15-chef",
+  "displayName": "Chef Paco",
+  "entitySlug": "chef-paco",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "e29feccf4d5d8132f1d18c824d57ec2184032b26033ea57f87e5c3e43218663b",
+  "sourceAssetId": "npc-15-chef-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-15-chef-walk.png",
+  "credits": "credits.txt"
+}

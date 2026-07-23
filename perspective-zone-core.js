@@ -8,12 +8,14 @@
   const FIXED_STEP = 1 / 120;
   const MAX_FRAME_DELTA = 0.05;
   const MAX_SUBSTEPS = 8;
+  const HUD_REFRESH_INTERVAL = 0.1;
   const PROFILE_MODE = "perfil";
   const DIORAMA_MODE = "diorama";
   const PLAYER_WIDTH = 28;
   const PLAYER_HEIGHT = 48;
   const MAX_PARTICLES = 96;
   const PARTICLE_LIMITS = Object.freeze({ dust: 28, leaves: 24, sparks: 24, confetti: 32, ring: 12 });
+  const owns = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
   const FLIP_COMBO_WINDOW = 8;
   const FLIP_ANTICIPATION_END = 0.2;
   const PAPER_RUSH_THRESHOLD = 85;
@@ -153,12 +155,12 @@
       { id: "gate-house", x: 4770, y: 262, w: 420, h: 248, depth: 68, roof: 40, color: "#768c64", side: "#475b3a", accent: "#f2cf6d", windows: 5 },
     ]),
     wildlife: freezeRecords([
-      { id: "azahin-guide", species: "Azahín", sprite: "assets/pokemon/azahin-line/azahin-front.png", x: 330, y: 454, minX: 245, maxX: 700, speed: 36, depth: -18, behavior: "graze", scale: 0.9 },
-      { id: "serranin-hopper", species: "Serranín", sprite: "assets/pokemon/serranin-line/serranin-front.png", x: 1870, y: 454, minX: 1800, maxX: 2180, speed: 28, depth: 34, behavior: "hop", scale: 0.86 },
-      { id: "rubrisma-fold", species: "Rubrisma", sprite: "assets/pokemon/rubrisma-line/rubrisma-front.png", x: 2670, y: 390, minX: 2550, maxX: 2810, speed: 22, depth: -68, behavior: "shy", scale: 0.82 },
-      { id: "barbito-canal", species: "Barbito", sprite: "assets/pokemon/barbito-line/barbito-front.png", x: 3005, y: 463, minX: 2910, maxX: 3110, speed: 18, depth: 12, behavior: "graze", scale: 0.8 },
-      { id: "rebehielo-roof", species: "Rebehielo", sprite: "assets/pokemon/rebehielo-line/rebehielo-front.png", x: 4100, y: 365, minX: 3970, maxX: 4140, speed: 24, depth: 24, behavior: "hop", scale: 0.84, grounding: { mode: "platform", platformId: "roof-west" } },
-      { id: "azuranima-gate", species: "Azuránima", sprite: "assets/pokemon/rubrisma-line/azuranima-front.png", x: 4940, y: 452, minX: 4820, maxX: 5120, speed: 20, depth: -26, behavior: "sing", scale: 0.82 },
+      { id: "azahin-guide", species: "Azahín", sprite: "assets/pokemon/azahin-line/azahin/idle-front.webp", x: 330, y: 454, minX: 245, maxX: 700, speed: 36, depth: -18, behavior: "graze", scale: 0.9 },
+      { id: "serranin-hopper", species: "Serranín", sprite: "assets/pokemon/serranin-line/serranin/idle-front.webp", x: 1870, y: 454, minX: 1800, maxX: 2180, speed: 28, depth: 34, behavior: "hop", scale: 0.86 },
+      { id: "rubrisma-fold", species: "Rubrisma", sprite: "assets/pokemon/rubrisma-line/rubrisma/idle-front.webp", x: 2670, y: 390, minX: 2550, maxX: 2810, speed: 22, depth: -68, behavior: "shy", scale: 0.82 },
+      { id: "barbito-canal", species: "Barbito", sprite: "assets/pokemon/barbito-line/barbito/idle-front.webp", x: 3005, y: 463, minX: 2910, maxX: 3110, speed: 18, depth: 12, behavior: "graze", scale: 0.8 },
+      { id: "rebehielo-roof", species: "Rebehielo", sprite: "assets/pokemon/rebehielo-line/rebehielo/idle-front.webp", x: 4100, y: 365, minX: 3970, maxX: 4140, speed: 24, depth: 24, behavior: "hop", scale: 0.84, grounding: { mode: "platform", platformId: "roof-west" } },
+      { id: "azuranima-gate", species: "Azuránima", sprite: "assets/pokemon/rubrisma-line/azuranima/idle-front.webp", x: 4940, y: 452, minX: 4820, maxX: 5120, speed: 20, depth: -26, behavior: "sing", scale: 0.82 },
     ]),
   });
 
@@ -592,7 +594,7 @@
   }
 
   function spawnParticles(state, kind, count, origin = {}) {
-    const particleKind = Object.hasOwn(PARTICLE_LIMITS, kind) ? kind : "dust";
+    const particleKind = owns(PARTICLE_LIMITS, kind) ? kind : "dust";
     const requested = Math.max(0, Math.floor(Number(count) || 0));
     const amount = state.reducedMotion ? Math.min(requested, particleKind === "confetti" ? 8 : 4) : requested;
     const x = Number(origin.x ?? (state.player.x + state.player.width / 2));
@@ -733,37 +735,51 @@
   }
 
   function anchorNearPlayer(state, level) {
-    return level.foldAnchors
-      .filter((anchor) => Math.abs(anchor.x - state.player.x) <= anchor.radius)
-      .sort((first, second) => Math.abs(first.x - state.player.x) - Math.abs(second.x - state.player.x))[0] || null;
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const anchor of level.foldAnchors) {
+      const distance = Math.abs(anchor.x - state.player.x);
+      if (!(distance <= anchor.radius) || distance >= nearestDistance) continue;
+      nearest = anchor;
+      nearestDistance = distance;
+    }
+    return nearest;
   }
 
   function safeFlipProjection(state, targetMode, level = DEFAULT_LEVEL, maximumDrop = 210) {
     const player = state.player;
     const target = targetMode === DIORAMA_MODE ? DIORAMA_MODE : PROFILE_MODE;
-    const projectedState = { ...state, mode: target };
+    const projectedState = { mode: target, depth: state.depth, collected: state.collected };
     const centerX = player.x + player.width / 2;
-    const candidates = level.platforms
-      .filter((platform) => platformIsActive(platform, projectedState))
-      .map((platform) => ({ platform, position: platformPosition(platform, state.time) }))
-      .filter(({ platform, position }) => centerX >= position.x - 8 && centerX <= position.x + platform.w + 8)
-      .filter(({ position }) => position.y >= player.y + player.height - 64 && position.y <= player.y + player.height + maximumDrop)
-      .sort((first, second) => first.position.y - second.position.y);
-    for (const candidate of candidates) {
-      const projectedPlayer = { ...player, y: candidate.position.y - player.height };
+    const minimumY = player.y + player.height - 64;
+    const maximumY = player.y + player.height + maximumDrop;
+    let bestProjection = null;
+    let bestGroundY = Infinity;
+    for (const platform of level.platforms) {
+      if (!platformIsActive(platform, projectedState)) continue;
+      const position = platformPosition(platform, state.time);
+      if (!(centerX >= position.x - 8 && centerX <= position.x + platform.w + 8)) continue;
+      if (!(position.y >= minimumY && position.y <= maximumY) || position.y >= bestGroundY) continue;
+      const projectedPlayer = {
+        x: player.x,
+        y: position.y - player.height,
+        width: player.width,
+        height: player.height,
+      };
       const overlapsSolid = level.barriers.some((barrier) => (
         barrierBlocks(barrier, projectedState, level) && playerOverlaps(barrier, projectedPlayer)
       ));
       if (overlapsSolid) continue;
-      return {
+      bestGroundY = position.y;
+      bestProjection = {
         mode: target,
-        platformId: candidate.platform.id,
+        platformId: platform.id,
         x: player.x,
         y: projectedPlayer.y,
-        groundY: candidate.position.y,
+        groundY: position.y,
       };
     }
-    return null;
+    return bestProjection;
   }
 
   function snapPlayerToSafeSurface(state, projection) {
@@ -777,8 +793,7 @@
     return true;
   }
 
-  function flipPreview(state, level = DEFAULT_LEVEL) {
-    const anchor = anchorNearPlayer(state, level);
+  function flipPreviewFromAnchor(state, level, anchor) {
     if (!anchor || state.flip || !state.player.grounded) return null;
     const target = state.mode === PROFILE_MODE ? DIORAMA_MODE : PROFILE_MODE;
     const projection = safeFlipProjection(state, target, level);
@@ -791,6 +806,10 @@
       y: projection?.y ?? state.player.y,
       groundY: projection?.groundY ?? null,
     };
+  }
+
+  function flipPreview(state, level = DEFAULT_LEVEL) {
+    return flipPreviewFromAnchor(state, level, anchorNearPlayer(state, level));
   }
 
   function requestFlip(state, targetMode, level = DEFAULT_LEVEL, options = {}) {
@@ -1634,6 +1653,72 @@
     let destroyed = false;
     let lastHudSignature = "";
     let lastCameraTime = state.time;
+    let cachedHud = null;
+    let lastHudRefreshTime = -Infinity;
+    let hudInvalidated = true;
+    const hudMarkers = Object.create(null);
+
+    function discreteHudChanged() {
+      return !hudMarkers.initialized
+        || hudMarkers.running !== running
+        || hudMarkers.mode !== state.mode
+        || hudMarkers.phase !== state.phase
+        || hudMarkers.flip !== state.flip
+        || hudMarkers.pulses !== state.pulses
+        || hudMarkers.collected !== state.collected.size
+        || hudMarkers.checkpointId !== state.checkpointId
+        || hudMarkers.complete !== state.complete
+        || hudMarkers.goalLocked !== state.goalLocked
+        || hudMarkers.tutorial !== state.tutorial
+        || hudMarkers.missionIndex !== state.mission.currentIndex
+        || hudMarkers.missionCompleted !== state.mission.completed.size
+        || hudMarkers.wildlifeDiscovered !== state.wildlifeDiscovered.size
+        || hudMarkers.completedChallenges !== state.completedChallenges.size
+        || hudMarkers.flipsCompleted !== state.flipsCompleted
+        || hudMarkers.flipCombo !== state.flipCombo
+        || hudMarkers.bestFlipCombo !== state.bestFlipCombo
+        || hudMarkers.precisionLandings !== state.precisionLandingIds.size
+        || hudMarkers.flowTier !== state.flowTier
+        || hudMarkers.styleChain !== state.styleChain
+        || hudMarkers.bestStyleChain !== state.bestStyleChain
+        || hudMarkers.paperRushes !== state.paperRushes
+        || hudMarkers.rushActive !== (state.rushTimer > 0)
+        || hudMarkers.assist !== state.assist
+        || hudMarkers.reducedMotion !== state.reducedMotion
+        || hudMarkers.grounded !== state.player.grounded
+        || hudMarkers.platformId !== state.player.platformId;
+    }
+
+    function captureHudMarkers() {
+      hudMarkers.initialized = true;
+      hudMarkers.running = running;
+      hudMarkers.mode = state.mode;
+      hudMarkers.phase = state.phase;
+      hudMarkers.flip = state.flip;
+      hudMarkers.pulses = state.pulses;
+      hudMarkers.collected = state.collected.size;
+      hudMarkers.checkpointId = state.checkpointId;
+      hudMarkers.complete = state.complete;
+      hudMarkers.goalLocked = state.goalLocked;
+      hudMarkers.tutorial = state.tutorial;
+      hudMarkers.missionIndex = state.mission.currentIndex;
+      hudMarkers.missionCompleted = state.mission.completed.size;
+      hudMarkers.wildlifeDiscovered = state.wildlifeDiscovered.size;
+      hudMarkers.completedChallenges = state.completedChallenges.size;
+      hudMarkers.flipsCompleted = state.flipsCompleted;
+      hudMarkers.flipCombo = state.flipCombo;
+      hudMarkers.bestFlipCombo = state.bestFlipCombo;
+      hudMarkers.precisionLandings = state.precisionLandingIds.size;
+      hudMarkers.flowTier = state.flowTier;
+      hudMarkers.styleChain = state.styleChain;
+      hudMarkers.bestStyleChain = state.bestStyleChain;
+      hudMarkers.paperRushes = state.paperRushes;
+      hudMarkers.rushActive = state.rushTimer > 0;
+      hudMarkers.assist = state.assist;
+      hudMarkers.reducedMotion = state.reducedMotion;
+      hudMarkers.grounded = state.player.grounded;
+      hudMarkers.platformId = state.player.platformId;
+    }
 
     function imageFor(source) {
       if (!source || typeof root.Image !== "function") return null;
@@ -2049,7 +2134,7 @@
     }
 
     function drawFlipPreview(context, cameraX) {
-      const preview = flipPreview(state, level);
+      const preview = hud().flipPreview;
       if (!preview?.safe) return;
       const targetBlend = preview.target === PROFILE_MODE ? 1 : 0;
       const depthX = (1 - targetBlend) * state.depth * 0.62;
@@ -2208,11 +2293,13 @@
     }
 
     function hud() {
+      const refreshDue = state.time + 1e-9 >= lastHudRefreshTime + HUD_REFRESH_INTERVAL;
+      if (cachedHud && !hudInvalidated && !refreshDue && !discreteHudChanged()) return cachedHud;
       const anchor = anchorNearPlayer(state, level);
       const mission = missionData(state, level);
       const challenges = challengeData(state);
       const currentFlipStage = flipStage(state.flip);
-      const preview = flipPreview(state, level);
+      const preview = flipPreviewFromAnchor(state, level, anchor);
       const signature = [state.mode, state.phase, state.pulses, state.collected.size, state.checkpointId,
         state.complete, state.goalLocked, anchor?.id || "", Math.floor(state.runTime * 10), state.tutorial,
         mission.id, mission.progress, state.wildlifeDiscovered.size, state.completedChallenges.size,
@@ -2220,8 +2307,10 @@
         preview?.safe ? preview.platformId : preview ? "unsafe" : "", Math.floor(state.paperFlow),
         state.flowTier, state.styleChain, Math.ceil(state.rushTimer * 10), state.paperRushes].join("|");
       lastHudSignature = signature;
-      return {
+      cachedHud = {
         signature,
+        running,
+        assist: state.assist,
         mode: state.mode,
         modeLabel: state.mode === PROFILE_MODE ? "PERFIL 2D" : "DIORAMA",
         phase: state.phase,
@@ -2266,6 +2355,10 @@
         particles: state.particles.length,
         maxParticles: MAX_PARTICLES,
       };
+      captureHudMarkers();
+      lastHudRefreshTime = state.time;
+      hudInvalidated = false;
+      return cachedHud;
     }
 
     function moveToDebug(target = "start") {
@@ -2273,7 +2366,7 @@
         start: { x: level.spawn.x, y: level.spawn.y, checkpointId: "start", mode: DIORAMA_MODE, blend: 0, introSeen: false },
         flip: { x: level.introFlipX + 1, y: level.floorY - PLAYER_HEIGHT, checkpointId: "start", mode: DIORAMA_MODE, blend: 0, introSeen: false },
         checkpoint: { x: level.checkpoints[1]?.x || 1855, y: level.checkpoints[1]?.y || 462, checkpointId: level.checkpoints[1]?.id || "courtyard", mode: PROFILE_MODE, blend: 1, introSeen: true },
-        goal: { x: level.goal.x - 145, y: level.floorY - PLAYER_HEIGHT, checkpointId: level.checkpoints.at(-1)?.id || "rooftops", mode: PROFILE_MODE, blend: 1, introSeen: true },
+        goal: { x: level.goal.x - 145, y: level.floorY - PLAYER_HEIGHT, checkpointId: level.checkpoints[level.checkpoints.length - 1]?.id || "rooftops", mode: PROFILE_MODE, blend: 1, introSeen: true },
       };
       const point = points[target] || points.start;
       state.player.x = point.x; state.player.y = point.y; state.player.previousY = point.y;
@@ -2295,13 +2388,22 @@
         ? "Salta con Espacio y pliega con Q junto a una bisagra."
         : "Sigue al Azahín por el diorama.";
       if (target === "goal") level.collectibles.forEach((collectible) => state.collected.add(collectible.id));
+      hudInvalidated = true;
       return hud();
     }
 
     return Object.freeze({
       state,
-      start() { running = true; return state; },
-      stop() { running = false; return state; },
+      start() {
+        if (!running) hudInvalidated = true;
+        running = true;
+        return state;
+      },
+      stop() {
+        if (running) hudInvalidated = true;
+        running = false;
+        return state;
+      },
       step,
       render,
       resize() { return true; },
@@ -2320,6 +2422,7 @@
     SNAPSHOT_VERSION,
     FIXED_STEP,
     MAX_FRAME_DELTA,
+    HUD_REFRESH_INTERVAL,
     MAX_PARTICLES,
     PARTICLE_LIMITS,
     PAPER_RUSH_THRESHOLD,

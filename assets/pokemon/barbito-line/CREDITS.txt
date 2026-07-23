@@ -1,8 +1,0 @@
-Origen: ficha conceptual aportada por el usuario (codex-clipboard-aea8032b-de22-49fc-8090-1129877b65d1.png).
-Proceso: recorte de las vistas dibujadas y eliminación del fondo de pergamino; no se generaron perspectivas nuevas.
-
-Archivos extraídos:
-- barbito-front.png
-- barbito-back.png
-- barbalto-front.png
-- barbalto-back.png

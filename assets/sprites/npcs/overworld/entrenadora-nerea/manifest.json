@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-21-teen-girl",
+  "spriteId": "npc-21-teen-girl",
+  "displayName": "Entrenadora Nerea",
+  "entitySlug": "entrenadora-nerea",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "7e545dd32c4b72fc7eeb556f9944e1b5ff64213c33161188fcc827a0315a54ab",
+  "sourceAssetId": "npc-21-teen-girl-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-21-teen-girl-walk.png",
+  "credits": "credits.txt"
+}

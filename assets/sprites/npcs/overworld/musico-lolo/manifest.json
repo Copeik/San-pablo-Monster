@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-17-musician",
+  "spriteId": "npc-17-musician",
+  "displayName": "Músico Lolo",
+  "entitySlug": "musico-lolo",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "f3ebfc76cbccffc201b2743c222f9f1a834f878ffcce802d6e684bdeb325f8ec",
+  "sourceAssetId": "npc-17-musician-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-17-musician-walk.png",
+  "credits": "credits.txt"
+}

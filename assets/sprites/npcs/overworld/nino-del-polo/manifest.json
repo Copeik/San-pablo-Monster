@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "nino-polo",
+  "spriteId": "nino-polo",
+  "displayName": "Niño del polo",
+  "entitySlug": "nino-del-polo",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "a6ab597045a0ae6fda5006cd552c0fd923e5689814cef32a6c52c91de19bab2f",
+  "sourceAssetId": "nino-polo-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/nino-polo-walk.png",
+  "credits": "credits.txt"
+}

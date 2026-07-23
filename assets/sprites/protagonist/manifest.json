@@ -1,0 +1,25 @@
+{
+  "generator": "PixelLab MCP",
+  "generatedAt": "2026-07-20",
+  "characterId": "b96197cb-8527-4fdf-bd6d-d48c01c41804",
+  "direction": "south-west",
+  "frameSize": [112, 112],
+  "animations": [
+    {
+      "name": "fainted-lying",
+      "animationGroupId": "7acd6297-0513-42e1-847b-4f22e8c978ca",
+      "animationId": "0e195eea-5ee0-46e4-986e-e72641696ac5",
+      "frames": 8,
+      "file": "protagonist-fainted-lying-south-west-pixellab.png",
+      "sha256": "b17ef0e9a20aaa902347f78bc5b85a06db391a58c805b827b824b7e35c55947e"
+    },
+    {
+      "name": "getting-up-from-fainted",
+      "animationGroupId": "247aa4fb-9667-4f88-aac4-de96e7d6a83a",
+      "animationId": "6f0743c8-dbc2-4df9-9f88-1efcaa89a302",
+      "frames": 9,
+      "file": "protagonist-getting-up-south-west-pixellab.png",
+      "sha256": "874f7e7b8de0d904f8019b30b7ae84e8842a31a602e10ca69c239720da782189"
+    }
+  ]
+}

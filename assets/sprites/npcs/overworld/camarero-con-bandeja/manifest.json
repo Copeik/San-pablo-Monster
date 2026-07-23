@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "camarero-bandeja",
+  "spriteId": "camarero-bandeja",
+  "displayName": "Camarero con bandeja",
+  "entitySlug": "camarero-con-bandeja",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "59231670f1881cd7ef5aea23c6f8dc0febbfcfb822917691ab2270572e8fe7c4",
+  "sourceAssetId": "camarero-bandeja-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/camarero-bandeja-walk.png",
+  "credits": "credits.txt"
+}

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "downloadedAt": "2026-07-22",
+  "provider": "PixelLab MCP",
+  "jobs": [
+    {
+      "id": "e95ba896-4054-4c9a-bc81-8be4f13b69f4",
+      "download": "https://api.pixellab.ai/mcp/tiles-pro/e95ba896-4054-4c9a-bc81-8be4f13b69f4/download",
+      "storageUrlTemplate": "https://backblaze.pixellab.ai/file/pixellab-tiles/359ff7ee-4953-4931-ba5a-f000797f9c3b/e95ba896-4054-4c9a-bc81-8be4f13b69f4/tile_{0..55}.png",
+      "localArchive": "assets/generated/plaza-farmacia-pixellab/archives/building-kit-e95ba896.zip",
+      "localOriginalCount": 56
+    },
+    {
+      "id": "f352b2ac-03dd-4be2-a02a-f6ac46e0a8cd",
+      "download": "https://api.pixellab.ai/mcp/tiles-pro/f352b2ac-03dd-4be2-a02a-f6ac46e0a8cd/download",
+      "storageUrlTemplate": "https://backblaze.pixellab.ai/file/pixellab-tiles/359ff7ee-4953-4931-ba5a-f000797f9c3b/f352b2ac-03dd-4be2-a02a-f6ac46e0a8cd/tile_{0..15}.png",
+      "localArchive": "assets/generated/plaza-farmacia-pixellab/archives/storefront-kit-f352b2ac.zip",
+      "localOriginalCount": 16
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-overworld-pack",
+  "profile": "npc-overworld-v1",
+  "npcId": "npc-10-artist",
+  "spriteId": "npc-10-artist",
+  "displayName": "Artista Lua",
+  "entitySlug": "artista-lua",
+  "aliases": [],
+  "slot": "overworld",
+  "path": "overworld.png",
+  "format": "png",
+  "width": 384,
+  "height": 512,
+  "mode": "RGBA",
+  "grid": {
+    "columns": 6,
+    "rows": 8,
+    "cellSize": 64
+  },
+  "rowOrder": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "sha256": "709177c1420a4e657fcabe506c43d26a536cbb61b5b6ca9a97a7d630531e4804",
+  "sourceAssetId": "npc-10-artist-legacy-4x4",
+  "sourcePath": "assets/sprites/npcs/legacy-4x4/npc-10-artist-walk.png",
+  "credits": "credits.txt"
+}
