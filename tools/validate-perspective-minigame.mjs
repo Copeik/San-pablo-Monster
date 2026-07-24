@@ -173,7 +173,6 @@ async function loadRealGameData(root, core, html) {
 
   for (const relativePath of [
     "map-registry.js",
-    "map-geography.js",
     "map-editor-rules.js",
     "map-editor-data.js",
     "assets/generated/san-pablo-neighborhood/catalog.js",

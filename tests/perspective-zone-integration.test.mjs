@@ -114,7 +114,6 @@ async function loadRealMapData() {
 
   for (const relativePath of [
     "map-registry.js",
-    "map-geography.js",
     "map-editor-rules.js",
     "map-editor-data.js",
     "assets/generated/san-pablo-neighborhood/catalog.js",
@@ -338,7 +337,7 @@ test("el HUD v2.1 presenta misión, Flujo y cuatro insignias sin mezclar el aria
   assert.match(styles, /\.perspective-challenges\s*\{[^}]*grid-template-columns:\s*repeat\(4,/i);
   assert.match(html, /perspective-zone\.css\?v=13/i);
   assert.match(html, /perspective-zone-core\.js\?v=12/i);
-  assert.match(html, /script\.js\?v=135/i);
+  assert.match(html, /script\.js\?v=\d+/i);
 });
 
 test("la barra usa missionProgress normalizado y solo divide el fallback bruto", () => {

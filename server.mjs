@@ -41,6 +41,56 @@ const MIME_TYPES = new Map([
   [".mp4", "video/mp4"], [".ico", "image/x-icon"], [".txt", "text/plain; charset=utf-8"],
 ]);
 
+const PUBLIC_ROOT_FILES = new Set([
+  "index.html",
+  "styles.css",
+  "perspective-zone.css",
+  "map-registry.js",
+  "map-editor-rules.js",
+  "map-editor-data.js",
+  "map-layout.js",
+  "map-data.js",
+  "perspective-zone-core.js",
+  "map-bootstrap.js",
+  "player-movement.js",
+  "attack-effects.js",
+  "sanpledex-animation-data.js",
+  "game-music.js",
+  "script.js",
+  "map-editor-standalone.js",
+]);
+
+function isPublicAssetPath(relative) {
+  if (/^assets\/(?:audio|video|images|portraits|interiors)\//.test(relative)) return true;
+  if (/^assets\/effects\//.test(relative)) return true;
+  if (/^assets\/pokemon\/[^/]+\/[^/]+\.(?:png|webp|txt)$/.test(relative)) return true;
+  if (/^assets\/sprites\/(?:protagonist-walk-pixellab\.png|CREDITS\.txt)$/.test(relative)) return true;
+  if (/^assets\/sprites\/npcs\/overworld\/[^/]+\.png$/.test(relative)) return true;
+  if (relative === "assets/sprites/npcs/source/hgss/hgss-npc-idle.png") return true;
+  if (/^assets\/generated\/[^/]+\/runtime\/.+\.(?:png|webp)$/.test(relative)) return true;
+  if ([
+    "assets/generated/san-pablo-neighborhood/catalog.js",
+    "assets/generated/san-pablo-barrio-c-pixellab/catalog.js",
+    "assets/generated/san-pablo-derived/tileset-grass-dirt.png",
+    "assets/generated/san-pablo-derived/tileset-road-sidewalk.png",
+  ].includes(relative)) return true;
+  if (/^assets\/generated\/plaza-farmacia-pixellab\/[^/]+\.png$/.test(relative)) return true;
+  if (/^assets\/maps\/(?:san-pablo-rebuilt-chunks-2x|ciudad-azahar-chunks-2x)\/[^/]+\.webp$/.test(relative)) return true;
+  return [
+    "assets/maps/san-pablo-rebuilt-preview.webp",
+    "assets/maps/san-pablo-rebuilt-navigation-v2.png",
+    "assets/maps/ciudad-azahar-preview.webp",
+    "assets/maps/ciudad-azahar-navigation.png",
+  ].includes(relative);
+}
+
+function isPublicStaticPath(relative) {
+  const normalized = relative.replace(/\\/g, "/");
+  if (PUBLIC_ROOT_FILES.has(normalized)) return true;
+  if (/^maps\/[a-z0-9-]+\/(?:base\.svg|editor-data\.js|layout\.js|map\.js|register\.js)$/.test(normalized)) return true;
+  return isPublicAssetPath(normalized);
+}
+
 export function sanitizeConversation(history) {
   if (!Array.isArray(history)) return [];
   return history.slice(-12).flatMap((entry) => {
@@ -344,7 +394,7 @@ function safeStaticPath(urlPath, staticRoot = ROOT) {
   try { decoded = decodeURIComponent(urlPath); } catch { return null; }
   const relative = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
   if (!relative || relative.split(/[\\/]/).every((part) => !part.startsWith(".")) === false) return null;
-  if (["server.mjs", "package.json"].includes(relative) || relative.startsWith("tests/")) return null;
+  if (!isPublicStaticPath(relative)) return null;
   const resolvedRoot = path.resolve(staticRoot);
   const target = path.resolve(resolvedRoot, relative);
   return target.startsWith(`${resolvedRoot}${path.sep}`) ? target : null;

@@ -90,6 +90,34 @@ test("comprime recursos estáticos grandes cuando el navegador acepta gzip", asy
   assert.ok(Number(identity.headers.get("content-length")) > 0);
 });
 
+test("publica solo archivos necesarios para ejecutar o editar el juego", async () => {
+  const publicPaths = [
+    "/index.html",
+    "/maps/route-test/base.svg",
+    "/assets/pokemon/braspy-line/braspy-front.png",
+    "/assets/generated/san-pablo-derived/runtime/building-institutional.png",
+    "/assets/maps/san-pablo-rebuilt-navigation-v2.png",
+    "/assets/sprites/npcs/overworld/npc-01-nurse-walk.png",
+  ];
+  for (const pathname of publicPaths) {
+    const response = await fetch(`${origin}${pathname}`, { method: "HEAD" });
+    assert.equal(response.status, 200, pathname);
+  }
+
+  const privatePaths = [
+    "/AGENTS.md",
+    "/tools/build-sanpledex-pixellab-animations.py",
+    "/map-editor-server.mjs",
+    "/assets/maps/san-pablo-source/trees.geojson",
+    "/assets/generated/san-pablo-derived/sources/building-institutional-source.png",
+    "/assets/pokemon/braspy-line/pixellab-hq/braspin/accepted-frames/idle/front/frame-00.png",
+  ];
+  for (const pathname of privatePaths) {
+    const response = await fetch(`${origin}${pathname}`, { method: "HEAD" });
+    assert.equal(response.status, 404, pathname);
+  }
+});
+
 test("mantiene la clave en servidor y devuelve solo la pulla", async () => {
   const response = await fetch(`${origin}/api/manolin/chat`, {
     method: "POST",
